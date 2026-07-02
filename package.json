@@ -1,0 +1,62 @@
+{
+  "name": "solarpropv",
+  "version": "0.5.0",
+  "description": "Dimensionamento e proposta comercial de sistemas fotovoltaicos",
+  "main": "dist-electron/index.js",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "test": "vitest run --config vitest.config.ts",
+    "test:watch": "vitest --config vitest.config.ts",
+    "dist:win": "npm run build && electron-builder --win portable --x64",
+    "dist:win:installer": "npm run build && electron-builder --win nsis --x64"
+  },
+  "build": {
+    "appId": "com.lumensolar.solarpropv",
+    "productName": "SolarPropV",
+    "copyright": "Copyright \u00a9 2025 LUMEN SOLU\u00c7\u00d5ES LTDA",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "SolarPropV-${version}-portable.exe"
+    },
+    "portable": {
+      "requestExecutionLevel": "user"
+    },
+    "extraMetadata": {
+      "main": "dist-electron/index.js"
+    }
+  },
+  "dependencies": {
+    "@react-pdf/renderer": "^4.3.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "zustand": "^4.5.4"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.1",
+    "electron": "^31.3.0",
+    "electron-builder": "^25.1.8",
+    "typescript": "^5.5.4",
+    "vite": "^5.4.0",
+    "vite-plugin-electron": "^0.28.8",
+    "vite-plugin-electron-renderer": "^0.14.6",
+    "vitest": "^2.0.5"
+  }
+}
