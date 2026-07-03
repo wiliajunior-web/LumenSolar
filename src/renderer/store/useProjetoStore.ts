@@ -190,6 +190,7 @@ export const useProjetoStore = create<ProjetoState>((set, get) => ({
     const custosRecorrentes = calcularCustosRecorrentes({
       distribuidora, tipoLigacao: consumo.tipoLigacao, cipRS: consumo.cipMensalRS,
       consumoMedioMensalKWh: mediaKWh, geracaoMensalKWh: dimensionamento.geracaoMensalEstimadaKWh,
+      fracaoTarifaFioB: empresa.fracaoTarifaFioB,
       percentualFioB: percentualFioBPorAno(enquadramento, new Date().getFullYear()),
     });
 
@@ -236,7 +237,7 @@ export const useProjetoStore = create<ProjetoState>((set, get) => ({
       degradacaoAnualModulos: 0.005,
       reajusteTarifarioAnual: empresa.reajusteTarifarioAnual,
       horizonteAnos: HORIZONTE,
-      taxaMinimaAtratividadeAnual: 0.08,
+      taxaMinimaAtratividadeAnual: empresa.taxaMinimaAtratividadeAnual,
     });
 
     const tirAnual = calcularTIR(fluxoCaixaRes.fluxoAnual);
@@ -245,14 +246,11 @@ export const useProjetoStore = create<ProjetoState>((set, get) => ({
       dimensionamento.potenciaInstaladaRealKWp, hsp, perdas.perdaTotalLiquida, cliente.uf
     );
 
-    const taxaSolfacil48 = 0.0199;
-    const taxaSolfacil60 = 0.0199;
-    const taxaCartao18   = 0.0299;
-
+    // Taxas de financiamento — configuráveis em ⚙ Empresa
     const simulacoes: SimulacaoFinanciamento[] = [
-      simularFinanciamento(investimento, economiaMensal, taxaSolfacil48, 48, 0.005, empresa.reajusteTarifarioAnual, HORIZONTE, 'Solfácil 48×'),
-      simularFinanciamento(investimento, economiaMensal, taxaSolfacil60, 60, 0.005, empresa.reajusteTarifarioAnual, HORIZONTE, 'Solfácil 60×'),
-      simularFinanciamento(investimento, economiaMensal, taxaCartao18,   18, 0.005, empresa.reajusteTarifarioAnual, HORIZONTE, 'Cartão 18×'),
+      simularFinanciamento(investimento, economiaMensal, empresa.taxaSolfacil48Mensal, 48, 0.005, empresa.reajusteTarifarioAnual, HORIZONTE, 'Solfácil 48×'),
+      simularFinanciamento(investimento, economiaMensal, empresa.taxaSolfacil60Mensal, 60, 0.005, empresa.reajusteTarifarioAnual, HORIZONTE, 'Solfácil 60×'),
+      simularFinanciamento(investimento, economiaMensal, empresa.taxaOutroFinanciamento, empresa.parcelasOutroFinanciamento, 0.005, empresa.reajusteTarifarioAnual, HORIZONTE, empresa.descricaoOutroFinanciamento),
     ];
 
     const indicadores: IndicadoresFinanceiros = {

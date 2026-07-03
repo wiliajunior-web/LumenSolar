@@ -378,7 +378,7 @@ function TabEmpresa({ onClose }: { onClose: () => void }) {
         </div>
       </div>
 
-      <div className="card">
+      <div className="card" style={{ marginBottom: 14 }}>
         <div className="card-head">Valores-base de precificação</div>
         <div className="card-body">
           <p className="lbl-hint" style={{ marginBottom: 14 }}>Preenche automaticamente cada proposta. Editável por projeto na aba Precificação.</p>
@@ -386,9 +386,52 @@ function TabEmpresa({ onClose }: { onClose: () => void }) {
             <Campo label="Estrutura de fixação (R$/kWp)" hint="Padrão: R$150/kWp instalado"><input className="inp inp-num" type="number" value={empresa.valorEstruturaPorKWp} onChange={e => atualizarEmpresa({ valorEstruturaPorKWp: Number(e.target.value) })} /></Campo>
             <Campo label="Materiais elétricos (R$/kWp)" hint="Cabos, DPS, disjuntores, eletrodutos"><input className="inp inp-num" type="number" value={empresa.valorMateriaisPorKWp} onChange={e => atualizarEmpresa({ valorMateriaisPorKWp: Number(e.target.value) })} /></Campo>
             <Campo label="Mão de obra (R$/módulo)" hint="Instalação + comissionamento do inversor"><input className="inp inp-num" type="number" value={empresa.valorMaoDeObraPorModulo} onChange={e => atualizarEmpresa({ valorMaoDeObraPorModulo: Number(e.target.value) })} /></Campo>
-            <Campo label="Projeto + ART CREA (R$)" hint="ART CREA-MG ~R$130 + projeto ~R$400 = R$530 típico"><input className="inp inp-num" type="number" value={empresa.valorProjetoArt} onChange={e => atualizarEmpresa({ valorProjetoArt: Number(e.target.value) })} /></Campo>
-            <Campo label="Alíquota Simples Nacional (%)" hint="Alíquota efetiva do DAS — seu contador informa"><input className="inp inp-num" type="number" step="0.1" value={+(empresa.aliquotaImpostos * 100).toFixed(1)} onChange={e => atualizarEmpresa({ aliquotaImpostos: Number(e.target.value) / 100 })} /></Campo>
+            <Campo label="Projeto + ART CREA (R$)" hint="CREA-MG: R$69 (até 10k), R$130 (até 30k), R$250 (até 100k) + projeto ~R$400"><input className="inp inp-num" type="number" value={empresa.valorProjetoArt} onChange={e => atualizarEmpresa({ valorProjetoArt: Number(e.target.value) })} /></Campo>
+            <Campo label="Alíquota Simples Nacional (%)" hint="Alíquota efetiva mensal do DAS — informe o valor do seu contador"><input className="inp inp-num" type="number" step="0.1" value={+(empresa.aliquotaImpostos * 100).toFixed(1)} onChange={e => atualizarEmpresa({ aliquotaImpostos: Number(e.target.value) / 100 })} /></Campo>
             <Campo label="Margem de lucro padrão (%)" hint="Sobre o preço de venda (não sobre o custo)"><input className="inp inp-num" type="number" step="1" value={+(empresa.margemPadrao * 100).toFixed(0)} onChange={e => atualizarEmpresa({ margemPadrao: Number(e.target.value) / 100 })} /></Campo>
+          </div>
+        </div>
+      </div>
+
+      <div className="card" style={{ marginBottom: 14 }}>
+        <div className="card-head">Simulações de financiamento</div>
+        <div className="card-body">
+          <div className="info-box info-box-blue" style={{ marginBottom: 14 }}>
+            ⚠️ <strong>Atenção:</strong> as taxas do Solfácil variam de 0,99% a 2,49% a.m. conforme o perfil de crédito do cliente. Atualize sempre com a taxa real aprovada para cada cliente. Taxa padrão de 1,99% a.m. é uma referência — não é garantida.
+          </div>
+          <div className="g2" style={{ rowGap: 14 }}>
+            <Campo label="Solfácil 48× — taxa mensal (%)" hint="Solfácil: 0,99% a 2,49% a.m. conforme perfil de crédito. 1,99% = referência.">
+              <input className="inp inp-num" type="number" step="0.01" value={+(empresa.taxaSolfacil48Mensal*100).toFixed(2)} onChange={e => atualizarEmpresa({ taxaSolfacil48Mensal: Number(e.target.value)/100 })} />
+            </Campo>
+            <Campo label="Solfácil 60× — taxa mensal (%)" hint="Geralmente igual ou levemente superior às 48 parcelas.">
+              <input className="inp inp-num" type="number" step="0.01" value={+(empresa.taxaSolfacil60Mensal*100).toFixed(2)} onChange={e => atualizarEmpresa({ taxaSolfacil60Mensal: Number(e.target.value)/100 })} />
+            </Campo>
+            <Campo label="3ª opção — descrição" hint='Ex: "Cartão 18×", "Banco do Brasil 72×", "BNDES"'>
+              <input className="inp" value={empresa.descricaoOutroFinanciamento} onChange={e => atualizarEmpresa({ descricaoOutroFinanciamento: e.target.value })} />
+            </Campo>
+            <Campo label="3ª opção — parcelas">
+              <input className="inp inp-num" type="number" value={empresa.parcelasOutroFinanciamento} onChange={e => atualizarEmpresa({ parcelasOutroFinanciamento: Number(e.target.value) })} />
+            </Campo>
+            <Campo label="3ª opção — taxa mensal (%)" hint="Cartão de crédito: geralmente 2,49% a 3,49% a.m.">
+              <input className="inp inp-num" type="number" step="0.01" value={+(empresa.taxaOutroFinanciamento*100).toFixed(2)} onChange={e => atualizarEmpresa({ taxaOutroFinanciamento: Number(e.target.value)/100 })} />
+            </Campo>
+          </div>
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="card-head">Parâmetros de análise financeira</div>
+        <div className="card-body">
+          <div className="g2" style={{ rowGap: 14 }}>
+            <Campo label="Reajuste tarifário esperado (%/ano)" hint="Média histórica ANEEL: 6% a 10%/ano. Conservador: 6%.">
+              <input className="inp inp-num" type="number" step="0.5" value={+(empresa.reajusteTarifarioAnual*100).toFixed(1)} onChange={e => atualizarEmpresa({ reajusteTarifarioAnual: Number(e.target.value)/100 })} />
+            </Campo>
+            <Campo label="TMA — taxa mínima de atratividade (%/ano)" hint="Taxa de referência para payback descontado e VPL. CDI atual: ~10,5%/ano.">
+              <input className="inp inp-num" type="number" step="0.5" value={+(empresa.taxaMinimaAtratividadeAnual*100).toFixed(1)} onChange={e => atualizarEmpresa({ taxaMinimaAtratividadeAnual: Number(e.target.value)/100 })} />
+            </Campo>
+            <Campo label="Fração Fio B na tarifa (%)" hint="Componente TUSD de distribuição sobre a tarifa total. CEMIG: ~32%, média nacional: ~35%.">
+              <input className="inp inp-num" type="number" step="0.5" value={+(empresa.fracaoTarifaFioB*100).toFixed(1)} onChange={e => atualizarEmpresa({ fracaoTarifaFioB: Number(e.target.value)/100 })} />
+            </Campo>
           </div>
         </div>
       </div>
