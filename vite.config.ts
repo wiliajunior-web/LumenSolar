@@ -22,6 +22,7 @@ export default defineConfig({
       '@data': path.resolve(__dirname, 'src/data'),
     },
   },
+  base: './',  // CRÍTICO para Electron: assets usam caminhos relativos (file://)
   build: {
     outDir: 'dist',
   },
