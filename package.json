@@ -1,7 +1,7 @@
 {
-  "name": "solarpropv",
+  "name": "lumensolar",
   "version": "0.5.0",
-  "description": "Dimensionamento e proposta comercial de sistemas fotovoltaicos",
+  "description": "Dimensionamento e proposta comercial fotovoltaica — Lumen Soluções",
   "main": "dist-electron/index.js",
   "type": "module",
   "scripts": {
@@ -13,8 +13,8 @@
     "dist:win:installer": "npm run build && electron-builder --win nsis --x64"
   },
   "build": {
-    "appId": "com.lumensolar.solarpropv",
-    "productName": "SolarPropV",
+    "appId": "com.lumensolar.app",
+    "productName": "LumenSolar",
     "copyright": "Copyright © 2025 LUMEN SOLUÇÕES LTDA",
     "directories": {
       "output": "release"
@@ -32,7 +32,7 @@
           ]
         }
       ],
-      "artifactName": "SolarPropV-${version}-portable.exe"
+      "artifactName": "LumenSolar-${version}-portable.exe"
     },
     "portable": {
       "requestExecutionLevel": "user"

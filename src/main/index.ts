@@ -22,7 +22,7 @@ function createWindow() {
     height: 850,
     minWidth: 900,
     minHeight: 600,
-    title: 'SolarPropV — Lumen Soluções',
+    title: 'LumenSolar — Lumen Soluções',
     show: false,
     webPreferences: {
       ...(PRELOAD_PATH ? { preload: PRELOAD_PATH } : {}),
