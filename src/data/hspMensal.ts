@@ -54,9 +54,9 @@ export function geracaoMensalPorMes(
   const eficiencia = 1 - perdasSistema;
   // dias médios por mês considerando que HSP anual é a média diária
   const diasPorMes = [31, 28.25, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  // Geração do mês = Potência (kWp) × HSP_diário_do_mês × dias_do_mês × eficiência
+  // HSP_diário_do_mês = hspAnualMedio × fator (fator normalizado: soma=12, média=1.0)
   return fatores.map((fator, i) =>
-    potenciaKWp * hspAnualMedio * fator * diasPorMes[i] * eficiencia / 30.4167
-    // Simplificação: usa HSP médio × fator como HSP do mês, × dias do mês
-    // mas normaliza pela média de dias para preservar coerência com o dimensionamento
+    potenciaKWp * hspAnualMedio * fator * diasPorMes[i] * eficiencia
   );
 }

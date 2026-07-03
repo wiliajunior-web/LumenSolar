@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { pdf } from '@react-pdf/renderer';
 import { useProjetoStore, PRESETS_MODULO, type TipoModuloPreset } from './store/useProjetoStore';
 import { DISTRIBUIDORAS } from '@data/distribuidoras';
@@ -139,9 +139,11 @@ const Btn = ({ onClick, children, variant = 'primary', disabled = false, small =
 };
 
 // ─── Campo de formulário ─────────────────────────────────────────────────────
-const Campo = ({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) => (
+const Campo = ({ label, hint, tip, children }: { label: string; hint?: string; tip?: string; children: React.ReactNode }) => (
   <label className="lbl">
-    <span className="lbl-txt">{label}</span>
+    <span className="lbl-txt" style={{ display: 'flex', alignItems: 'center' }}>
+      {label}{tip && <Tip text={tip} />}
+    </span>
     {children}
     {hint && <span className="lbl-hint">{hint}</span>}
   </label>
@@ -154,6 +156,38 @@ const LR = ({ label, val, color }: { label: string; val: string; color?: string 
     <span className="row-val" style={{ color: color ?? D.text }}>{val}</span>
   </div>
 );
+
+// ─── Tooltip ─────────────────────────────────────────────────────────────────
+const Tip = ({ text }: { text: string }) => {
+  const [vis, setVis] = React.useState(false);
+  return (
+    <span style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', marginLeft: 5 }}
+      onMouseEnter={() => setVis(true)} onMouseLeave={() => setVis(false)}>
+      <span style={{
+        cursor: 'help', color: D.textMuted, fontSize: 10, fontWeight: 800,
+        border: `1.5px solid ${D.border}`, borderRadius: '50%',
+        width: 15, height: 15, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+        flexShrink: 0, lineHeight: 1, userSelect: 'none',
+      }}>?</span>
+      {vis && (
+        <div style={{
+          position: 'absolute', bottom: 'calc(100% + 8px)', left: '50%', transform: 'translateX(-50%)',
+          background: D.header, color: '#e0e0e0', borderRadius: 8, padding: '9px 13px',
+          fontSize: 12, lineHeight: 1.55, width: 260, zIndex: 9999,
+          boxShadow: '0 4px 24px rgba(0,0,0,.4)',
+          whiteSpace: 'normal', pointerEvents: 'none',
+          border: `1px solid #2a2d3e`,
+        }}>
+          {text}
+          <div style={{
+            position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)',
+            border: '6px solid transparent', borderTopColor: D.header,
+          }} />
+        </div>
+      )}
+    </span>
+  );
+};
 
 // ─── KPI ─────────────────────────────────────────────────────────────────────
 const KPI = ({ label, val, sub, color }: { label: string; val: string; sub?: string; color?: string }) => (
@@ -448,13 +482,13 @@ function TabCliente({ onNext }: { onNext: () => void }) {
       <div className="card">
         <div className="card-body">
           <div className="g2" style={{ rowGap: 14 }}>
-            <Campo label="Nome completo *" hint="Nome ou razão social do cliente">
+            <Campo label="Nome completo *" hint="Nome ou razão social do cliente" tip="Aparece na capa da proposta comercial. Pessoa física: nome completo. Empresa: razão social ou nome fantasia.">
               <input className="inp" value={cliente.nome} onChange={e => atualizarCliente({ nome: e.target.value })} placeholder="Ex: João Silva / Empresa Ltda" autoFocus />
             </Campo>
             <Campo label="Cidade">
               <input className="inp" value={cliente.cidade} onChange={e => atualizarCliente({ cidade: e.target.value })} />
             </Campo>
-            <Campo label="UF">
+            <Campo label="UF" tip="A UF define a irradiação solar local usada no cálculo de geração. Estados com mais sol geram mais com o mesmo sistema.">
               <select className="inp" value={cliente.uf} onChange={e => atualizarCliente({ uf: e.target.value })}>
                 {Object.keys(HSP_MEDIO_POR_UF).map(uf => <option key={uf} value={uf}>{uf}</option>)}
               </select>
@@ -483,19 +517,19 @@ function TabConsumo({ onPrev, onNext, mediaKWh, mediaRS }: { onPrev:()=>void; on
         <div className="card-head">Distribuidora e tarifas</div>
         <div className="card-body">
           <div className="g3">
-            <Campo label="Distribuidora" hint="">
+            <Campo label="Distribuidora" tip="A distribuidora determina a tarifa de energia (R$/kWh) usada para calcular a taxa de disponibilidade e o custo do Fio B (Lei 14.300/2022). Atualize anualmente após revisão tarifária da ANEEL.">
               <select className="inp" value={s.consumo.codigoDistribuidora} onChange={e => s.atualizarConsumo({ codigoDistribuidora: e.target.value })}>
                 {DISTRIBUIDORAS.map(d => <option key={d.codigo} value={d.codigo}>{d.nomeAbreviado}</option>)}
               </select>
             </Campo>
-            <Campo label="Tipo de ligação">
+            <Campo label="Tipo de ligação" tip="Define o mínimo faturável mensal: monofásica = 30 kWh, bifásica = 50 kWh, trifásica = 100 kWh. Mesmo com o solar gerando mais que o consumo, este valor mínimo sempre é cobrado.">
               <select className="inp" value={s.consumo.tipoLigacao} onChange={e => s.atualizarConsumo({ tipoLigacao: e.target.value as 'monofasica'|'bifasica'|'trifasica' })}>
                 <option value="monofasica">Monofásica (30 kWh mín.)</option>
                 <option value="bifasica">Bifásica (50 kWh mín.)</option>
                 <option value="trifasica">Trifásica (100 kWh mín.)</option>
               </select>
             </Campo>
-            <Campo label="CIP / Iluminação pública (R$)" hint="Valor mensal fixo da conta">
+            <Campo label="CIP / Iluminação pública (R$)" hint="Valor mensal fixo da conta" tip="Contribuição municipal para custeio da iluminação pública (CIP ou COSIP). Varia por cidade — verifique na fatura do cliente. Não é isenta mesmo com sistema solar.">
               <input className="inp inp-num" type="number" step="0.01" value={s.consumo.cipMensalRS} onChange={e => s.atualizarConsumo({ cipMensalRS: Number(e.target.value) })} />
             </Campo>
           </div>
@@ -550,7 +584,7 @@ function TabKit({ onPrev, onNext, mediaKWh }: { onPrev:()=>void; onNext:()=>void
         <div className="card-head">Módulos fotovoltaicos</div>
         <div className="card-body">
           <div className="g2" style={{ rowGap: 14 }}>
-            <Campo label="Tipo do módulo" hint="Define automaticamente os parâmetros de eficiência">
+            <Campo label="Tipo do módulo" hint="Define automaticamente os parâmetros de eficiência" tip="Monocristalino: mais eficiente, menos sensível ao calor. Bifacial N-TYPE: gera dos dois lados, melhor em dias nublados, menor degradação ao longo do tempo. Policristalino: tecnologia mais antiga, eficiência inferior, menos usada em 2025.">
               <select className="inp" value={s.kit.tipoModulo} onChange={e => s.atualizarKit({ tipoModulo: e.target.value as TipoModuloPreset })}>
                 {(Object.entries(PRESETS_MODULO) as [TipoModuloPreset, typeof PRESETS_MODULO[TipoModuloPreset]][]).map(([k, v]) => (
                   <option key={k} value={k}>{v.label}</option>
@@ -559,8 +593,8 @@ function TabKit({ onPrev, onNext, mediaKWh }: { onPrev:()=>void; onNext:()=>void
             </Campo>
             <Campo label="Marca"><input className="inp" value={s.kit.marcaModulo} onChange={e => s.atualizarKit({ marcaModulo: e.target.value })} placeholder="Ex: Leapton, DAH, JA Solar" /></Campo>
             <Campo label="Modelo"><input className="inp" value={s.kit.modeloModulo} onChange={e => s.atualizarKit({ modeloModulo: e.target.value })} placeholder="Ex: 620W BIF N-TYPE" /></Campo>
-            <Campo label="Potência (Wp)"><input className="inp inp-num" type="number" value={s.kit.potenciaModuloWp} onChange={e => s.atualizarKit({ potenciaModuloWp: Number(e.target.value) })} /></Campo>
-            <Campo label="Quantidade de módulos"><input className="inp inp-num" type="number" value={s.kit.quantidade || ''} onChange={e => s.atualizarKit({ quantidade: Number(e.target.value) })} /></Campo>
+            <Campo label="Potência (Wp)" tip="Potência de pico de cada módulo em condições padrão (STC: 1000 W/m², 25°C). Em campo, a geração real é menor por temperatura, sujidade e sombreamento — o sistema de perdas do LumenSolar calcula isso automaticamente."><input className="inp inp-num" type="number" value={s.kit.potenciaModuloWp} onChange={e => s.atualizarKit({ potenciaModuloWp: Number(e.target.value) })} /></Campo>
+            <Campo label="Quantidade de módulos" tip="Use o painel de sugestão acima para saber o mínimo recomendado. É comum superdimensionar em 5-10% para compensar meses com menos sol e futuro crescimento de consumo."><input className="inp inp-num" type="number" value={s.kit.quantidade || ''} onChange={e => s.atualizarKit({ quantidade: Number(e.target.value) })} /></Campo>
             {potKWp > 0 && (
               <div style={{ gridColumn: 'span 2', background: D.bg, borderRadius: 8, padding: '10px 14px', fontSize: 13, display: 'flex', gap: 24 }}>
                 <div><span style={{ color: D.textMuted }}>Potência do sistema: </span><strong>{fmtNum(potKWp, 2)} kWp</strong></div>
@@ -578,7 +612,7 @@ function TabKit({ onPrev, onNext, mediaKWh }: { onPrev:()=>void; onNext:()=>void
             <Campo label="Marca"><input className="inp" value={s.kit.marcaInversor} onChange={e => s.atualizarKit({ marcaInversor: e.target.value })} placeholder="Ex: Growatt, Fronius, Deye" /></Campo>
             <Campo label="Modelo"><input className="inp" value={s.kit.modeloInversor} onChange={e => s.atualizarKit({ modeloInversor: e.target.value })} placeholder="Ex: MIN 6000TL-X2" /></Campo>
             <Campo label="Potência nominal (kW)"><input className="inp inp-num" type="number" step="0.1" value={s.kit.potenciaInversorKW || ''} onChange={e => s.atualizarKit({ potenciaInversorKW: Number(e.target.value) })} /></Campo>
-            <Campo label="Eficiência máxima (%)" hint="Growatt MIN X2: 98,4% · Fronius: 98,1%"><input className="inp inp-num" type="number" step="0.1" value={s.kit.eficienciaInversorPercent} onChange={e => s.atualizarKit({ eficienciaInversorPercent: Number(e.target.value) })} /></Campo>
+            <Campo label="Eficiência máxima (%)" hint="Growatt MIN X2: 98,4% · Fronius: 98,1%" tip="Percentual da energia CC dos painéis que o inversor converte em CA para a rede. Inversores modernos chegam a 98-99%. Está no datasheet do fabricante."><input className="inp inp-num" type="number" step="0.1" value={s.kit.eficienciaInversorPercent} onChange={e => s.atualizarKit({ eficienciaInversorPercent: Number(e.target.value) })} /></Campo>
           </div>
         </div>
       </div>
@@ -587,10 +621,10 @@ function TabKit({ onPrev, onNext, mediaKWh }: { onPrev:()=>void; onNext:()=>void
         <div className="card-head">Custo e enquadramento</div>
         <div className="card-body">
           <div className="g2" style={{ rowGap: 14 }}>
-            <Campo label="Custo do kit no fornecedor (R$)" hint="Módulos + inversor conforme orçamento">
+            <Campo label="Custo do kit no fornecedor (R$)" hint="Módulos + inversor conforme orçamento" tip="Preço de custo do kit completo (módulos + inversor) conforme NF do fornecedor. Não inclui estrutura, materiais elétricos, mão de obra e projeto — esses são adicionados na aba Precificação.">
               <input className="inp inp-num" type="number" step="0.01" value={s.kit.custoKitRS || ''} onChange={e => s.atualizarKit({ custoKitRS: Number(e.target.value) })} />
             </Campo>
-            <Campo label="Data de protocolo de acesso" hint="Lei 14.300/2022: define a regra do Fio B">
+            <Campo label="Data de protocolo de acesso" hint="Lei 14.300/2022: define a regra do Fio B" tip="Data em que você vai protocolar o pedido de acesso na distribuidora. Determinante para o enquadramento no art. 26 (isenção de Fio B até 2045) ou no art. 27 (cobrança gradual de 15% a 100%). Dentro de 12 meses da publicação da lei (até 07/01/2023) = art. 26. Após isso = art. 27.">
               <input className="inp" type="date" value={s.kit.dataProtocoloAcesso} onChange={e => s.atualizarKit({ dataProtocoloAcesso: e.target.value })} />
             </Campo>
           </div>
@@ -622,10 +656,10 @@ function TabPreco({ onPrev, onCalc }: { onPrev:()=>void; onCalc:()=>void }) {
             <strong style={{ fontVariantNumeric: 'tabular-nums', fontSize: 14 }}>{fmtBRL(s.kit.custoKitRS)}</strong>
           </div>
           <div className="g2" style={{ rowGap: 14 }}>
-            <Campo label="Estrutura de fixação (R$)" hint={`Auto: ${fmtNum((s.kit.potenciaModuloWp * s.kit.quantidade)/1000, 2)} kWp × R$${s.empresa.valorEstruturaPorKWp}/kWp`}><input className="inp inp-num" type="number" step="0.01" value={s.preco.estruturaRS || ''} onChange={e => s.atualizarPreco({ estruturaRS: Number(e.target.value) })} /></Campo>
-            <Campo label="Materiais elétricos (R$)" hint="Cabos, DPS, string box, disjuntores"><input className="inp inp-num" type="number" step="0.01" value={s.preco.materiaisEletricosRS || ''} onChange={e => s.atualizarPreco({ materiaisEletricosRS: Number(e.target.value) })} /></Campo>
-            <Campo label="Mão de obra (R$)" hint={`Auto: ${s.kit.quantidade} módulos × R$${s.empresa.valorMaoDeObraPorModulo}/módulo`}><input className="inp inp-num" type="number" step="0.01" value={s.preco.maoDeObraRS || ''} onChange={e => s.atualizarPreco({ maoDeObraRS: Number(e.target.value) })} /></Campo>
-            <Campo label="Projeto + ART CREA (R$)" hint="ART CREA-MG (~R$130) + projeto de engenharia (~R$400)"><input className="inp inp-num" type="number" step="0.01" value={s.preco.projetoArtRS || ''} onChange={e => s.atualizarPreco({ projetoArtRS: Number(e.target.value) })} /></Campo>
+            <Campo label="Estrutura de fixação (R$)" tip="Estrutura metálica (alumínio ou aço galvanizado) para fixar os módulos no telhado. Varia com o tipo de telhado: colonial, metálico, laje. R$150/kWp é um valor médio para telhado colonial." hint={`Auto: ${fmtNum((s.kit.potenciaModuloWp * s.kit.quantidade)/1000, 2)} kWp × R$${s.empresa.valorEstruturaPorKWp}/kWp`}><input className="inp inp-num" type="number" step="0.01" value={s.preco.estruturaRS || ''} onChange={e => s.atualizarPreco({ estruturaRS: Number(e.target.value) })} /></Campo>
+            <Campo label="Materiais elétricos (R$)" hint="Cabos, DPS, string box, disjuntores" tip="Inclui: cabo solar 6mm² (±4m por módulo), conectores MC4, String Box com DPS, disjuntor CA, eletrodutos e calhas. R$120/kWp é uma estimativa conservadora."><input className="inp inp-num" type="number" step="0.01" value={s.preco.materiaisEletricosRS || ''} onChange={e => s.atualizarPreco({ materiaisEletricosRS: Number(e.target.value) })} /></Campo>
+            <Campo label="Mão de obra (R$)" tip="Inclui: instalação da estrutura, fixação dos módulos, conexão do inversor, comissionamento e testes do sistema. R$280/módulo é referência para instalações residenciais com 1-2 técnicos." hint={`Auto: ${s.kit.quantidade} módulos × R$${s.empresa.valorMaoDeObraPorModulo}/módulo`}><input className="inp inp-num" type="number" step="0.01" value={s.preco.maoDeObraRS || ''} onChange={e => s.atualizarPreco({ maoDeObraRS: Number(e.target.value) })} /></Campo>
+            <Campo label="Projeto + ART CREA (R$)" hint="ART CREA-MG (~R$130) + projeto de engenharia (~R$400)" tip="ART obrigatória para conexão à distribuidora. CREA-MG 2025: até R$30k de obra = R$130. Projeto elétrico inclui diagrama unifilar, memorial descritivo e documentação para a distribuidora."><input className="inp inp-num" type="number" step="0.01" value={s.preco.projetoArtRS || ''} onChange={e => s.atualizarPreco({ projetoArtRS: Number(e.target.value) })} /></Campo>
             <Campo label="Outros — frete, deslocamento (R$)"><input className="inp inp-num" type="number" step="0.01" value={s.preco.outrosCustosRS || ''} onChange={e => s.atualizarPreco({ outrosCustosRS: Number(e.target.value) })} /></Campo>
           </div>
           <div className="sep" />
@@ -640,8 +674,8 @@ function TabPreco({ onPrev, onCalc }: { onPrev:()=>void; onCalc:()=>void }) {
             <strong>Fórmula correta:</strong> Preço = Custo ÷ (1 − impostos − margem) — garante que o imposto e o lucro incidem sobre o preço de venda, não sobre o custo.
           </div>
           <div className="g2" style={{ rowGap: 14 }}>
-            <Campo label="Alíquota Simples Nacional (%)" hint="Alíquota efetiva mensal do DAS"><input className="inp inp-num" type="number" step="0.1" value={+(s.preco.aliquotaImpostos*100).toFixed(1)} onChange={e => s.atualizarPreco({ aliquotaImpostos: Number(e.target.value)/100 })} /></Campo>
-            <Campo label="Margem de lucro (% sobre venda)" hint="Ex: 15% = R$0,15 de cada R$1,00 vendido"><input className="inp inp-num" type="number" step="1" value={+(s.preco.margemDesejada*100).toFixed(0)} onChange={e => s.atualizarPreco({ margemDesejada: Number(e.target.value)/100 })} /></Campo>
+            <Campo label="Alíquota Simples Nacional (%)" hint="Alíquota efetiva mensal do DAS" tip="Alíquota efetiva que aparece no DAS (Documento de Arrecadação do Simples). Seu contador calcula mensalmente. Faixas 2025 (Anexo III serviços): até R$180k/ano = 6% | R$180k-R$360k ≈ 9-11%."><input className="inp inp-num" type="number" step="0.1" value={+(s.preco.aliquotaImpostos*100).toFixed(1)} onChange={e => s.atualizarPreco({ aliquotaImpostos: Number(e.target.value)/100 })} /></Campo>
+            <Campo label="Margem de lucro (% sobre venda)" hint="Ex: 15% = R$0,15 de cada R$1,00 vendido" tip="Margem calculada SOBRE o preço de venda (não sobre o custo). Ou seja, 15% de margem significa que de cada R$100 recebidos, R$15 são lucro. É diferente do markup: margem 15% = markup ~25%. Setor solar: margem típica de 10% a 25%."><input className="inp inp-num" type="number" step="1" value={+(s.preco.margemDesejada*100).toFixed(0)} onChange={e => s.atualizarPreco({ margemDesejada: Number(e.target.value)/100 })} /></Campo>
           </div>
         </div>
       </div>
