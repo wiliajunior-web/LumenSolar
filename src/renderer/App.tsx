@@ -208,8 +208,8 @@ const STEPS: { id: Aba; label: string; icon: string }[] = [
   { id: 'resultado',  label: 'Resultado',   icon: '★' },
 ];
 
-const Sidebar = ({ aba, setAba, empresa, onEmpresa }: {
-  aba: Aba; setAba: (a: Aba) => void; empresa: any; onEmpresa: () => void;
+const Sidebar = ({ aba, setAba, logo, nomeEmpresa, onEmpresa }: {
+  aba: Aba; setAba: (a: Aba) => void; logo?: string; nomeEmpresa: string; onEmpresa: () => void;
 }) => {
   const abaIdx = STEPS.findIndex(s => s.id === aba);
   return (
@@ -296,85 +296,37 @@ const Sidebar = ({ aba, setAba, empresa, onEmpresa }: {
   );
 };
 
+// ─── SidebarContainer — único componente que pode assinar empresa do store
+// (Sidebar mostra o logo, mas App em si NÃO assina o store)
+function SidebarContainer({ aba, setAba, onEmpresa }: { aba: Aba; setAba: (a: Aba) => void; onEmpresa: () => void }) {
+  // Selector granular: só assina empresa.logoBase64 e empresa.nomeFantasia
+  const logo   = useProjetoStore(s => s.empresa.logoBase64);
+  const nome   = useProjetoStore(s => s.empresa.nomeFantasia || s.empresa.razaoSocial);
+  return <Sidebar aba={aba} setAba={setAba} logo={logo} nomeEmpresa={nome} onEmpresa={onEmpresa} />;
+}
+
 // ─── App ─────────────────────────────────────────────────────────────────────
+// REGRA CRÍTICA: App NÃO assina o Zustand store.
+// Cada Tab gerencia seu próprio estado. Isso garante que digitar
+// em qualquer campo re-renderiza APENAS o Tab ativo, nunca o App.
 export default function App() {
   const [aba, setAba] = useState<Aba>('cliente');
   const [showEmpresa, setShowEmpresa] = useState(false);
-  const [gerando, setGerando] = useState(false);
-  const s = useProjetoStore();
-
-  const validas = s.consumo.contas.filter(c => c.kWh > 0);
-  const mediaKWh = validas.length > 0 ? validas.reduce((a, c) => a + c.kWh, 0) / validas.length : 0;
-  const mediaRS  = validas.filter(c => c.valorRS > 0).length > 0
-    ? validas.filter(c => c.valorRS > 0).reduce((a, c) => a + c.valorRS, 0) / validas.filter(c => c.valorRS > 0).length : 0;
-
-  function buildPropostaData() {
-    return {
-      empresa: s.empresa, cliente: s.cliente,
-      codigoDistribuidora: s.consumo.codigoDistribuidora,
-      kit: {
-        marcaModulo: s.kit.marcaModulo, modeloModulo: s.kit.modeloModulo,
-        potenciaModuloWp: s.kit.potenciaModuloWp, quantidade: s.kit.quantidade,
-        tipoModulo: (PRESETS_MODULO[s.kit.tipoModulo].bifacial ? 'bifacial' :
-          s.kit.tipoModulo === 'policristalino' ? 'policristalino' : 'monocristalino') as 'monocristalino'|'policristalino'|'bifacial',
-        marcaInversor: s.kit.marcaInversor, modeloInversor: s.kit.modeloInversor,
-        potenciaInversorKW: s.kit.potenciaInversorKW, custoKitRS: s.kit.custoKitRS,
-      },
-      dimensionamento: s.dimensionamento!, custosRecorrentes: s.custosRecorrentes!,
-      precificacao: s.precificacao!, enquadramento: s.enquadramento!,
-      percentuaisFioBPorAno: s.percentuaisFioBPorAno,
-      consumoMedioMensalKWh: s.consumoMedioMensalKWh ?? 0,
-      valorMedioMensalRS: s.valorMedioMensalRS ?? 0,
-      aliquotaImpostos: s.preco.aliquotaImpostos,
-      margemDesejada: s.preco.margemDesejada,
-      indicadores: s.indicadores!,
-      contas: s.consumo.contas,
-    };
-  }
-
-  async function gerarPDFCliente() {
-    if (!s.dimensionamento || !s.precificacao || !s.custosRecorrentes || !s.enquadramento) return;
-    setGerando(true);
-    try {
-      const { PropostaComercialPDF } = await import('@domain/proposta/PropostaComercialPDF');
-      const blob = await pdf(<PropostaComercialPDF data={buildPropostaData()} />).toBlob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `Proposta_${(s.cliente.nome||'Cliente').replace(/\s+/g,'_')}_${new Date().toISOString().slice(0,10)}.pdf`;
-      a.click(); URL.revokeObjectURL(url);
-    } finally { setGerando(false); }
-  }
-
-  async function gerarPDFTecnico() {
-    if (!s.dimensionamento || !s.precificacao || !s.custosRecorrentes || !s.enquadramento) return;
-    setGerando(true);
-    try {
-      const blob = await pdf(<PropostaPDF data={buildPropostaData()} />).toBlob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `DocTecnica_${(s.cliente.nome||'Cliente').replace(/\s+/g,'_')}_${new Date().toISOString().slice(0,10)}.pdf`;
-      a.click(); URL.revokeObjectURL(url);
-    } finally { setGerando(false); }
-  }
-
-  function calcularEIr() { s.calcularTudo(); setAba('resultado'); }
+  // ↑ APENAS estado local de React. Zero chamadas a useProjetoStore() aqui.
 
   return (
     <>
       <style>{GLOBAL_CSS}</style>
       <div style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
-        <Sidebar aba={aba} setAba={setAba} empresa={s.empresa} onEmpresa={() => setShowEmpresa(true)} />
+        <SidebarContainer aba={aba} setAba={setAba} onEmpresa={() => setShowEmpresa(true)} />
         <main style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
           <div style={{ padding: '28px 32px', flex: 1 }}>
-            {/* Renderização direta — NUNCA definir componentes inline dentro do render (causa perda de foco) */}
-            {showEmpresa && <TabEmpresa onClose={() => setShowEmpresa(false)} />}
-            {!showEmpresa && aba === 'cliente'   && <TabCliente onNext={() => setAba('consumo')} />}
-            {!showEmpresa && aba === 'consumo'   && <TabConsumo onPrev={() => setAba('cliente')} onNext={() => setAba('kit')} mediaKWh={mediaKWh} mediaRS={mediaRS} />}
-            {!showEmpresa && aba === 'kit'        && <TabKit onPrev={() => setAba('consumo')} onNext={() => { s.recalcularDefaultsPreco(); setAba('preco'); }} mediaKWh={mediaKWh} />}
-            {!showEmpresa && aba === 'preco'      && <TabPreco onPrev={() => setAba('kit')} onCalc={calcularEIr} />}
-            {!showEmpresa && aba === 'resultado'  && <TabResultado onPrev={() => setAba('preco')} onPDFCliente={gerarPDFCliente} onPDFTecnico={gerarPDFTecnico} gerando={gerando} />}
+            {showEmpresa   && <TabEmpresa   onClose={() => setShowEmpresa(false)} />}
+            {!showEmpresa && aba === 'cliente'   && <TabCliente   onNext={() => setAba('consumo')} />}
+            {!showEmpresa && aba === 'consumo'   && <TabConsumo   onPrev={() => setAba('cliente')} onNext={() => setAba('kit')} />}
+            {!showEmpresa && aba === 'kit'        && <TabKit       onPrev={() => setAba('consumo')} onNext={() => { useProjetoStore.getState().recalcularDefaultsPreco(); setAba('preco'); }} />}
+            {!showEmpresa && aba === 'preco'      && <TabPreco     onPrev={() => setAba('kit')}    onCalc={() => { useProjetoStore.getState().calcularTudo(); setAba('resultado'); }} />}
+            {!showEmpresa && aba === 'resultado'  && <TabResultado onPrev={() => setAba('preco')} />}
           </div>
         </main>
       </div>
@@ -519,8 +471,12 @@ function TabCliente({ onNext }: { onNext: () => void }) {
 }
 
 // ─── Tab Consumo ──────────────────────────────────────────────────────────────
-function TabConsumo({ onPrev, onNext, mediaKWh, mediaRS }: { onPrev:()=>void; onNext:()=>void; mediaKWh:number; mediaRS:number }) {
+function TabConsumo({ onPrev, onNext }: { onPrev:()=>void; onNext:()=>void }) {
   const s = useProjetoStore();
+  const validas = s.consumo.contas.filter(c => c.kWh > 0);
+  const mediaKWh = validas.length > 0 ? validas.reduce((a, c) => a + c.kWh, 0) / validas.length : 0;
+  const mediaRS  = validas.filter(c => c.valorRS > 0).length > 0
+    ? validas.filter(c => c.valorRS > 0).reduce((a,c) => a + c.valorRS, 0) / validas.filter(c => c.valorRS > 0).length : 0;
   return (
     <div style={{ maxWidth: 700 }}>
       <PageTitle title="Consumo de energia" sub="Preencha com os dados das faturas do cliente dos últimos 12 meses." />
@@ -584,8 +540,10 @@ function TabConsumo({ onPrev, onNext, mediaKWh, mediaRS }: { onPrev:()=>void; on
 }
 
 // ─── Tab Kit ──────────────────────────────────────────────────────────────────
-function TabKit({ onPrev, onNext, mediaKWh }: { onPrev:()=>void; onNext:()=>void; mediaKWh:number }) {
+function TabKit({ onPrev, onNext }: { onPrev:()=>void; onNext:()=>void }) {
   const s = useProjetoStore();
+  const validas = s.consumo.contas.filter(c => c.kWh > 0);
+  const mediaKWh = validas.length > 0 ? validas.reduce((a, c) => a + c.kWh, 0) / validas.length : 0;
   const potKWp = (s.kit.potenciaModuloWp * s.kit.quantidade) / 1000;
   return (
     <div style={{ maxWidth: 680 }}>
@@ -714,8 +672,60 @@ function TabPreco({ onPrev, onCalc }: { onPrev:()=>void; onCalc:()=>void }) {
 }
 
 // ─── Tab Resultado ────────────────────────────────────────────────────────────
-function TabResultado({ onPrev, onPDFCliente, onPDFTecnico, gerando }: { onPrev:()=>void; onPDFCliente:()=>void; onPDFTecnico:()=>void; gerando:boolean }) {
+function TabResultado({ onPrev }: { onPrev:()=>void }) {
   const s = useProjetoStore();
+  const [gerando, setGerando] = React.useState(false);
+
+  function buildData() {
+    const { empresa, cliente, consumo, kit, dimensionamento, custosRecorrentes,
+      precificacao, enquadramento, percentuaisFioBPorAno, consumoMedioMensalKWh,
+      valorMedioMensalRS, preco, indicadores } = s;
+    return {
+      empresa, cliente, codigoDistribuidora: consumo.codigoDistribuidora,
+      kit: {
+        marcaModulo: kit.marcaModulo, modeloModulo: kit.modeloModulo,
+        potenciaModuloWp: kit.potenciaModuloWp, quantidade: kit.quantidade,
+        tipoModulo: (PRESETS_MODULO[kit.tipoModulo].bifacial ? 'bifacial' :
+          kit.tipoModulo === 'policristalino' ? 'policristalino' : 'monocristalino') as 'monocristalino'|'policristalino'|'bifacial',
+        marcaInversor: kit.marcaInversor, modeloInversor: kit.modeloInversor,
+        potenciaInversorKW: kit.potenciaInversorKW, custoKitRS: kit.custoKitRS,
+      },
+      dimensionamento: dimensionamento!, custosRecorrentes: custosRecorrentes!,
+      precificacao: precificacao!, enquadramento: enquadramento!,
+      percentuaisFioBPorAno, consumoMedioMensalKWh: consumoMedioMensalKWh ?? 0,
+      valorMedioMensalRS: valorMedioMensalRS ?? 0,
+      aliquotaImpostos: preco.aliquotaImpostos, margemDesejada: preco.margemDesejada,
+      indicadores: indicadores!, contas: consumo.contas,
+    };
+  }
+
+  async function gerarPDFCliente() {
+    if (!s.dimensionamento) return;
+    setGerando(true);
+    try {
+      const { PropostaComercialPDF } = await import('@domain/proposta/PropostaComercialPDF');
+      const blob = await pdf(<PropostaComercialPDF data={buildData()} />).toBlob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'Proposta_' + (s.cliente.nome||'Cliente').replace(/\s+/g,'_') + '_' + new Date().toISOString().slice(0,10) + '.pdf';
+      a.click(); URL.revokeObjectURL(url);
+    } finally { setGerando(false); }
+  }
+
+  async function gerarPDFTecnico() {
+    if (!s.dimensionamento) return;
+    setGerando(true);
+    try {
+      const blob = await pdf(<PropostaPDF data={buildData()} />).toBlob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'DocTecnica_' + (s.cliente.nome||'Cliente').replace(/\s+/g,'_') + '_' + new Date().toISOString().slice(0,10) + '.pdf';
+      a.click(); URL.revokeObjectURL(url);
+    } finally { setGerando(false); }
+  }
+
   if (!s.dimensionamento || !s.precificacao || !s.custosRecorrentes || !s.indicadores) {
     return (
       <div style={{ textAlign: 'center', padding: '60px 0' }}>
