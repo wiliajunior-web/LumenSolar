@@ -308,53 +308,58 @@ export default function App() {
   const mediaRS  = validas.filter(c => c.valorRS > 0).length > 0
     ? validas.filter(c => c.valorRS > 0).reduce((a, c) => a + c.valorRS, 0) / validas.filter(c => c.valorRS > 0).length : 0;
 
-  async function gerarPDF() {
+  function buildPropostaData() {
+    return {
+      empresa: s.empresa, cliente: s.cliente,
+      codigoDistribuidora: s.consumo.codigoDistribuidora,
+      kit: {
+        marcaModulo: s.kit.marcaModulo, modeloModulo: s.kit.modeloModulo,
+        potenciaModuloWp: s.kit.potenciaModuloWp, quantidade: s.kit.quantidade,
+        tipoModulo: (PRESETS_MODULO[s.kit.tipoModulo].bifacial ? 'bifacial' :
+          s.kit.tipoModulo === 'policristalino' ? 'policristalino' : 'monocristalino') as 'monocristalino'|'policristalino'|'bifacial',
+        marcaInversor: s.kit.marcaInversor, modeloInversor: s.kit.modeloInversor,
+        potenciaInversorKW: s.kit.potenciaInversorKW, custoKitRS: s.kit.custoKitRS,
+      },
+      dimensionamento: s.dimensionamento!, custosRecorrentes: s.custosRecorrentes!,
+      precificacao: s.precificacao!, enquadramento: s.enquadramento!,
+      percentuaisFioBPorAno: s.percentuaisFioBPorAno,
+      consumoMedioMensalKWh: s.consumoMedioMensalKWh ?? 0,
+      valorMedioMensalRS: s.valorMedioMensalRS ?? 0,
+      aliquotaImpostos: s.preco.aliquotaImpostos,
+      margemDesejada: s.preco.margemDesejada,
+      indicadores: s.indicadores!,
+      contas: s.consumo.contas,
+    };
+  }
+
+  async function gerarPDFCliente() {
     if (!s.dimensionamento || !s.precificacao || !s.custosRecorrentes || !s.enquadramento) return;
     setGerando(true);
     try {
-      const blob = await pdf(
-        <PropostaPDF data={{
-          empresa: s.empresa, cliente: s.cliente,
-          codigoDistribuidora: s.consumo.codigoDistribuidora,
-          kit: {
-            marcaModulo: s.kit.marcaModulo, modeloModulo: s.kit.modeloModulo,
-            potenciaModuloWp: s.kit.potenciaModuloWp, quantidade: s.kit.quantidade,
-            tipoModulo: PRESETS_MODULO[s.kit.tipoModulo].bifacial ? 'bifacial' :
-              s.kit.tipoModulo === 'policristalino' ? 'policristalino' : 'monocristalino',
-            marcaInversor: s.kit.marcaInversor, modeloInversor: s.kit.modeloInversor,
-            potenciaInversorKW: s.kit.potenciaInversorKW, custoKitRS: s.kit.custoKitRS,
-          },
-          dimensionamento: s.dimensionamento, custosRecorrentes: s.custosRecorrentes,
-          precificacao: s.precificacao, enquadramento: s.enquadramento,
-          percentuaisFioBPorAno: s.percentuaisFioBPorAno,
-          consumoMedioMensalKWh: s.consumoMedioMensalKWh ?? 0,
-          valorMedioMensalRS: s.valorMedioMensalRS ?? 0,
-          aliquotaImpostos: s.preco.aliquotaImpostos,
-          margemDesejada: s.preco.margemDesejada,
-        }} />
-      ).toBlob();
+      const { PropostaComercialPDF } = await import('@domain/proposta/PropostaComercialPDF');
+      const blob = await pdf(<PropostaComercialPDF data={buildPropostaData()} />).toBlob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `Proposta_Lumen_${(s.cliente.nome || 'Cliente').replace(/\s+/g,'_')}_${new Date().toISOString().slice(0,10)}.pdf`;
-      a.click();
-      URL.revokeObjectURL(url);
+      a.download = `Proposta_${(s.cliente.nome||'Cliente').replace(/\s+/g,'_')}_${new Date().toISOString().slice(0,10)}.pdf`;
+      a.click(); URL.revokeObjectURL(url);
+    } finally { setGerando(false); }
+  }
+
+  async function gerarPDFTecnico() {
+    if (!s.dimensionamento || !s.precificacao || !s.custosRecorrentes || !s.enquadramento) return;
+    setGerando(true);
+    try {
+      const blob = await pdf(<PropostaPDF data={buildPropostaData()} />).toBlob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `DocTecnica_${(s.cliente.nome||'Cliente').replace(/\s+/g,'_')}_${new Date().toISOString().slice(0,10)}.pdf`;
+      a.click(); URL.revokeObjectURL(url);
     } finally { setGerando(false); }
   }
 
   function calcularEIr() { s.calcularTudo(); setAba('resultado'); }
-
-  // ─── Conteúdo por aba ───────────────────────────────────────────────────
-  const Content = () => {
-    if (showEmpresa) return <TabEmpresa onClose={() => setShowEmpresa(false)} />;
-    switch(aba) {
-      case 'cliente':    return <TabCliente onNext={() => setAba('consumo')} />;
-      case 'consumo':    return <TabConsumo onPrev={() => setAba('cliente')} onNext={() => setAba('kit')} mediaKWh={mediaKWh} mediaRS={mediaRS} />;
-      case 'kit':        return <TabKit onPrev={() => setAba('consumo')} onNext={() => { s.recalcularDefaultsPreco(); setAba('preco'); }} mediaKWh={mediaKWh} />;
-      case 'preco':      return <TabPreco onPrev={() => setAba('kit')} onCalc={calcularEIr} />;
-      case 'resultado':  return <TabResultado onPrev={() => setAba('preco')} onPDF={gerarPDF} gerando={gerando} />;
-    }
-  };
 
   return (
     <>
@@ -363,7 +368,13 @@ export default function App() {
         <Sidebar aba={aba} setAba={setAba} empresa={s.empresa} onEmpresa={() => setShowEmpresa(true)} />
         <main style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
           <div style={{ padding: '28px 32px', flex: 1 }}>
-            <Content />
+            {/* Renderização direta — NUNCA definir componentes inline dentro do render (causa perda de foco) */}
+            {showEmpresa && <TabEmpresa onClose={() => setShowEmpresa(false)} />}
+            {!showEmpresa && aba === 'cliente'   && <TabCliente onNext={() => setAba('consumo')} />}
+            {!showEmpresa && aba === 'consumo'   && <TabConsumo onPrev={() => setAba('cliente')} onNext={() => setAba('kit')} mediaKWh={mediaKWh} mediaRS={mediaRS} />}
+            {!showEmpresa && aba === 'kit'        && <TabKit onPrev={() => setAba('consumo')} onNext={() => { s.recalcularDefaultsPreco(); setAba('preco'); }} mediaKWh={mediaKWh} />}
+            {!showEmpresa && aba === 'preco'      && <TabPreco onPrev={() => setAba('kit')} onCalc={calcularEIr} />}
+            {!showEmpresa && aba === 'resultado'  && <TabResultado onPrev={() => setAba('preco')} onPDFCliente={gerarPDFCliente} onPDFTecnico={gerarPDFTecnico} gerando={gerando} />}
           </div>
         </main>
       </div>
@@ -703,7 +714,7 @@ function TabPreco({ onPrev, onCalc }: { onPrev:()=>void; onCalc:()=>void }) {
 }
 
 // ─── Tab Resultado ────────────────────────────────────────────────────────────
-function TabResultado({ onPrev, onPDF, gerando }: { onPrev:()=>void; onPDF:()=>void; gerando:boolean }) {
+function TabResultado({ onPrev, onPDFCliente, onPDFTecnico, gerando }: { onPrev:()=>void; onPDFCliente:()=>void; onPDFTecnico:()=>void; gerando:boolean }) {
   const s = useProjetoStore();
   if (!s.dimensionamento || !s.precificacao || !s.custosRecorrentes || !s.indicadores) {
     return (
@@ -725,7 +736,10 @@ function TabResultado({ onPrev, onPDF, gerando }: { onPrev:()=>void; onPDF:()=>v
           <h1 style={{ fontSize: 22, fontWeight: 800, color: D.text, marginBottom: 2 }}>{s.cliente.nome || 'Resultado'}</h1>
           <p style={{ fontSize: 13, color: D.textMuted }}>{s.cliente.cidade}{s.cliente.cidade && s.cliente.uf ? ` · ${s.cliente.uf}` : s.cliente.uf}</p>
         </div>
-        <Btn onClick={onPDF} disabled={gerando}>{gerando ? '⏳ Gerando...' : '📄 Baixar Proposta PDF'}</Btn>
+        <div style={{ display: 'flex', gap: 8 }}>
+              <Btn onClick={onPDFCliente} disabled={gerando}>{gerando ? '⏳...' : '📄 Proposta Cliente'}</Btn>
+              <Btn onClick={onPDFTecnico} disabled={gerando} variant="ghost">{gerando ? '⏳...' : '🔧 Doc. Técnica'}</Btn>
+            </div>
       </div>
 
       {/* KPIs principais */}
@@ -865,7 +879,10 @@ function TabResultado({ onPrev, onPDF, gerando }: { onPrev:()=>void; onPDF:()=>v
 
       <div style={{ marginTop: 16, display: 'flex', gap: 10, justifyContent: 'space-between' }}>
         <Btn onClick={onPrev} variant="ghost">← Editar</Btn>
-        <Btn onClick={onPDF} disabled={gerando}>{gerando ? '⏳ Gerando...' : '📄 Baixar Proposta PDF'}</Btn>
+        <div style={{ display: 'flex', gap: 8 }}>
+              <Btn onClick={onPDFCliente} disabled={gerando}>{gerando ? '⏳...' : '📄 Proposta Cliente'}</Btn>
+              <Btn onClick={onPDFTecnico} disabled={gerando} variant="ghost">{gerando ? '⏳...' : '🔧 Doc. Técnica'}</Btn>
+            </div>
       </div>
     </div>
   );

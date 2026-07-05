@@ -128,6 +128,8 @@ export interface PropostaData {
   valorMedioMensalRS: number;
   aliquotaImpostos: number;
   margemDesejada: number;
+  indicadores?: any;
+  contas?: any[];
 }
 
 export function PropostaPDF({ data }: { data: PropostaData }) {
