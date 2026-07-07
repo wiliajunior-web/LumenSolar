@@ -49,6 +49,8 @@ export interface DadosEmpresa {
    * Valor padrão: 35% (média nacional).
    */
   fracaoTarifaFioB: number;
+  /** CPF do engenheiro responsável técnico (para procuração). */
+  cpfEngenheiro: string;
 }
 
 export const DADOS_EMPRESA_PADRAO: DadosEmpresa = {
@@ -79,4 +81,5 @@ export const DADOS_EMPRESA_PADRAO: DadosEmpresa = {
   descricaoOutroFinanciamento: 'Cartão 18×',
   parcelasOutroFinanciamento: 18,
   fracaoTarifaFioB: 0.35,
+  cpfEngenheiro: '',
 };

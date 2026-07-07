@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { pdf } from '@react-pdf/renderer';
 import { useProjetoStore, PRESETS_MODULO, type TipoModuloPreset } from './store/useProjetoStore';
 import { DISTRIBUIDORAS } from '@data/distribuidoras';
+import { TIPO_TELHADO_LABELS, ORIENTACOES, type TipoTelhado } from '@data/localizacao';
 import { HSP_MEDIO_POR_UF } from '@data/hspPorUF';
 import { PropostaPDF } from '@domain/proposta/PropostaPDF';
 
@@ -199,13 +200,14 @@ const KPI = ({ label, val, sub, color }: { label: string; val: string; sub?: str
 );
 
 // ─── Sidebar ─────────────────────────────────────────────────────────────────
-type Aba = 'cliente' | 'consumo' | 'kit' | 'preco' | 'resultado';
+type Aba = 'cliente' | 'consumo' | 'local' | 'kit' | 'preco' | 'resultado';
 const STEPS: { id: Aba; label: string; icon: string }[] = [
-  { id: 'cliente',    label: 'Cliente',     icon: '◈' },
-  { id: 'consumo',    label: 'Consumo',     icon: '⌁' },
-  { id: 'kit',        label: 'Kit Solar',   icon: '◉' },
-  { id: 'preco',      label: 'Precificação',icon: '◎' },
-  { id: 'resultado',  label: 'Resultado',   icon: '★' },
+  { id: 'cliente',   label: 'Cliente',      icon: '◈' },
+  { id: 'consumo',   label: 'Consumo',      icon: '⌁' },
+  { id: 'local',     label: 'Local',        icon: '◧' },
+  { id: 'kit',       label: 'Kit Solar',    icon: '◉' },
+  { id: 'preco',     label: 'Precificação', icon: '◎' },
+  { id: 'resultado', label: 'Resultado',    icon: '★' },
 ];
 
 const Sidebar = ({ aba, setAba, logo, nomeEmpresa, onEmpresa }: {
@@ -323,8 +325,9 @@ export default function App() {
           <div style={{ padding: '28px 32px', flex: 1 }}>
             {showEmpresa   && <TabEmpresa   onClose={() => setShowEmpresa(false)} />}
             {!showEmpresa && aba === 'cliente'   && <TabCliente   onNext={() => setAba('consumo')} />}
-            {!showEmpresa && aba === 'consumo'   && <TabConsumo   onPrev={() => setAba('cliente')} onNext={() => setAba('kit')} />}
-            {!showEmpresa && aba === 'kit'        && <TabKit       onPrev={() => setAba('consumo')} onNext={() => { useProjetoStore.getState().recalcularDefaultsPreco(); setAba('preco'); }} />}
+            {!showEmpresa && aba === 'consumo'   && <TabConsumo   onPrev={() => setAba('cliente')} onNext={() => setAba('local')} />}
+            {!showEmpresa && aba === 'local'      && <TabLocal     onPrev={() => setAba('consumo')} onNext={() => setAba('kit')} />}
+            {!showEmpresa && aba === 'kit'        && <TabKit       onPrev={() => setAba('local')} onNext={() => { useProjetoStore.getState().recalcularDefaultsPreco(); setAba('preco'); }} />}
             {!showEmpresa && aba === 'preco'      && <TabPreco     onPrev={() => setAba('kit')}    onCalc={() => { useProjetoStore.getState().calcularTudo(); setAba('resultado'); }} />}
             {!showEmpresa && aba === 'resultado'  && <TabResultado onPrev={() => setAba('preco')} />}
           </div>
@@ -359,6 +362,7 @@ function TabEmpresa({ onClose }: { onClose: () => void }) {
             <Campo label="Telefone"><input className="inp" value={empresa.telefone} onChange={e => atualizarEmpresa({ telefone: e.target.value })} /></Campo>
             <Campo label="E-mail" hint="Aparece na proposta"><input className="inp" value={empresa.email} onChange={e => atualizarEmpresa({ email: e.target.value })} /></Campo>
             <Campo label="Validade padrão (dias)"><input className="inp inp-num" type="number" value={empresa.validadeProposta} onChange={e => atualizarEmpresa({ validadeProposta: Number(e.target.value) })} /></Campo>
+            <Campo label="CPF do engenheiro responsável" tip="Necessário para a Procuração. Formato: 000.000.000-00"><input className="inp" value={empresa.cpfEngenheiro} onChange={e => atualizarEmpresa({ cpfEngenheiro: e.target.value })} placeholder="000.000.000-00" /></Campo>
           </div>
           <div className="sep" />
           <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
@@ -539,6 +543,78 @@ function TabConsumo({ onPrev, onNext }: { onPrev:()=>void; onNext:()=>void }) {
   );
 }
 
+// ─── Tab Local ───────────────────────────────────────────────────────────────
+function TabLocal({ onPrev, onNext }: { onPrev:()=>void; onNext:()=>void }) {
+  const s = useProjetoStore();
+  const loc = s.localizacao;
+  const upd = s.atualizarLocalizacao;
+  return (
+    <div style={{ maxWidth: 680 }}>
+      <PageTitle title="Local de instalação" sub="Dados do telhado e coordenadas — necessários para o Memorial Descritivo (CEMIG/distribuidora)." />
+
+      <div className="card" style={{ marginBottom: 14 }}>
+        <div className="card-head">Telhado</div>
+        <div className="card-body">
+          <div className="g2" style={{ rowGap: 14 }}>
+            <Campo label="Tipo de telhado" tip="Determina o tipo de estrutura de fixação e pode afetar o peso distribuído.">
+              <select className="inp" value={loc.tipoTelhado} onChange={e => upd({ tipoTelhado: e.target.value as TipoTelhado })}>
+                {Object.entries(TIPO_TELHADO_LABELS).map(([k,v]) => <option key={k} value={k}>{v}</option>)}
+              </select>
+            </Campo>
+            {loc.tipoTelhado === 'outro' && (
+              <Campo label="Descreva o tipo de telhado">
+                <input className="inp" value={loc.descTipoTelhado} onChange={e => upd({ descTipoTelhado: e.target.value })} />
+              </Campo>
+            )}
+            <Campo label="Inclinação do telhado (°)" tip="Inclinação em graus da superfície onde os módulos serão instalados. Telhados coloniais tipicamente 20-30°; laje = 0-10°. Afeta a geração estimada.">
+              <input className="inp inp-num" type="number" step="0.5" min="0" max="90" value={loc.inclinacaoGraus} onChange={e => upd({ inclinacaoGraus: Number(e.target.value) })} />
+            </Campo>
+            <Campo label="Orientação principal dos módulos" tip="Direção para onde os módulos ficam voltados. Norte = máxima geração no hemisfério sul. Nordeste e Noroeste também são boas opções.">
+              <select className="inp" value={loc.orientacaoPrincipal} onChange={e => upd({ orientacaoPrincipal: e.target.value })}>
+                {ORIENTACOES.map(o => <option key={o} value={o}>{o}</option>)}
+              </select>
+            </Campo>
+            <Campo label="Desvio azimutal (°)" hint="Positivo = desvio para Oeste, Negativo = desvio para Leste" tip="Ângulo de desvio em relação à orientação cardinal selecionada. Ex: Norte com desvio de +15° = Norte-Noroeste. Zero = orientação exata.">
+              <input className="inp inp-num" type="number" step="1" min="-90" max="90" value={loc.desvioAzimuthalGraus} onChange={e => upd({ desvioAzimuthalGraus: Number(e.target.value) })} />
+            </Campo>
+          </div>
+        </div>
+      </div>
+
+      <div className="card" style={{ marginBottom: 14 }}>
+        <div className="card-head">Coordenadas e identificação da UC</div>
+        <div className="card-body">
+          <div className="info-box info-box-blue" style={{ marginBottom: 14 }}>
+            💡 Coordenadas UTM são necessárias para o Memorial Descritivo. Obtenha no Google Maps (botão direito → "O que há aqui?") ou GPS. Use o conversor online de lat/long para UTM.
+          </div>
+          <div className="g2" style={{ rowGap: 14 }}>
+            <Campo label="UTM E — Abscissa" hint="Ex: 795209" tip="Coordenada UTM Leste (Easting). Obtida convertendo latitude/longitude para UTM. Necessária para o memorial.">
+              <input className="inp" value={loc.utmE} onChange={e => upd({ utmE: e.target.value })} placeholder="Ex: 795209" />
+            </Campo>
+            <Campo label="UTM N — Ordenada" hint="Ex: 7933873" tip="Coordenada UTM Norte (Northing).">
+              <input className="inp" value={loc.utmN} onChange={e => upd({ utmN: e.target.value })} placeholder="Ex: 7933873" />
+            </Campo>
+            <Campo label="Fuso UTM" hint="MG/GO/SP: Fuso 22 ou 23" tip="Zona UTM. Minas Gerais e Goiás usam fuso 22 ou 23 dependendo da longitude.">
+              <input className="inp inp-num" type="number" value={loc.utmFuso} onChange={e => upd({ utmFuso: Number(e.target.value) })} />
+            </Campo>
+            <Campo label="Nº da UC (Unidade Consumidora)" hint="Número do cliente na distribuidora — está na conta de energia" tip="Código de identificação do cliente na distribuidora (CEMIG, Equatorial, etc.). Necessário para o pedido de acesso.">
+              <input className="inp" value={loc.numeroUC} onChange={e => upd({ numeroUC: e.target.value })} placeholder="Ex: 1234567-8" />
+            </Campo>
+            <Campo label="Nº do Medidor" hint="Opcional">
+              <input className="inp" value={loc.numeroMedidor} onChange={e => upd({ numeroMedidor: e.target.value })} />
+            </Campo>
+            <Campo label="Endereço da instalação" hint="Se diferente do endereço do cliente">
+              <input className="inp" value={loc.enderecoInstalacao} onChange={e => upd({ enderecoInstalacao: e.target.value })} placeholder="Rua, número, bairro — CEP" />
+            </Campo>
+          </div>
+        </div>
+      </div>
+
+      <NavButtons onPrev={onPrev} onNext={onNext} nextLabel="Kit Solar →" />
+    </div>
+  );
+}
+
 // ─── Tab Kit ──────────────────────────────────────────────────────────────────
 function TabKit({ onPrev, onNext }: { onPrev:()=>void; onNext:()=>void }) {
   const s = useProjetoStore();
@@ -599,6 +675,45 @@ function TabKit({ onPrev, onNext }: { onPrev:()=>void; onNext:()=>void }) {
           </div>
         </div>
       </div>
+      {/* Specs técnicas — para Memorial Descritivo */}
+      <div className="card" style={{ marginBottom: 14 }}>
+        <div className="card-head">Especificações técnicas do módulo — do datasheet</div>
+        <div className="card-body">
+          <p className="lbl-hint" style={{ marginBottom: 14 }}>Dados do datasheet do fabricante — necessários para o Memorial Descritivo enviado à distribuidora.</p>
+          <div className="g3" style={{ rowGap: 14 }}>
+            <Campo label="Vmpp (V)" tip="Tensão de máxima potência em condições STC (1000 W/m², 25°C). Está na ficha técnica do módulo."><input className="inp inp-num" type="number" step="0.1" value={s.kit.vmppV || ''} onChange={e => s.atualizarKit({ vmppV: Number(e.target.value) })} /></Campo>
+            <Campo label="Impp (A)" tip="Corrente de máxima potência em STC."><input className="inp inp-num" type="number" step="0.01" value={s.kit.imppA || ''} onChange={e => s.atualizarKit({ imppA: Number(e.target.value) })} /></Campo>
+            <Campo label="Voc (V)" tip="Tensão de circuito aberto — usada para calcular tensão máxima do sistema CC."><input className="inp inp-num" type="number" step="0.1" value={s.kit.vocV || ''} onChange={e => s.atualizarKit({ vocV: Number(e.target.value) })} /></Campo>
+            <Campo label="Isc (A)" tip="Corrente de curto-circuito — usada para dimensionar proteções CC."><input className="inp inp-num" type="number" step="0.01" value={s.kit.iscA || ''} onChange={e => s.atualizarKit({ iscA: Number(e.target.value) })} /></Campo>
+            <Campo label="Comprimento (mm)"><input className="inp inp-num" type="number" value={s.kit.comprimentoMm || ''} onChange={e => s.atualizarKit({ comprimentoMm: Number(e.target.value) })} /></Campo>
+            <Campo label="Largura (mm)"><input className="inp inp-num" type="number" value={s.kit.larguraMm || ''} onChange={e => s.atualizarKit({ larguraMm: Number(e.target.value) })} /></Campo>
+            <Campo label="Peso por módulo (kg)"><input className="inp inp-num" type="number" step="0.1" value={s.kit.pesoKgModulo || ''} onChange={e => s.atualizarKit({ pesoKgModulo: Number(e.target.value) })} /></Campo>
+            <Campo label="Garantia do produto (anos)"><input className="inp inp-num" type="number" value={s.kit.garantiaProdutoAnos} onChange={e => s.atualizarKit({ garantiaProdutoAnos: Number(e.target.value) })} /></Campo>
+            <Campo label="Garantia de potência (anos)"><input className="inp inp-num" type="number" value={s.kit.garantiaPotenciaAnos} onChange={e => s.atualizarKit({ garantiaPotenciaAnos: Number(e.target.value) })} /></Campo>
+          </div>
+          <div className="g2" style={{ rowGap: 14, marginTop: 12 }}>
+            <Campo label="Potência garantida ao final (%)" hint="Ex: 80% ao final de 25 anos"><input className="inp inp-num" type="number" value={s.kit.potenciaGarantidaPercent} onChange={e => s.atualizarKit({ potenciaGarantidaPercent: Number(e.target.value) })} /></Campo>
+            <Campo label="Certificações" hint="Ex: INMETRO, IEC 61215, IEC 61730"><input className="inp" value={s.kit.certificacoes} onChange={e => s.atualizarKit({ certificacoes: e.target.value })} /></Campo>
+          </div>
+        </div>
+      </div>
+
+      <div className="card" style={{ marginBottom: 14 }}>
+        <div className="card-head">Configuração de strings e specs do inversor — para Memorial</div>
+        <div className="card-body">
+          <div className="g2" style={{ rowGap: 14 }}>
+            <Campo label="Número de strings (fileiras)" tip="Número de fileiras de módulos ligadas em paralelo. Sistemas residenciais pequenos geralmente usam 1 string."><input className="inp inp-num" type="number" min="1" value={s.kit.numStrings} onChange={e => s.atualizarKit({ numStrings: Number(e.target.value) })} /></Campo>
+            <Campo label="Módulos por string" hint="Será preenchido automaticamente ao calcular" tip="Número de módulos ligados em série em cada string. Tensão do sistema CC = Voc × módulos por string."><input className="inp inp-num" type="number" min="1" value={s.kit.modulosPorString} onChange={e => s.atualizarKit({ modulosPorString: Number(e.target.value) })} /></Campo>
+            <Campo label="Faixa MPPT mín. (V)" tip="Tensão mínima da faixa de rastreamento de potência máxima do inversor — do datasheet."><input className="inp inp-num" type="number" value={s.kit.faixaMpptMinV || ''} onChange={e => s.atualizarKit({ faixaMpptMinV: Number(e.target.value) })} /></Campo>
+            <Campo label="Faixa MPPT máx. (V)"><input className="inp inp-num" type="number" value={s.kit.faixaMpptMaxV || ''} onChange={e => s.atualizarKit({ faixaMpptMaxV: Number(e.target.value) })} /></Campo>
+            <Campo label="Tensão máx. entrada CC (V)" tip="Tensão máxima de entrada do inversor. O sistema deve ser projetado para ficar abaixo desse valor."><input className="inp inp-num" type="number" value={s.kit.tensaoMaxEntradaV || ''} onChange={e => s.atualizarKit({ tensaoMaxEntradaV: Number(e.target.value) })} /></Campo>
+            <Campo label="Corrente máx. saída CA (A)"><input className="inp inp-num" type="number" step="0.1" value={s.kit.corrMaxSaidaA || ''} onChange={e => s.atualizarKit({ corrMaxSaidaA: Number(e.target.value) })} /></Campo>
+            <Campo label="Número de MPPTs" hint="Rastreadores de ponto de máxima potência"><input className="inp inp-num" type="number" min="1" value={s.kit.numMppt} onChange={e => s.atualizarKit({ numMppt: Number(e.target.value) })} /></Campo>
+            <Campo label="IP do gabinete" hint="Ex: IP65, IP67"><input className="inp" value={s.kit.ipGabinete} onChange={e => s.atualizarKit({ ipGabinete: e.target.value })} /></Campo>
+          </div>
+        </div>
+      </div>
+
       <NavButtons onPrev={onPrev} onNext={onNext} nextLabel="Precificação →" />
     </div>
   );
@@ -722,6 +837,35 @@ function TabResultado({ onPrev }: { onPrev:()=>void }) {
       const a = document.createElement('a');
       a.href = url;
       a.download = 'DocTecnica_' + (s.cliente.nome||'Cliente').replace(/\s+/g,'_') + '_' + new Date().toISOString().slice(0,10) + '.pdf';
+      a.click(); URL.revokeObjectURL(url);
+    } finally { setGerando(false); }
+  }
+
+  async function gerarMemorial() {
+    if (!s.dimensionamento) return;
+    setGerando(true);
+    try {
+      const { MemorialDescritivo } = await import('@domain/proposta/MemorialDescritivo');
+      const d = buildData();
+      const blob = await pdf(<MemorialDescritivo data={{...d, localizacao: s.localizacao, kit: s.kit}} />).toBlob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'Memorial_' + (s.cliente.nome||'Cliente').replace(/\s+/g,'_') + '_' + new Date().toISOString().slice(0,10) + '.pdf';
+      a.click(); URL.revokeObjectURL(url);
+    } finally { setGerando(false); }
+  }
+
+  async function gerarProcuracao() {
+    setGerando(true);
+    try {
+      const { Procuracao } = await import('@domain/proposta/Procuracao');
+      const d = buildData();
+      const blob = await pdf(<Procuracao data={{...d, localizacao: s.localizacao}} />).toBlob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'Procuracao_' + (s.cliente.nome||'Cliente').replace(/\s+/g,'_') + '_' + new Date().toISOString().slice(0,10) + '.pdf';
       a.click(); URL.revokeObjectURL(url);
     } finally { setGerando(false); }
   }
