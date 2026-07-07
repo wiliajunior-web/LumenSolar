@@ -365,7 +365,7 @@ function TabEmpresa({ onClose }: { onClose: () => void }) {
             <Campo label="CPF do engenheiro responsável" tip="Necessário para a Procuração. Formato: 000.000.000-00"><input className="inp" value={empresa.cpfEngenheiro} onChange={e => atualizarEmpresa({ cpfEngenheiro: e.target.value })} placeholder="000.000.000-00" /></Campo>
           </div>
           <div className="sep" />
-          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
             {empresa.logoBase64 && <img src={empresa.logoBase64} style={{ width: 48, height: 48, borderRadius: '50%', objectFit: 'contain', border: `1px solid ${D.border}` }} />}
             <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '8px 14px', background: D.gold, color: D.header, borderRadius: 8, cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>
               📂 {empresa.logoBase64 ? 'Trocar logo' : 'Carregar logo'}
@@ -374,7 +374,47 @@ function TabEmpresa({ onClose }: { onClose: () => void }) {
                 const r = new FileReader(); r.onload = ev => atualizarEmpresa({ logoBase64: ev.target?.result as string }); r.readAsDataURL(file);
               }} />
             </label>
-            {empresa.logoBase64 && <button onClick={() => atualizarEmpresa({ logoBase64: undefined })} style={{ background:'none', border:'none', color: D.danger, cursor:'pointer', fontSize:12, fontWeight:600 }}>Remover</button>}
+            {empresa.logoBase64 && <button onClick={() => atualizarEmpresa({ logoBase64: undefined })} style={{ background:'none', border:'none', color: D.danger, cursor:'pointer', fontSize:12, fontWeight:600 }}>Remover logo</button>}
+          </div>
+          <div className="sep" />
+          <p className="lbl-hint" style={{ marginBottom: 10 }}>Fotos para os PDFs — <strong>já vêm com a arte Lumen padrão</strong>, mas você pode personalizar:</p>
+          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+            {/* Foto de capa */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              {empresa.fotoCapa
+                ? <img src={empresa.fotoCapa} style={{ width: 72, height: 52, objectFit: 'cover', borderRadius: 6, border: `1px solid ${D.border}` }} />
+                : <div style={{ width: 72, height: 52, background: '#0d1117', borderRadius: 6, border: `1px solid ${D.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: D.gold }}>CAPA</div>
+              }
+              <div>
+                <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', background: D.gold, color: D.header, borderRadius: 6, cursor: 'pointer', fontSize: 11, fontWeight: 700 }}>
+                  🖼 Foto de capa
+                  <input type="file" accept="image/*" style={{ display: 'none' }} onChange={e => {
+                    const file = e.target.files?.[0]; if (!file) return;
+                    const r = new FileReader(); r.onload = ev => atualizarEmpresa({ fotoCapa: ev.target?.result as string }); r.readAsDataURL(file);
+                  }} />
+                </label>
+                {empresa.fotoCapa && <button onClick={() => atualizarEmpresa({ fotoCapa: undefined })} style={{ marginLeft: 6, background: 'none', border: 'none', color: D.danger, cursor: 'pointer', fontSize: 11 }}>Remover</button>}
+                <p className="lbl-hint">Portrait A4 — proposta do cliente</p>
+              </div>
+            </div>
+            {/* Foto de apoio */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              {empresa.fotoApoio
+                ? <img src={empresa.fotoApoio} style={{ width: 72, height: 52, objectFit: 'cover', borderRadius: 6, border: `1px solid ${D.border}` }} />
+                : <div style={{ width: 72, height: 52, background: '#0d1117', borderRadius: 6, border: `1px solid ${D.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: D.gold }}>BANNER</div>
+              }
+              <div>
+                <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', background: D.gold, color: D.header, borderRadius: 6, cursor: 'pointer', fontSize: 11, fontWeight: 700 }}>
+                  🖼 Foto de apoio
+                  <input type="file" accept="image/*" style={{ display: 'none' }} onChange={e => {
+                    const file = e.target.files?.[0]; if (!file) return;
+                    const r = new FileReader(); r.onload = ev => atualizarEmpresa({ fotoApoio: ev.target?.result as string }); r.readAsDataURL(file);
+                  }} />
+                </label>
+                {empresa.fotoApoio && <button onClick={() => atualizarEmpresa({ fotoApoio: undefined })} style={{ marginLeft: 6, background: 'none', border: 'none', color: D.danger, cursor: 'pointer', fontSize: 11 }}>Remover</button>}
+                <p className="lbl-hint">Landscape wide — banner interno</p>
+              </div>
+            </div>
           </div>
         </div>
       </div>

@@ -7,6 +7,7 @@ import {
   Document, Page, Text, View, StyleSheet, Image, Svg, Rect, G,
 } from '@react-pdf/renderer';
 import { DISTRIBUIDORAS } from '../../data/distribuidoras';
+import { IMG_CAPA, IMG_APOIO } from '../../assets/imagens';
 import { MESES_LABELS } from '../../data/hspMensal';
 
 // ── Paleta Lumen ─────────────────────────────────────────────────────────────
@@ -176,60 +177,44 @@ export function PropostaComercialPDF({ data }: { data: any }) {
   return (
     <Document title={`Proposta Solar — ${cliente.nome}`} author={empresa.razaoSocial}>
 
-      {/* ════ CAPA ════ */}
-      <Page size="A4" style={S.pageD}>
-        <View style={{ flex: 1, padding: '36 40', justifyContent: 'space-between' }}>
-          {/* Topo */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 40 }}>
-            {empresa.logoBase64
-              ? <Image src={empresa.logoBase64} style={{ width: 48, height: 48, borderRadius: 24 }} />
-              : <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: C.gold, alignItems: 'center', justifyContent: 'center' }}>
-                  <Text style={{ color: C.dark, fontFamily: 'Helvetica-Bold', fontSize: 20 }}>L</Text>
-                </View>
-            }
-            <View>
-              <Text style={{ color: C.white, fontFamily: 'Helvetica-Bold', fontSize: 14, letterSpacing: 2 }}>LUMEN SOLAR</Text>
-              <Text style={{ color: '#6070a0', fontSize: 9 }}>{empresa.razaoSocial}</Text>
-            </View>
+      {/* ════ CAPA — foto Lumen como background full-bleed ════ */}
+      <Page size="A4" style={{ fontFamily: 'Helvetica', padding: 0 }}>
+        {/* Imagem de capa full-page */}
+        <Image
+          src={empresa.fotoCapa || IMG_CAPA}
+          style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+        />
+        {/* Overlay com info do cliente no rodapé */}
+        <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(0,0,0,0.72)', padding: '18 32 22 32' }}>
+          <Text style={{ color: '#ffffff', fontFamily: 'Helvetica-Bold', fontSize: 16, marginBottom: 4 }}>
+            {cliente.nome || 'Cliente'}
+          </Text>
+          <Text style={{ color: '#c9a227', fontSize: 10, marginBottom: 10 }}>
+            {cliente.cidade}{cliente.cidade && cliente.uf ? ` — ${cliente.uf}` : cliente.uf}
+          </Text>
+          {/* Métricas */}
+          <View style={{ flexDirection: 'row', gap: 0, marginBottom: 10 }}>
+            {[
+              [N(dim.potenciaInstaladaRealKWp) + ' kWp', 'Potência instalada'],
+              [R(cr.economiaMensalRS) + '/mês', 'Economia estimada'],
+              [ind?.paybackSimples ?? '—', 'Retorno do invest.'],
+            ].map(([val, lbl], i) => (
+              <View key={i} style={{ flex: 1, paddingRight: 12 }}>
+                <Text style={{ color: '#c9a227', fontFamily: 'Helvetica-Bold', fontSize: 14 }}>{val}</Text>
+                <Text style={{ color: '#aaaacc', fontSize: 8, marginTop: 2 }}>{lbl.toUpperCase()}</Text>
+              </View>
+            ))}
           </View>
-
-          {/* Título */}
-          <View>
-            <View style={S.capaBadge}><Text style={S.capaBadgeTxt}>PROPOSTA COMERCIAL</Text></View>
-            <Text style={S.capaTitulo}>Energia Solar{'\n'}Personalizada</Text>
-            <Text style={S.capaCliente}>{cliente.nome}</Text>
-            <Text style={S.capaLocal}>{cliente.cidade}{cliente.cidade && cliente.uf ? ` — ${cliente.uf}` : cliente.uf} · {hoje()}</Text>
-          </View>
-
-          {/* Métricas de destaque */}
-          <View style={S.capaMetrics}>
-            <View style={S.metric}>
-              <Text style={S.metricVal}>{N(dim.potenciaInstaladaRealKWp)} kWp</Text>
-              <Text style={S.metricLbl}>POTÊNCIA INSTALADA</Text>
-            </View>
-            <View style={S.metric}>
-              <Text style={S.metricVal}>{R(cr.economiaMensalRS)}</Text>
-              <Text style={S.metricLbl}>ECONOMIA / MÊS</Text>
-            </View>
-            <View style={S.metric}>
-              <Text style={[S.metricVal, { color: '#58d68d' }]}>{ind?.paybackSimples ?? '—'}</Text>
-              <Text style={S.metricLbl}>RETORNO DO INVESTIMENTO</Text>
-            </View>
-          </View>
-
-          {/* Rodapé da capa */}
-          <View style={S.capaRodape}>
-            <View>
-              <Text style={S.capaEmpNome}>{empresa.nomeFantasia || empresa.razaoSocial}</Text>
-              <Text style={S.capaEmpInfo}>{[empresa.telefone, empresa.email, empresa.crea && `CREA-${empresa.uf} ${empresa.crea}`].filter(Boolean).join('  ·  ')}</Text>
-            </View>
-            <Text style={S.capaValidade}>Válida por {empresa.validadeProposta} dias{'\n'}a partir de {hoje()}</Text>
-          </View>
+          <Text style={{ color: '#666688', fontSize: 8 }}>
+            Válida por {empresa.validadeProposta} dias · {hoje()} · {empresa.email} · {empresa.telefone}
+          </Text>
         </View>
       </Page>
 
       {/* ════ PÁG 1: POR QUE SOLAR? ════ */}
       <Page size="A4" style={S.page}>
+        {/* Banner de topo */}
+        <Image src={empresa.fotoApoio || IMG_APOIO} style={{ width: '100%', height: 110, objectFit: 'cover', objectPosition: 'center 60%' }} />
         <View style={S.row} wrap={false}>
           <View style={S.band} />
           <View style={S.body}>

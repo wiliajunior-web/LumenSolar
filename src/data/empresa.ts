@@ -51,6 +51,10 @@ export interface DadosEmpresa {
   fracaoTarifaFioB: number;
   /** CPF do engenheiro responsável técnico (para procuração). */
   cpfEngenheiro: string;
+  /** Foto de capa da proposta (base64). Padrão: arte Lumen. */
+  fotoCapa?: string;
+  /** Foto de apoio — interior das páginas (base64). Padrão: arte Lumen. */
+  fotoApoio?: string;
 }
 
 export const DADOS_EMPRESA_PADRAO: DadosEmpresa = {
