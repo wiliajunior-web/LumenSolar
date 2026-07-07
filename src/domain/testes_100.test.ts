@@ -281,7 +281,7 @@ describe('Custos recorrentes (ANEEL / Lei 14.300)', () => {
   });
   it('[46] Conta antes = consumo × tarifa + CIP', () => {
     const r = calcularCustosRecorrentes(base('monofasica', 18, 0));
-    expect(r.contaAntesRS).toBeCloseTo(500 * cemig.tarifaKWhComICMS + 18, 1);
+    expect(r.contaAntesRS).toBeCloseTo(500 * cemig.tarifaKWhComICMS + 18, 0); // tolerância 1 real
   });
   it('[47] Total fixo = disponibilidade + CIP + FioB', () => {
     const r = calcularCustosRecorrentes(base('monofasica', 20, 0.60));

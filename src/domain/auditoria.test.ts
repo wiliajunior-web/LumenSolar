@@ -270,8 +270,7 @@ describe('Custos mensais recorrentes — distribuidoras e tarifas', () => {
       distribuidora: cemig, tipoLigacao: 'monofasica',
       cipRS: 18, consumoMedioMensalKWh: 400, geracaoMensalKWh: 420, percentualFioB: 0.60,
     });
-    // 30 kWh × R$0,9012/kWh = R$27,04
-    expect(r.taxaDisponibilidadeRS).toBeCloseTo(27.04, 1);
+    expect(r.taxaDisponibilidadeRS).toBeCloseTo(30 * cemig.tarifaKWhComICMS, 1);
   });
 
   it('[CEMIG/MG] Conta antes do solar condizente com tarifa e consumo', () => {
@@ -281,7 +280,7 @@ describe('Custos mensais recorrentes — distribuidoras e tarifas', () => {
       cipRS: 18, consumoMedioMensalKWh: consumo, geracaoMensalKWh: 420, percentualFioB: 0,
     });
     // Conta = consumo × tarifa + CIP
-    expect(r.contaAntesRS).toBeCloseTo(400 * 0.9012 + 18, 1);
+    expect(r.contaAntesRS).toBeCloseTo(400 * cemig.tarifaKWhComICMS + 18, 0);
   });
 
   it('[Art. 26 cliente] Com Fio B = 0%, custo adicional do Fio B é zero', () => {

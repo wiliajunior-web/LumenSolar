@@ -406,9 +406,9 @@ describe('BLOCO H — Integridade de dados (ANEEL, CRESESB, distribuidoras)', ()
     }
   });
 
-  it('[H05] CEMIG tarifa atual dentro do esperado para 2025 (R$0.80–R$1.10)', () => {
-    expect(cemig.tarifaKWhComICMS).toBeGreaterThan(0.80);
-    expect(cemig.tarifaKWhComICMS).toBeLessThan(1.10);
+  it('[H05] CEMIG tarifa 2026 (Res. ANEEL 3.589/2026) entre R$1,00 e R$1,50', () => {
+    expect(cemig.tarifaKWhComICMS).toBeGreaterThan(1.00);
+    expect(cemig.tarifaKWhComICMS).toBeLessThan(1.50);
   });
 });
 

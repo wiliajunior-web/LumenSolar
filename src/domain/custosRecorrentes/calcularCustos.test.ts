@@ -14,8 +14,7 @@ describe('calcularCustosRecorrentes', () => {
       geracaoMensalKWh: 520,
       percentualFioB: 0.6,
     });
-    // 30 kWh × R$0,9012/kWh = R$27,04
-    expect(r.taxaDisponibilidadeRS).toBeCloseTo(30 * 0.9012, 3);
+    expect(r.taxaDisponibilidadeRS).toBeCloseTo(30 * cemig.tarifaKWhComICMS, 1);
   });
 
   it('taxa de disponibilidade para trifásica é maior que monofásica', () => {

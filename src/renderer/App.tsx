@@ -527,23 +527,52 @@ function TabConsumo({ onPrev, onNext }: { onPrev:()=>void; onNext:()=>void }) {
       <div className="card" style={{ marginBottom: 14 }}>
         <div className="card-head">Distribuidora e tarifas</div>
         <div className="card-body">
-          <div className="g3">
-            <Campo label="Distribuidora" tip="A distribuidora determina a tarifa de energia (R$/kWh) usada para calcular a taxa de disponibilidade e o custo do Fio B (Lei 14.300/2022). Atualize anualmente após revisão tarifária da ANEEL.">
+          <div className="info-box info-box-blue" style={{ marginBottom: 14, fontSize: 12 }}>
+            📄 <strong>Como preencher a partir da conta de energia:</strong><br/>
+            <span style={{ display: 'block', marginTop: 6, lineHeight: 1.6 }}>
+              • <strong>Distribuidora</strong> → logo no cabeçalho da conta (CEMIG, Equatorial, etc.)<br/>
+              • <strong>Tipo de ligação</strong> → campo "Classe/Subclasse" — "Bifásico" ou "Trifásico" ou "Monofásico"<br/>
+              • <strong>CIP/COSIP</strong> → linha "Contrib. Ilum. Publica Municipal" nos Valores Faturados<br/>
+              • <strong>Tarifa real</strong> → coluna "Preço Unit." na linha "Energia Elétrica"<br/>
+              • <strong>Nº da UC</strong> → "N.º DA UNIDADE CONSUMIDORA" (número grande em destaque)<br/>
+              • <strong>Histórico</strong> → tabela "Histórico de Consumo" no canto inferior esquerdo
+            </span>
+          </div>
+          <div className="g2" style={{ marginBottom: 12 }}>
+            <Campo label="Distribuidora" tip="Distribuidora de energia elétrica da conta do cliente. O logo aparece no cabeçalho da fatura.">
               <select className="inp" value={s.consumo.codigoDistribuidora} onChange={e => s.atualizarConsumo({ codigoDistribuidora: e.target.value })}>
                 {DISTRIBUIDORAS.map(d => <option key={d.codigo} value={d.codigo}>{d.nomeAbreviado}</option>)}
               </select>
             </Campo>
-            <Campo label="Tipo de ligação" tip="Define o mínimo faturável mensal: monofásica = 30 kWh, bifásica = 50 kWh, trifásica = 100 kWh. Mesmo com o solar gerando mais que o consumo, este valor mínimo sempre é cobrado.">
+            <Campo label="Tipo de ligação" tip="Está no campo 'Classe' da conta — Bifásico, Monofásico ou Trifásico. Determina o mínimo faturável: Mono=30kWh, Bi=50kWh, Tri=100kWh. ATENÇÃO: a maioria das contas residenciais em Araguari/CEMIG é BIFÁSICA.">
               <select className="inp" value={s.consumo.tipoLigacao} onChange={e => s.atualizarConsumo({ tipoLigacao: e.target.value as 'monofasica'|'bifasica'|'trifasica' })}>
                 <option value="monofasica">Monofásica (30 kWh mín.)</option>
                 <option value="bifasica">Bifásica (50 kWh mín.)</option>
                 <option value="trifasica">Trifásica (100 kWh mín.)</option>
               </select>
             </Campo>
-            <Campo label="CIP / Iluminação pública (R$)" hint="Valor mensal fixo da conta" tip="Contribuição municipal para custeio da iluminação pública (CIP ou COSIP). Varia por cidade — verifique na fatura do cliente. Não é isenta mesmo com sistema solar.">
+          </div>
+          <div className="g2" style={{ marginBottom: 12 }}>
+            <Campo
+              label="Tarifa real da conta (R$/kWh)"
+              hint="Coluna 'Preço Unit.' linha Energia Elétrica — ex: 1,18272801"
+              tip="⭐ CAMPO MAIS IMPORTANTE para precisão. Copie o valor exato da coluna 'Preço Unit.' na linha 'Energia Elétrica'. É mais preciso que qualquer banco de dados, pois reflete a tarifa atual após revisão da ANEEL. Se deixar 0, usa a referência do banco de dados (menos preciso)."
+            >
+              <input className="inp inp-num" type="number" step="0.00001" value={s.consumo.tarifaRealKWhComICMS || ''} onChange={e => s.atualizarConsumo({ tarifaRealKWhComICMS: Number(e.target.value) })} placeholder="Ex: 1.18272801" />
+            </Campo>
+            <Campo label="CIP / Iluminação pública (R$/mês)" hint="Linha 'Contrib. Ilum. Publica Municipal'" tip="Contribuição municipal de iluminação pública. Na conta CEMIG aparece como 'Contrib. Ilum. Publica Municipal'. Persiste após instalação solar.">
               <input className="inp inp-num" type="number" step="0.01" value={s.consumo.cipMensalRS} onChange={e => s.atualizarConsumo({ cipMensalRS: Number(e.target.value) })} />
             </Campo>
           </div>
+          {/* Aviso de tarifa */}
+          {s.consumo.tarifaRealKWhComICMS === 0 && (() => {
+            const d = DISTRIBUIDORAS.find(d => d.codigo === s.consumo.codigoDistribuidora);
+            return d ? (
+              <div className="info-box" style={{ marginBottom: 12 }}>
+                ⚠️ Usando tarifa de referência do banco de dados ({d.nomeAbreviado}): <strong>R$ {d.tarifaKWhComICMS.toFixed(4)}/kWh</strong> ({d.referenciaAtualizacao}). Para máxima precisão, informe a tarifa real da conta acima.
+              </div>
+            ) : null;
+          })()}
         </div>
       </div>
 

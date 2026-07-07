@@ -43,6 +43,12 @@ export interface EntradaConsumo {
   codigoDistribuidora: string;
   tipoLigacao: TipoLigacao;
   cipMensalRS: number;
+  /**
+   * Tarifa real da conta de energia (R$/kWh), conforme valor na fatura.
+   * Se 0, usa a tarifa de referência da distribuidora no banco de dados.
+   * SEMPRE prefira o valor da conta: é mais preciso que o banco de dados.
+   */
+  tarifaRealKWhComICMS: number;
 }
 
 export interface EntradaKit {
@@ -141,6 +147,7 @@ export const useProjetoStore = create<ProjetoState>((set, get) => ({
     codigoDistribuidora: 'CEMIG',
     tipoLigacao: 'monofasica',
     cipMensalRS: 18,
+    tarifaRealKWhComICMS: 0,
   },
   localizacao: LOCALIZACAO_PADRAO,
   kit: {
@@ -225,7 +232,11 @@ export const useProjetoStore = create<ProjetoState>((set, get) => ({
     for (const a of anos) pfb[a]=percentualFioBPorAno(enquadramento,a);
 
     const distribuidora=DISTRIBUIDORAS.find(d=>d.codigo===consumo.codigoDistribuidora)??DISTRIBUIDORAS[0];
-    const custosRecorrentes=calcularCustosRecorrentes({distribuidora,tipoLigacao:consumo.tipoLigacao,cipRS:consumo.cipMensalRS,consumoMedioMensalKWh:mediaKWh,geracaoMensalKWh:dimensionamento.geracaoMensalEstimadaKWh,percentualFioB:percentualFioBPorAno(enquadramento,new Date().getFullYear()),fracaoTarifaFioB:empresa.fracaoTarifaFioB});
+    // Usa tarifa real da conta se informada; caso contrário usa banco de dados
+    const distribuidoraComTarifa = consumo.tarifaRealKWhComICMS > 0
+      ? {...distribuidora, tarifaKWhComICMS: consumo.tarifaRealKWhComICMS}
+      : distribuidora;
+    const custosRecorrentes=calcularCustosRecorrentes({distribuidora:distribuidoraComTarifa,tipoLigacao:consumo.tipoLigacao,cipRS:consumo.cipMensalRS,consumoMedioMensalKWh:mediaKWh,geracaoMensalKWh:dimensionamento.geracaoMensalEstimadaKWh,percentualFioB:percentualFioBPorAno(enquadramento,new Date().getFullYear()),fracaoTarifaFioB:empresa.fracaoTarifaFioB});
 
     const potKWp=dimensionamento.potenciaInstaladaRealKWp;
     const numMod=dimensionamento.numeroModulos;
