@@ -119,10 +119,8 @@ describe('BLOCO B — Lei 14.300 e custos recorrentes', () => {
     expect(r.custoBFioMensalRS).toBeLessThan(800 * cemig.tarifaKWhComICMS * 0.35 * 0.60 + 0.01);
   });
 
-  it('[B08] ABSURDO: CIP negativo → custo deve ser positivo ou zero', () => {
-    // Programa não deve gerar valores absurdos com CIP negativo
-    const r = calcularCustosRecorrentes({distribuidora:cemig, tipoLigacao:'monofasica', cipRS:-50, consumoMedioMensalKWh:500, geracaoMensalKWh:500, percentualFioB:0});
-    expect(r.taxaDisponibilidadeRS).toBeGreaterThan(0);
+  it('[B08] CIP negativo → deve lançar erro (validação adicionada na auditoria)', () => {
+    expect(() => calcularCustosRecorrentes({distribuidora:cemig, tipoLigacao:'monofasica', cipRS:-50, consumoMedioMensalKWh:500, geracaoMensalKWh:500, percentualFioB:0})).toThrow();
   });
 });
 

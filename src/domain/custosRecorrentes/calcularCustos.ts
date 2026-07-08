@@ -36,6 +36,9 @@ export interface ResultadoCustosRecorrentes {
 const FRACAO_FATURA_FIO_B_PADRAO = 0.35;
 
 export function calcularCustosRecorrentes(p: ParametrosCustosRecorrentes): ResultadoCustosRecorrentes {
+  if (p.distribuidora.tarifaKWhComICMS < 0) throw new Error('Tarifa da distribuidora não pode ser negativa.');
+  if (p.cipRS < 0) throw new Error('CIP/COSIP não pode ser negativo.');
+  if (p.consumoMedioMensalKWh < 0) throw new Error('Consumo médio mensal não pode ser negativo.');
   const kwhMinimo = KWH_DISPONIBILIDADE[p.tipoLigacao];
   const taxaDisponibilidadeRS = kwhMinimo * p.distribuidora.tarifaKWhComICMS;
 

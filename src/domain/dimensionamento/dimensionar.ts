@@ -14,6 +14,7 @@ const DIAS_MES = 30.4167;
  * arredondando para um número inteiro de módulos.
  */
 export function dimensionarSistema(params: ParametrosDimensionamento): ResultadoDimensionamento {
+  if (params.consumoMedioMensalKWh < 0) throw new Error('Consumo médio mensal não pode ser negativo.');
   if (params.hspLocal <= 0) throw new Error('HSP local deve ser maior que zero.');
   if (params.perdasSistema < 0 || params.perdasSistema >= 1) {
     throw new Error('Perdas do sistema devem estar entre 0 e 1 (exclusivo).');
