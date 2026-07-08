@@ -15,11 +15,16 @@ const PRELOAD_CANDIDATES = [
 const PRELOAD_PATH = PRELOAD_CANDIDATES.find(p => existsSync(p));
 
 // ── Diretórios de dados ──────────────────────────────────────────────────────
-const USER_DATA = app.getPath('userData');
-const PROPOSALS_DIR = path.join(USER_DATA, 'proposals');
-const EMPRESA_FILE = path.join(USER_DATA, 'empresa.json');
+// Caminhos inicializados lazy dentro de app.whenReady para máxima compatibilidade
+let PROPOSALS_DIR: string;
+let EMPRESA_FILE: string;
 
 function ensureDirs() {
+  if (!PROPOSALS_DIR) {
+    const userData = app.getPath('userData');
+    PROPOSALS_DIR = path.join(userData, 'proposals');
+    EMPRESA_FILE  = path.join(userData, 'empresa.json');
+  }
   if (!existsSync(PROPOSALS_DIR)) mkdirSync(PROPOSALS_DIR, { recursive: true });
 }
 
@@ -51,9 +56,15 @@ ipcMain.handle('proposal:save', async (_e, proposal: any) => {
 });
 
 ipcMain.handle('proposal:load', async (_e, id: string) => {
+  ensureDirs();
   const file = path.join(PROPOSALS_DIR, `${id}.json`);
-  const raw = await readFile(file, 'utf-8');
-  return JSON.parse(raw);
+  try {
+    const raw = await readFile(file, 'utf-8');
+    return JSON.parse(raw);
+  } catch (e: any) {
+    if (e.code === 'ENOENT') return null; // arquivo não encontrado
+    throw e;
+  }
 });
 
 ipcMain.handle('proposal:delete', async (_e, id: string) => {

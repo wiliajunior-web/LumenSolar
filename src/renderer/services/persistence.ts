@@ -49,7 +49,5 @@ export async function salvarEmpresa(empresa: any): Promise<void> {
   await ipcRenderer.invoke('empresa:save', empresa);
 }
 
-/** Gera um ID único para uma proposta. */
-export function gerarId(): string {
-  return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-}
+// Re-export from utils for convenience
+export { gerarId } from './utils';

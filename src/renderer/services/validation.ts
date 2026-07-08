@@ -19,7 +19,7 @@ export function validarCliente(cliente: any): ResultadoValidacao {
   const erros: ErroValidacao[] = [];
   if (!cliente.nome?.trim()) erros.push({ campo: 'nome', mensagem: 'Nome completo obrigatório' });
   if (!cliente.cidade?.trim()) erros.push({ campo: 'cidade', mensagem: 'Cidade obrigatória' });
-  if (!cliente.uf?.trim()) erros.push({ campo: 'uf', mensagem: 'UF obrigatória' });
+  // UF sempre tem valor padrão 'MG', não precisa ser validada como vazia
 
   const status: StatusPasso = erros.length === 0 ? 'completo'
     : (cliente.nome || cliente.cidade) ? 'parcial' : 'vazio';
@@ -58,8 +58,9 @@ export function validarPreco(preco: any, custoKit: number): ResultadoValidacao {
   if (preco.aliquotaImpostos + preco.margemDesejada >= 1) erros.push({ campo: 'impostos', mensagem: 'Soma de impostos + margem não pode atingir 100%' });
   if (preco.aliquotaImpostos < 0 || preco.aliquotaImpostos > 0.50) erros.push({ campo: 'aliquota', mensagem: 'Alíquota de impostos fora do intervalo válido' });
 
+  // Kit com custo preenchido = parcial (indica que usuário começou a preencher)
   const status: StatusPasso = erros.length === 0 ? 'completo'
-    : preco.estruturaRS > 0 ? 'parcial' : 'vazio';
+    : custoKit > 0 ? 'parcial' : 'vazio';
   return { status, erros };
 }
 

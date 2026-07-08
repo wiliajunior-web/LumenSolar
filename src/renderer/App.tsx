@@ -348,14 +348,15 @@ export default function App() {
     useProjetoStore.setState({
       cliente: { nome:'', cpf:'', rg:'', estadoCivil:'solteiro', profissao:'', endereco:'', telefone:'', email:'', cidade:'', uf:'MG' },
       consumo: { contas: ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'].map(m=>({mes:m,kWh:0,valorRS:0})), codigoDistribuidora:'CEMIG', tipoLigacao:'monofasica', cipMensalRS:18, tarifaRealKWhComICMS:0 },
-      kit: useProjetoStore.getState().kit,
-      preco: { estruturaRS:0, materiaisEletricosRS:0, maoDeObraRS:0, projetoArtRS:500, outrosCustosRS:0, aliquotaImpostos:useProjetoStore.getState().empresa.aliquotaImpostos, margemDesejada:useProjetoStore.getState().empresa.margemPadrao },
+      kit: { tipoModulo:'bifacial_ntype' as const, marcaModulo:'', modeloModulo:'', potenciaModuloWp:550, quantidade:0, marcaInversor:'', modeloInversor:'', potenciaInversorKW:0, eficienciaInversorPercent:98.4, custoKitRS:0, dataProtocoloAcesso: new Date().toISOString().slice(0,10), vmppV:0, imppA:0, vocV:0, iscA:0, comprimentoMm:0, larguraMm:0, pesoKgModulo:0, certificacoes:'INMETRO, IEC 61215, IEC 61730', garantiaProdutoAnos:12, garantiaPotenciaAnos:25, potenciaGarantidaPercent:80, numStrings:1, modulosPorString:1, faixaMpptMinV:0, faixaMpptMaxV:0, tensaoMaxEntradaV:0, tensaoSaidaV:220, corrMaxSaidaA:0, numMppt:1, ipGabinete:'IP65', fatorPotencia:'>0.99', thd:'<3%' },
+      preco: { estruturaRS:0, materiaisEletricosRS:0, maoDeObraRS:0, projetoArtRS:useProjetoStore.getState().empresa.valorProjetoArt, outrosCustosRS:0, aliquotaImpostos:useProjetoStore.getState().empresa.aliquotaImpostos, margemDesejada:useProjetoStore.getState().empresa.margemPadrao },
       dimensionamento: null, enquadramento: null, custosRecorrentes: null, precificacao: null, indicadores: null,
       percentuaisFioBPorAno: {}, detalhamentoPerdas: [],
     } as any);
     const newId = gerarId();
     setProposalId(newId);
     setSaving('idle');
+    setValidationErrors([]);
     setAba('cliente');
   }
 
@@ -364,9 +365,15 @@ export default function App() {
     const id = proposalId ?? gerarId();
     if (!proposalId) setProposalId(id);
     setSaving('saving');
+    // Carregar proposta existente para preservar criadoEm original
+    let criadoEmOriginal = new Date().toISOString();
+    try {
+      const existing = await carregarProposta(id).catch(() => null);
+      if (existing?.criadoEm) criadoEmOriginal = existing.criadoEm;
+    } catch { /* nova proposta */ }
     const data = {
       id, nomeCliente: s.cliente.nome || 'Sem nome', cidade: s.cliente.cidade,
-      uf: s.cliente.uf, criadoEm: new Date().toISOString(), atualizadoEm: new Date().toISOString(),
+      uf: s.cliente.uf, criadoEm: criadoEmOriginal, atualizadoEm: new Date().toISOString(),
       potenciaKWp: s.dimensionamento?.potenciaInstaladaRealKWp, precoVenda: s.precificacao?.precoVenda,
       empresa: s.empresa, cliente: s.cliente, consumo: s.consumo, localizacao: s.localizacao, kit: s.kit, preco: s.preco,
     };
@@ -392,6 +399,7 @@ export default function App() {
   }
 
   function tentarCalcular() {
+    setStepStatus(calcStepStatus()); // atualizar dots antes de validar
     const { podeCalcular, erros } = validarProjetoCompleto(useProjetoStore.getState());
     if (!podeCalcular) {
       setValidationErrors(erros.map(e => e.mensagem));
