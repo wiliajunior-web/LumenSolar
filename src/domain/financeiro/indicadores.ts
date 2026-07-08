@@ -30,6 +30,7 @@ export function calcularTIR(fluxoCaixa: number[]): number | null {
  * ROI = (economia total - investimento) / investimento
  */
 export function calcularROI(investimento: number, economiaTotalHorizonte: number): number {
+  if (investimento <= 0) throw new Error('Investimento deve ser maior que zero para calcular o ROI.');
   return (economiaTotalHorizonte - investimento) / investimento;
 }
 
@@ -40,12 +41,14 @@ export function calcularROI(investimento: number, economiaTotalHorizonte: number
  */
 export function formatarPayback(anosDecimal: number | null): string {
   if (anosDecimal === null) return 'Acima de 25 anos';
-  const anosInteiros = Math.floor(anosDecimal);
-  const meses = Math.round((anosDecimal - anosInteiros) * 12);
-  if (meses >= 12) return formatarPayback(anosDecimal + 1 / 12);
-  if (anosInteiros === 0) return `${meses} meses`;
-  if (meses === 0) return `${anosInteiros} ano${anosInteiros !== 1 ? 's' : ''}`;
-  return `${anosInteiros} ano${anosInteiros !== 1 ? 's' : ''} e ${meses} ${meses === 1 ? 'mês' : 'meses'}`;
+  // Converte para meses totais primeiro para evitar off-by-one por floating-point
+  // ex: 1.9999 anos → 23.9988 meses → arredonda para 24 → 2 anos, 0 meses
+  const mesesTotal = Math.round(anosDecimal * 12);
+  const anos = Math.floor(mesesTotal / 12);
+  const meses = mesesTotal % 12;
+  if (anos === 0) return `${meses} ${meses === 1 ? 'mês' : 'meses'}`;
+  if (meses === 0) return `${anos} ano${anos !== 1 ? 's' : ''}`;
+  return `${anos} ano${anos !== 1 ? 's' : ''} e ${meses} ${meses === 1 ? 'mês' : 'meses'}`;
 }
 
 // ─── Área necessária ────────────────────────────────────────────────────────
@@ -114,7 +117,8 @@ export function simularFinanciamento(
   const totalPago = parcelaMensal * n;
 
   // Fluxo anual: saldo = economia do solar - parcelas do financiamento
-  let saldoAcumulado = 0;
+  let saldoAcumulado = 0;     // saldo líquido acumulado (economia - parcelas - investimento)
+  let totalParcelasPagas = 0;  // total de parcelas efetivamente pagas até agora
   let paybackAnos: number | null = null;
   let economiaTotalLiquida = 0;
   const parcelasAnual = parcelaMensal * 12;
@@ -123,7 +127,10 @@ export function simularFinanciamento(
     const fatorDeg = (1 - degradacaoAnual) ** (ano - 1);
     const fatorTar = (1 + reajusteTarifario) ** (ano - 1);
     const economiaAnual = economiaMensalAno1 * 12 * fatorDeg * fatorTar;
-    const parcelasNoAno = ano <= Math.ceil(n / 12) ? Math.min(parcelasAnual, totalPago - saldoAcumulado) : 0;
+    // Parcelas restantes a pagar (corrigido: usa totalParcelasPagas, não saldoAcumulado)
+    const restante = Math.max(0, totalPago - totalParcelasPagas);
+    const parcelasNoAno = ano <= Math.ceil(n / 12) ? Math.min(parcelasAnual, restante) : 0;
+    totalParcelasPagas += parcelasNoAno;
     const saldoLiquido = economiaAnual - parcelasNoAno;
     const saldoAnterior = saldoAcumulado;
     saldoAcumulado += saldoLiquido;

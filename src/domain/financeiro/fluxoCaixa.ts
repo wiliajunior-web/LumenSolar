@@ -21,6 +21,7 @@ export function calcularFluxoCaixa(params: ParametrosFluxoCaixa): ResultadoFluxo
 
   if (investimentoInicial <= 0) throw new Error('Investimento inicial deve ser maior que zero.');
   if (horizonteAnos <= 0) throw new Error('Horizonte deve ser maior que zero.');
+  if (degradacaoAnualModulos < 0 || degradacaoAnualModulos > 1) throw new Error('Degradação anual deve ser entre 0 e 1 (0% a 100%).');
 
   const fluxoAnual: number[] = [-investimentoInicial];
 

@@ -77,6 +77,12 @@ export function calcularAliquotaEfetivaSimples(
   faturamentoAnualBruto: number,
   anexo: 'I' | 'III'
 ): number {
+  if (faturamentoAnualBruto < 0) throw new Error('Faturamento anual não pode ser negativo.');
+  if (faturamentoAnualBruto === 0) return 0; // sem faturamento = sem imposto
+  const LIMITE_SIMPLES = 4_800_000;
+  if (faturamentoAnualBruto > LIMITE_SIMPLES) {
+    throw new Error(`Faturamento R$${faturamentoAnualBruto.toFixed(0)} excede o limite do Simples Nacional (R$4.800.000/ano). Use Lucro Presumido ou Lucro Real.`);
+  }
   const tabela = anexo === 'I' ? SIMPLES_ANEXO_I : SIMPLES_ANEXO_III;
   const faixa = tabela.find((f) => faturamentoAnualBruto <= f.faixaMaximaAnual) ?? tabela[tabela.length - 1];
   const aliquotaEfetiva = (faturamentoAnualBruto * faixa.aliquota - faixa.deducao) / faturamentoAnualBruto;
