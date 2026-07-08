@@ -21,7 +21,8 @@
     },
     "files": [
       "dist/**/*",
-      "dist-electron/**/*"
+      "dist-electron/**/*",
+      "node_modules/.pnpm/**/*"
     ],
     "win": {
       "target": [
@@ -39,7 +40,13 @@
     },
     "extraMetadata": {
       "main": "dist-electron/index.js"
-    }
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": false
+    },
+    "extraResources": []
   },
   "dependencies": {
     "@react-pdf/renderer": "^4.3.0",

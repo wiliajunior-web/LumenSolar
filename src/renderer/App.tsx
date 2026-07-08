@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { pdf } from '@react-pdf/renderer';
 import { useProjetoStore, PRESETS_MODULO, type TipoModuloPreset } from './store/useProjetoStore';
+import { listarPropostas, salvarProposta, carregarProposta, excluirProposta, carregarEmpresa, salvarEmpresa, gerarId, type ProposalMeta } from './services/persistence';
+import { validarCliente, validarConsumo, validarKit, validarPreco, validarProjetoCompleto, type StatusPasso } from './services/validation';
 import { DISTRIBUIDORAS } from '@data/distribuidoras';
 import { TIPO_TELHADO_LABELS, ORIENTACOES, type TipoTelhado } from '@data/localizacao';
 import { HSP_MEDIO_POR_UF } from '@data/hspPorUF';
@@ -200,7 +202,7 @@ const KPI = ({ label, val, sub, color }: { label: string; val: string; sub?: str
 );
 
 // ─── Sidebar ─────────────────────────────────────────────────────────────────
-type Aba = 'cliente' | 'consumo' | 'local' | 'kit' | 'preco' | 'resultado';
+type Aba = 'home' | 'cliente' | 'consumo' | 'local' | 'kit' | 'preco' | 'resultado';
 const STEPS: { id: Aba; label: string; icon: string }[] = [
   { id: 'cliente',   label: 'Cliente',      icon: '◈' },
   { id: 'consumo',   label: 'Consumo',      icon: '⌁' },
@@ -210,8 +212,9 @@ const STEPS: { id: Aba; label: string; icon: string }[] = [
   { id: 'resultado', label: 'Resultado',    icon: '★' },
 ];
 
-const Sidebar = ({ aba, setAba, logo, nomeEmpresa, onEmpresa }: {
+const Sidebar = ({ aba, setAba, logo, nomeEmpresa, onEmpresa, stepStatus }: {
   aba: Aba; setAba: (a: Aba) => void; logo?: string; nomeEmpresa: string; onEmpresa: () => void;
+  stepStatus: Record<string, StatusPasso>;
 }) => {
   const abaIdx = STEPS.findIndex(s => s.id === aba);
   return (
@@ -270,6 +273,7 @@ const Sidebar = ({ aba, setAba, logo, nomeEmpresa, onEmpresa }: {
                 color: done || current ? D.header : '#3a3d54',
                 boxShadow: current ? `0 0 0 4px ${D.goldMuted}` : 'none',
                 transition: 'all .2s',
+                outline: stepStatus[step.id] === 'completo' && !done ? `2px solid #16a34a` : stepStatus[step.id] === 'parcial' ? `2px solid #eab308` : 'none',
               }}>
                 {done ? '✓' : idx + 1}
               </div>
@@ -298,42 +302,257 @@ const Sidebar = ({ aba, setAba, logo, nomeEmpresa, onEmpresa }: {
   );
 };
 
-// ─── SidebarContainer — único componente que pode assinar empresa do store
-// (Sidebar mostra o logo, mas App em si NÃO assina o store)
-function SidebarContainer({ aba, setAba, onEmpresa }: { aba: Aba; setAba: (a: Aba) => void; onEmpresa: () => void }) {
-  // Selector granular: só assina empresa.logoBase64 e empresa.nomeFantasia
-  const logo   = useProjetoStore(s => s.empresa.logoBase64);
-  const nome   = useProjetoStore(s => s.empresa.nomeFantasia || s.empresa.razaoSocial);
-  return <Sidebar aba={aba} setAba={setAba} logo={logo} nomeEmpresa={nome} onEmpresa={onEmpresa} />;
+// ─── SidebarContainer ────────────────────────────────────────────────────────
+function SidebarContainer({ aba, setAba, onEmpresa, stepStatus, onHome }: {
+  aba: Aba; setAba: (a: Aba) => void; onEmpresa: () => void;
+  stepStatus: Record<string, StatusPasso>; onHome: () => void;
+}) {
+  const logo = useProjetoStore(s => s.empresa.logoBase64);
+  const nome = useProjetoStore(s => s.empresa.nomeFantasia || s.empresa.razaoSocial);
+  return <Sidebar aba={aba} setAba={setAba} logo={logo} nomeEmpresa={nome} onEmpresa={onEmpresa} stepStatus={stepStatus} />;
 }
 
 // ─── App ─────────────────────────────────────────────────────────────────────
-// REGRA CRÍTICA: App NÃO assina o Zustand store.
-// Cada Tab gerencia seu próprio estado. Isso garante que digitar
-// em qualquer campo re-renderiza APENAS o Tab ativo, nunca o App.
 export default function App() {
-  const [aba, setAba] = useState<Aba>('cliente');
+  const [aba, setAba] = useState<Aba>('home');
   const [showEmpresa, setShowEmpresa] = useState(false);
-  // ↑ APENAS estado local de React. Zero chamadas a useProjetoStore() aqui.
+  const [proposalId, setProposalId] = useState<string | null>(null);
+  const [saving, setSaving] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const [validationErrors, setValidationErrors] = useState<string[]>([]);
+
+  // Carregar empresa do disco ao iniciar
+  React.useEffect(() => {
+    carregarEmpresa().then(emp => {
+      if (emp) useProjetoStore.getState().atualizarEmpresa(emp);
+    }).catch(() => {});
+  }, []);
+
+  // Status de validação por passo (granular — não assina o store inteiro)
+  const calcStepStatus = (): Record<string, StatusPasso> => {
+    const s = useProjetoStore.getState();
+    return {
+      cliente: validarCliente(s.cliente).status,
+      consumo: validarConsumo(s.consumo).status,
+      local: s.localizacao.utmE ? 'completo' : s.localizacao.tipoTelhado ? 'parcial' : 'vazio',
+      kit: validarKit(s.kit).status,
+      preco: validarPreco(s.preco, s.kit.custoKitRS).status,
+      resultado: s.dimensionamento ? 'completo' : 'vazio',
+    };
+  };
+  const [stepStatus, setStepStatus] = useState<Record<string, StatusPasso>>(calcStepStatus());
+  // Atualizar status ao montar e ao mudar aba
+  React.useEffect(() => { setStepStatus(calcStepStatus()); }, [aba, showEmpresa]);
+
+  function novaProposta() {
+    // Limpa o store para uma nova proposta
+    useProjetoStore.setState({
+      cliente: { nome:'', cpf:'', rg:'', estadoCivil:'solteiro', profissao:'', endereco:'', telefone:'', email:'', cidade:'', uf:'MG' },
+      consumo: { contas: ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'].map(m=>({mes:m,kWh:0,valorRS:0})), codigoDistribuidora:'CEMIG', tipoLigacao:'monofasica', cipMensalRS:18, tarifaRealKWhComICMS:0 },
+      kit: useProjetoStore.getState().kit,
+      preco: { estruturaRS:0, materiaisEletricosRS:0, maoDeObraRS:0, projetoArtRS:500, outrosCustosRS:0, aliquotaImpostos:useProjetoStore.getState().empresa.aliquotaImpostos, margemDesejada:useProjetoStore.getState().empresa.margemPadrao },
+      dimensionamento: null, enquadramento: null, custosRecorrentes: null, precificacao: null, indicadores: null,
+      percentuaisFioBPorAno: {}, detalhamentoPerdas: [],
+    } as any);
+    const newId = gerarId();
+    setProposalId(newId);
+    setSaving('idle');
+    setAba('cliente');
+  }
+
+  async function salvar() {
+    const s = useProjetoStore.getState();
+    const id = proposalId ?? gerarId();
+    if (!proposalId) setProposalId(id);
+    setSaving('saving');
+    const data = {
+      id, nomeCliente: s.cliente.nome || 'Sem nome', cidade: s.cliente.cidade,
+      uf: s.cliente.uf, criadoEm: new Date().toISOString(), atualizadoEm: new Date().toISOString(),
+      potenciaKWp: s.dimensionamento?.potenciaInstaladaRealKWp, precoVenda: s.precificacao?.precoVenda,
+      empresa: s.empresa, cliente: s.cliente, consumo: s.consumo, localizacao: s.localizacao, kit: s.kit, preco: s.preco,
+    };
+    await salvarProposta(data).catch(console.error);
+    // Salvar empresa também
+    await salvarEmpresa(s.empresa).catch(console.error);
+    setSaving('saved');
+    setTimeout(() => setSaving('idle'), 2000);
+  }
+
+  async function abrirProposta(id: string) {
+    const data = await carregarProposta(id).catch(() => null);
+    if (!data) return;
+    setProposalId(id);
+    const store = useProjetoStore.getState();
+    if (data.empresa) store.atualizarEmpresa(data.empresa);
+    if (data.cliente) store.atualizarCliente(data.cliente);
+    if (data.consumo) store.atualizarConsumo(data.consumo);
+    if (data.localizacao) store.atualizarLocalizacao(data.localizacao);
+    if (data.kit) store.atualizarKit(data.kit);
+    if (data.preco) store.atualizarPreco(data.preco);
+    setAba('cliente');
+  }
+
+  function tentarCalcular() {
+    const { podeCalcular, erros } = validarProjetoCompleto(useProjetoStore.getState());
+    if (!podeCalcular) {
+      setValidationErrors(erros.map(e => e.mensagem));
+      setTimeout(() => setValidationErrors([]), 5000);
+      return;
+    }
+    setValidationErrors([]);
+    useProjetoStore.getState().calcularTudo();
+    setAba('resultado');
+  }
+
+  const temProposta = aba !== 'home';
 
   return (
     <>
       <style>{GLOBAL_CSS}</style>
       <div style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
-        <SidebarContainer aba={aba} setAba={setAba} onEmpresa={() => setShowEmpresa(true)} />
+        <SidebarContainer aba={aba} setAba={setAba} onEmpresa={() => setShowEmpresa(true)} stepStatus={stepStatus} onHome={() => setAba('home')} />
         <main style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
+          {/* Barra de ações superior quando há proposta ativa */}
+          {temProposta && !showEmpresa && (
+            <div style={{ background: D.card, borderBottom: `1px solid ${D.border}`, padding: '8px 28px', display: 'flex', alignItems: 'center', gap: 12 }}>
+              <button onClick={() => setAba('home')} style={{ background:'none', border:'none', color: D.textMuted, cursor:'pointer', fontSize:12, display:'flex', alignItems:'center', gap:4 }}>← Início</button>
+              <span style={{ color: D.border }}>|</span>
+              <span style={{ fontSize: 12, color: D.textMuted, flex: 1 }}>
+                {useProjetoStore.getState().cliente.nome || 'Nova Proposta'}
+                {proposalId && <span style={{ marginLeft: 8, fontSize: 10, color: D.textMuted }}>#{proposalId.slice(-6)}</span>}
+              </span>
+              {/* Erros de validação */}
+              {validationErrors.length > 0 && (
+                <div style={{ background:'#fef2f2', border:'1px solid #fca5a5', borderRadius:6, padding:'4px 12px', fontSize:11, color:'#dc2626', maxWidth:400 }}>
+                  ⚠️ {validationErrors[0]}{validationErrors.length > 1 ? ` (+${validationErrors.length-1})` : ''}
+                </div>
+              )}
+              <button onClick={salvar} disabled={saving === 'saving'} style={{
+                padding:'5px 14px', background: saving === 'saved' ? '#dcfce7' : D.bg, border:`1px solid ${D.border}`,
+                borderRadius:6, fontSize:12, cursor:'pointer', color: saving === 'saved' ? '#15803d' : D.textSub, fontWeight:600,
+              }}>
+                {saving === 'saving' ? '⏳ Salvando...' : saving === 'saved' ? '✅ Salvo!' : '💾 Salvar'}
+              </button>
+            </div>
+          )}
           <div style={{ padding: '28px 32px', flex: 1 }}>
-            {showEmpresa   && <TabEmpresa   onClose={() => setShowEmpresa(false)} />}
+            {showEmpresa && <TabEmpresa onClose={() => { setShowEmpresa(false); salvarEmpresa(useProjetoStore.getState().empresa).catch(()=>{}); }} />}
+            {!showEmpresa && aba === 'home' && <TabHome onNovaProposta={novaProposta} onAbrirProposta={abrirProposta} />}
             {!showEmpresa && aba === 'cliente'   && <TabCliente   onNext={() => setAba('consumo')} />}
             {!showEmpresa && aba === 'consumo'   && <TabConsumo   onPrev={() => setAba('cliente')} onNext={() => setAba('local')} />}
             {!showEmpresa && aba === 'local'      && <TabLocal     onPrev={() => setAba('consumo')} onNext={() => setAba('kit')} />}
             {!showEmpresa && aba === 'kit'        && <TabKit       onPrev={() => setAba('local')} onNext={() => { useProjetoStore.getState().recalcularDefaultsPreco(); setAba('preco'); }} />}
-            {!showEmpresa && aba === 'preco'      && <TabPreco     onPrev={() => setAba('kit')}    onCalc={() => { useProjetoStore.getState().calcularTudo(); setAba('resultado'); }} />}
+            {!showEmpresa && aba === 'preco'      && <TabPreco     onPrev={() => setAba('kit')} onCalc={tentarCalcular} />}
             {!showEmpresa && aba === 'resultado'  && <TabResultado onPrev={() => setAba('preco')} />}
           </div>
         </main>
       </div>
     </>
+  );
+}
+
+// ─── Tab Home ─────────────────────────────────────────────────────────────────
+function TabHome({ onNovaProposta, onAbrirProposta }: { onNovaProposta: ()=>void; onAbrirProposta: (id:string)=>void }) {
+  const [propostas, setPropostas] = React.useState<any[]>([]);
+  const [carregando, setCarregando] = React.useState(true);
+  const [excluindo, setExcluindo] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    listarPropostas().then(p => { setPropostas(p); setCarregando(false); }).catch(() => setCarregando(false));
+  }, []);
+
+  async function handleExcluir(id: string, e: React.MouseEvent) {
+    e.stopPropagation();
+    if (!confirm('Excluir esta proposta permanentemente?')) return;
+    setExcluindo(id);
+    await excluirProposta(id).catch(() => {});
+    setPropostas(p => p.filter(x => x.id !== id));
+    setExcluindo(null);
+  }
+
+  const fmtData = (iso: string) => {
+    try {
+      const d = new Date(iso);
+      const hoje = new Date();
+      const diff = Math.floor((hoje.getTime() - d.getTime()) / 86400000);
+      if (diff === 0) return 'Hoje às ' + d.toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'});
+      if (diff === 1) return 'Ontem';
+      if (diff < 7) return `${diff} dias atrás`;
+      return d.toLocaleDateString('pt-BR');
+    } catch { return iso; }
+  };
+
+  return (
+    <div style={{ maxWidth: 860 }}>
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:28 }}>
+        <div>
+          <h1 style={{ fontSize:24, fontWeight:800, color:D.text }}>Propostas</h1>
+          <p style={{ fontSize:13, color:D.textMuted, marginTop:4 }}>Gerencie seus projetos fotovoltaicos</p>
+        </div>
+        <Btn onClick={onNovaProposta}>+ Nova Proposta</Btn>
+      </div>
+
+      {carregando && <p style={{ color:D.textMuted, textAlign:'center', padding:40 }}>Carregando...</p>}
+
+      {!carregando && propostas.length === 0 && (
+        <div style={{ textAlign:'center', padding:'60px 0', background:D.card, borderRadius:16, border:`2px dashed ${D.border}` }}>
+          <div style={{ fontSize:48, marginBottom:16 }}>☀️</div>
+          <h2 style={{ fontSize:18, fontWeight:700, color:D.text, marginBottom:8 }}>Nenhuma proposta ainda</h2>
+          <p style={{ fontSize:14, color:D.textMuted, marginBottom:24 }}>Crie sua primeira proposta para um cliente</p>
+          <Btn onClick={onNovaProposta}>+ Nova Proposta</Btn>
+        </div>
+      )}
+
+      {!carregando && propostas.length > 0 && (
+        <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+          {propostas.map((p: any) => (
+            <div key={p.id}
+              onClick={() => onAbrirProposta(p.id)}
+              style={{
+                background:D.card, border:`1px solid ${D.border}`, borderRadius:12,
+                padding:'16px 20px', cursor:'pointer', display:'flex', alignItems:'center', gap:16,
+                transition:'box-shadow .15s, border-color .15s',
+              }}
+              onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.borderColor = D.gold; (e.currentTarget as HTMLDivElement).style.boxShadow = `0 0 0 2px ${D.gold}22`; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.borderColor = D.border; (e.currentTarget as HTMLDivElement).style.boxShadow = 'none'; }}
+            >
+              {/* Ícone */}
+              <div style={{ width:44, height:44, background:`${D.gold}15`, borderRadius:10, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+                <span style={{ fontSize:20 }}>☀️</span>
+              </div>
+              {/* Info */}
+              <div style={{ flex:1 }}>
+                <div style={{ fontSize:15, fontWeight:700, color:D.text, marginBottom:3 }}>{p.nomeCliente || 'Sem nome'}</div>
+                <div style={{ fontSize:12, color:D.textMuted }}>
+                  {[p.cidade, p.uf].filter(Boolean).join(' · ')}
+                  {p.cidade || p.uf ? ' · ' : ''}
+                  {fmtData(p.atualizadoEm)}
+                </div>
+              </div>
+              {/* Badges */}
+              <div style={{ display:'flex', gap:8, flexShrink:0 }}>
+                {p.potenciaKWp && (
+                  <div style={{ background:`${D.gold}15`, color:'#7a5c00', padding:'3px 10px', borderRadius:20, fontSize:12, fontWeight:700 }}>
+                    {p.potenciaKWp.toFixed(1)} kWp
+                  </div>
+                )}
+                {p.precoVenda && (
+                  <div style={{ background:'#f0fdf4', color:'#15803d', padding:'3px 10px', borderRadius:20, fontSize:12, fontWeight:700 }}>
+                    {p.precoVenda.toLocaleString('pt-BR', {style:'currency',currency:'BRL'})}
+                  </div>
+                )}
+              </div>
+              {/* Excluir */}
+              <button
+                onClick={(e) => handleExcluir(p.id, e)}
+                disabled={excluindo === p.id}
+                style={{ background:'none', border:'none', color:D.textMuted, cursor:'pointer', fontSize:18, padding:'4px 8px', borderRadius:6, flexShrink:0 }}
+                title="Excluir proposta"
+              >🗑</button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -607,6 +826,16 @@ function TabConsumo({ onPrev, onNext }: { onPrev:()=>void; onNext:()=>void }) {
           </div>
         </div>
       </div>
+      {/* Validação consumo */}
+      {(() => {
+        const validas = s.consumo.contas.filter(c => c.kWh > 0);
+        if (validas.length < 3) return (
+          <div className="info-box" style={{ marginBottom:12 }}>
+            ⚠️ Preencha pelo menos <strong>3 meses</strong> de consumo para dimensionar corretamente. ({validas.length}/3 meses preenchidos)
+          </div>
+        );
+        return null;
+      })()}
       <NavButtons onPrev={onPrev} onNext={onNext} nextLabel="Kit Solar →" />
     </div>
   );
@@ -736,7 +965,7 @@ function TabKit({ onPrev, onNext }: { onPrev:()=>void; onNext:()=>void }) {
         <div className="card-body">
           <div className="g2" style={{ rowGap: 14 }}>
             <Campo label="Custo do kit no fornecedor (R$)" hint="Módulos + inversor conforme orçamento" tip="Preço de custo do kit completo (módulos + inversor) conforme NF do fornecedor. Não inclui estrutura, materiais elétricos, mão de obra e projeto — esses são adicionados na aba Precificação.">
-              <input className="inp inp-num" type="number" step="0.01" value={s.kit.custoKitRS || ''} onChange={e => s.atualizarKit({ custoKitRS: Number(e.target.value) })} />
+              <input className="inp inp-num" type="number" step="0.01" value={s.kit.custoKitRS || ''} onChange={e => s.atualizarKit({ custoKitRS: Number(e.target.value) })} style={!s.kit.custoKitRS ? {borderColor:'#fca5a5'} : {}} />
             </Campo>
             <Campo label="Data de protocolo de acesso" hint="Lei 14.300/2022: define a regra do Fio B" tip="Data em que você vai protocolar o pedido de acesso na distribuidora. Determinante para o enquadramento no art. 26 (isenção de Fio B até 2045) ou no art. 27 (cobrança gradual de 15% a 100%). Dentro de 12 meses da publicação da lei (até 07/01/2023) = art. 26. Após isso = art. 27.">
               <input className="inp" type="date" value={s.kit.dataProtocoloAcesso} onChange={e => s.atualizarKit({ dataProtocoloAcesso: e.target.value })} />
