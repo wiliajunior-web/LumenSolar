@@ -1348,8 +1348,9 @@ function TabResultado({ onPrev }: { onPrev:()=>void }) {
           <p style={{ fontSize: 13, color: D.textMuted }}>{s.cliente.cidade}{s.cliente.cidade && s.cliente.uf ? ` · ${s.cliente.uf}` : s.cliente.uf}</p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-              <Btn onClick={onPDFCliente} disabled={gerando}>{gerando ? '⏳...' : '📄 Proposta Cliente'}</Btn>
-              <Btn onClick={onPDFTecnico} disabled={gerando} variant="ghost">{gerando ? '⏳...' : '🔧 Doc. Técnica'}</Btn>
+              <Btn onClick={gerarPDFCliente} disabled={gerando}>{gerando ? '⏳...' : '📄 Proposta'}</Btn>
+              <Btn onClick={gerarMemorial}    disabled={gerando} variant="ghost">{gerando ? '⏳...' : '📋 Memorial'}</Btn>
+              <Btn onClick={gerarProcuracao}  disabled={gerando} variant="ghost">{gerando ? '⏳...' : '✍ Procuração'}</Btn>
             </div>
       </div>
 
@@ -1491,8 +1492,9 @@ function TabResultado({ onPrev }: { onPrev:()=>void }) {
       <div style={{ marginTop: 16, display: 'flex', gap: 10, justifyContent: 'space-between' }}>
         <Btn onClick={onPrev} variant="ghost">← Editar</Btn>
         <div style={{ display: 'flex', gap: 8 }}>
-              <Btn onClick={onPDFCliente} disabled={gerando}>{gerando ? '⏳...' : '📄 Proposta Cliente'}</Btn>
-              <Btn onClick={onPDFTecnico} disabled={gerando} variant="ghost">{gerando ? '⏳...' : '🔧 Doc. Técnica'}</Btn>
+              <Btn onClick={gerarPDFCliente} disabled={gerando}>{gerando ? '⏳...' : '📄 Proposta'}</Btn>
+              <Btn onClick={gerarMemorial}    disabled={gerando} variant="ghost">{gerando ? '⏳...' : '📋 Memorial'}</Btn>
+              <Btn onClick={gerarProcuracao}  disabled={gerando} variant="ghost">{gerando ? '⏳...' : '✍ Procuração'}</Btn>
             </div>
       </div>
     </div>
