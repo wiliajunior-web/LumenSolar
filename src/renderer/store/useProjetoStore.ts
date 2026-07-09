@@ -169,6 +169,7 @@ export const useProjetoStore = create<ProjetoState>((set, get) => ({
     faixaMpptMinV:0, faixaMpptMaxV:0, tensaoMaxEntradaV:0,
     tensaoSaidaV:220, corrMaxSaidaA:0, numMppt:1,
     ipGabinete:'IP65', fatorPotencia:'>0.99', thd:'<3%',
+    percentualCompensacaoDesejado:1.0, motivoSuperdimensionamento:'',
   },
   preco: {
     estruturaRS:0, materiaisEletricosRS:0, maoDeObraRS:0,
@@ -224,7 +225,7 @@ export const useProjetoStore = create<ProjetoState>((set, get) => ({
       {eficienciaMaximaPercent:kit.eficienciaInversorPercent},
       {temperaturaAmbienteMediaC:24,perdaSombreamentoPercent:2,perdaSujidadePercent:2}
     );
-    const dimensionamento = dimensionarSistema({consumoMedioMensalKWh:mediaKWh,hspLocal:hsp,perdasSistema:perdas.perdaTotalLiquida,potenciaModuloWp:kit.potenciaModuloWp});
+    const dimensionamento = dimensionarSistema({consumoMedioMensalKWh:mediaKWh,hspLocal:hsp,perdasSistema:perdas.perdaTotalLiquida,potenciaModuloWp:kit.potenciaModuloWp,percentualCompensacaoDesejado:kit.percentualCompensacaoDesejado});
     const enquadramento = classificarEnquadramento({dataProtocoloAcesso:kit.dataProtocoloAcesso,potenciaInstaladaKW:dimensionamento.potenciaInstaladaRealKWp,fonte:'fotovoltaica',modalidade:'autoconsumo_local'});
 
     const anos=[2025,2026,2027,2028,2029,2030,2035,2040,2045];

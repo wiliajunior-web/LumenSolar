@@ -921,6 +921,154 @@ function TabLocal({ onPrev, onNext }: { onPrev:()=>void; onNext:()=>void }) {
   );
 }
 
+// ─── Estratégia de dimensionamento ──────────────────────────────────────────
+const ESTRATEGIAS = [
+  { label: '100%', perc: 1.00, cor: '#16a34a', desc: 'Consumo exato',    tip: 'Compensa exatamente o consumo atual. Recomendado quando o consumo é estável e não há planos de crescimento.' },
+  { label: '110%', perc: 1.10, cor: '#2563eb', desc: 'Reserva pequena',  tip: 'Cobre sazonalidade e pequenas variações. Ideal para consumo estável com margem de segurança.' },
+  { label: '120%', perc: 1.20, cor: '#7c3aed', desc: 'Reserva moderada', tip: 'Para crescimento de até 20%: novos aparelhos, uso maior no verão, pequena expansão.' },
+  { label: '130%', perc: 1.30, cor: '#b45309', desc: 'Reserva segura',   tip: 'Crescimento previsto de consumo: novo ar-condicionado, expansão da residência.' },
+  { label: '150%', perc: 1.50, cor: '#b91c1c', desc: 'Reserva grande',   tip: 'Carga futura relevante: veículo elétrico, chuveiro solar, expansão comercial.' },
+] as const;
+
+const MOTIVOS_PRESET = [
+  { label: '— Selecione o motivo —',                   val: '' },
+  { label: 'Compensação do consumo atual (100%)',        val: 'Sistema dimensionado para compensar 100% do consumo médio atual.' },
+  { label: 'Reserva para crescimento do consumo',        val: 'Reserva dimensionada para crescimento previsto do consumo (novos equipamentos, expansão).' },
+  { label: 'Reserva para novo ar-condicionado',          val: 'Reserva dimensionada prevendo instalação de sistema de ar-condicionado.' },
+  { label: 'Reserva para veículo elétrico',              val: 'Reserva dimensionada para futura instalação de carregador de veículo elétrico (EVSE).' },
+  { label: 'Créditos para meses de menor irradiação',   val: 'Geração excedente nos meses mais ensolarados para compensar meses com menor irradiação.' },
+  { label: 'Múltiplas unidades consumidoras (SCEE)',     val: 'Sistema dimensionado para compartilhar geração entre múltiplas unidades consumidoras.' },
+  { label: 'Crescimento do negócio previsto',            val: 'Reserva dimensionada para crescimento previsto da operação comercial.' },
+];
+
+function StrategiaKwp({ mediaKWh, uf, s }: { mediaKWh: number; uf: string; s: any }) {
+  const hsp = (HSP_MEDIO_POR_UF as Record<string,number>)[uf] ?? 5.0;
+  const perdasPadrao = 0.20;
+  const perc = s.kit.percentualCompensacaoDesejado ?? 1.0;
+  const kWpMinimo = mediaKWh / (hsp * 30.4167 * (1 - perdasPadrao));
+  const kWpAlvo   = kWpMinimo * perc;
+
+  const estratAtiva = ESTRATEGIAS.find(e => Math.abs(e.perc - perc) < 0.01);
+  const isLivre = !estratAtiva;
+
+  const sugestoes = [400, 500, 550, 595, 620, 670, 700].map(wp => {
+    const mod = Math.ceil(kWpAlvo / (wp / 1000));
+    return { wp, mod, pot: mod * wp / 1000, pct: Math.round(mod * wp / 1000 / kWpMinimo * 100) };
+  }).filter(sg => sg.mod >= 1 && sg.mod <= 40);
+
+  return (
+    <div style={{ background: D.header, border: `1px solid #2a2d3e`, borderRadius: 14, padding: '18px 22px', marginBottom: 18 }}>
+
+      {/* Linha de potência mínima */}
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 16 }}>
+        <span style={{ fontSize: 11, color: '#8a8d9e', fontWeight: 700, letterSpacing: '.05em', textTransform: 'uppercase' }}>Dimensionamento mínimo</span>
+        <span style={{ color: D.gold, fontWeight: 900, fontSize: 22, fontVariantNumeric: 'tabular-nums' }}>{fmtNum(kWpMinimo, 2)} kWp</span>
+        <span style={{ color: '#5a5d72', fontSize: 12 }}>para {fmtNum(mediaKWh,0)} kWh/mês em {uf}</span>
+        <Tip text={`Fórmula IEC 61724-1: ${fmtNum(mediaKWh,0)} kWh ÷ (${fmtNum(hsp,1)} h/dia × 30,42 dias × 80% eficiência) = ${fmtNum(kWpMinimo,2)} kWp`} />
+      </div>
+
+      {/* Seletor de estratégia */}
+      <div style={{ marginBottom: 12 }}>
+        <div style={{ fontSize: 10, color: '#5a5d72', fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', marginBottom: 8 }}>
+          Estratégia — quanto gerar acima do consumo?
+        </div>
+        <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', marginBottom: 10 }}>
+          {ESTRATEGIAS.map(e => {
+            const ativa = Math.abs(e.perc - perc) < 0.01;
+            return (
+              <button key={e.label}
+                onClick={() => s.atualizarKit({ percentualCompensacaoDesejado: e.perc })}
+                title={e.tip}
+                style={{
+                  padding: '7px 14px', borderRadius: 8, border: 'none', cursor: 'pointer', fontWeight: 700,
+                  fontSize: 13, lineHeight: 1, transition: 'all .15s',
+                  background: ativa ? e.cor : '#1a1c28',
+                  color: ativa ? '#fff' : '#5a5d72',
+                  outline: ativa ? `2px solid ${e.cor}66` : 'none',
+                }}
+              >
+                {e.label}
+                <div style={{ fontSize: 9, fontWeight: 400, marginTop: 2, opacity: .85 }}>{e.desc}</div>
+              </button>
+            );
+          })}
+          <button
+            onClick={() => s.atualizarKit({ percentualCompensacaoDesejado: isLivre ? perc : 1.40 })}
+            style={{
+              padding: '7px 14px', borderRadius: 8, border: 'none', cursor: 'pointer', fontWeight: 700,
+              fontSize: 13, lineHeight: 1, transition: 'all .15s',
+              background: isLivre ? '#475569' : '#1a1c28', color: isLivre ? '#fff' : '#5a5d72',
+            }}
+          >
+            Livre
+            <div style={{ fontSize: 9, fontWeight: 400, marginTop: 2 }}>Personalizado</div>
+          </button>
+        </div>
+
+        {isLivre && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontSize: 12, color: '#8a8d9e' }}>Percentual:</span>
+            <input className="inp inp-num" type="number" step="5" min="100" max="300"
+              value={Math.round(perc * 100)}
+              onChange={e => s.atualizarKit({ percentualCompensacaoDesejado: Number(e.target.value) / 100 })}
+              style={{ width: 80, padding: '4px 8px' }}
+            />
+            <span style={{ fontSize: 12, color: '#8a8d9e' }}>% do consumo atual</span>
+          </div>
+        )}
+
+        {/* Indicador do alvo */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', background: '#12141e', borderRadius: 8, marginTop: 10 }}>
+          <div>
+            <span style={{ fontSize: 10, color: '#5a5d72', display: 'block', marginBottom: 2 }}>Alvo com essa estratégia</span>
+            <span style={{ fontSize: 18, fontWeight: 900, color: estratAtiva?.cor ?? '#94a3b8', fontVariantNumeric: 'tabular-nums' }}>{fmtNum(kWpAlvo, 2)} kWp</span>
+          </div>
+          {perc > 1.005 && (
+            <div style={{ borderLeft: `1px solid #2a2d3e`, paddingLeft: 12 }}>
+              <span style={{ fontSize: 10, color: '#5a5d72', display: 'block', marginBottom: 2 }}>Reserva de energia</span>
+              <span style={{ fontSize: 14, fontWeight: 700, color: '#94a3b8' }}>+{fmtNum((perc-1)*100,0)}% → {fmtNum(mediaKWh*(perc-1),0)} kWh/mês extras</span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Motivo */}
+      <div style={{ marginBottom: 14 }}>
+        <div style={{ fontSize: 10, color: '#5a5d72', fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', marginBottom: 6 }}>
+          Motivo (aparece na proposta)
+        </div>
+        <select
+          style={{ width: '100%', padding: '7px 10px', background: '#1a1c28', border: `1px solid #2a2d3e`, borderRadius: 7, color: '#d0d0d8', fontSize: 12 }}
+          value={s.kit.motivoSuperdimensionamento}
+          onChange={e => s.atualizarKit({ motivoSuperdimensionamento: e.target.value })}
+        >
+          {MOTIVOS_PRESET.map(m => <option key={m.val} value={m.val}>{m.label}</option>)}
+        </select>
+      </div>
+
+      {/* Sugestões de kit */}
+      <div style={{ fontSize: 10, color: '#5a5d72', fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', marginBottom: 7 }}>
+        Sugestões de kit — clique para preencher
+      </div>
+      <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
+        {sugestoes.map(sg => (
+          <div key={sg.wp}
+            onClick={() => s.atualizarKit({ potenciaModuloWp: sg.wp, quantidade: sg.mod })}
+            style={{ background: '#12141e', border: `1px solid ${sg.pct >= Math.round(perc*100)-5 && sg.pct <= Math.round(perc*100)+10 ? D.gold+'44' : '#1e2030'}`, borderRadius: 9, padding: '9px 13px', cursor: 'pointer', minWidth: 95, transition: 'border-color .15s' }}
+          >
+            <div style={{ fontSize: 10, color: '#5a5d72', marginBottom: 2 }}>{sg.wp} Wp/módulo</div>
+            <div style={{ fontSize: 14, fontWeight: 800, color: '#e0e0e8', fontVariantNumeric: 'tabular-nums' }}>{sg.mod} mod.</div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: D.gold }}>{fmtNum(sg.pot, 2)} kWp</div>
+            <div style={{ fontSize: 10, color: sg.pct >= 100 ? '#16a34a' : '#ef4444' }}>
+              {sg.pct}% do consumo
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── Tab Kit ──────────────────────────────────────────────────────────────────
 function TabKit({ onPrev, onNext }: { onPrev:()=>void; onNext:()=>void }) {
   const s = useProjetoStore();
@@ -929,7 +1077,10 @@ function TabKit({ onPrev, onNext }: { onPrev:()=>void; onNext:()=>void }) {
   const potKWp = (s.kit.potenciaModuloWp * s.kit.quantidade) / 1000;
   return (
     <div style={{ maxWidth: 680 }}>
-      <PageTitle title="Kit Solar" sub={mediaKWh > 0 ? `Consumo médio do cliente: ${fmtNum(mediaKWh,0)} kWh/mês — busque no fornecedor um kit que gere esse valor.` : 'Preencha com os dados do kit escolhido no fornecedor.'} />
+      <PageTitle title="Kit Solar" sub={mediaKWh > 0 ? `Consumo médio do cliente: ${fmtNum(mediaKWh,0)} kWh/mês` : 'Preencha com os dados do kit escolhido no fornecedor.'} />
+
+      {/* ── Estratégia de dimensionamento ── */}
+      {mediaKWh > 0 && <StrategiaKwp mediaKWh={mediaKWh} uf={s.cliente.uf} s={s} />}
 
       <div className="card" style={{ marginBottom: 14 }}>
         <div className="card-head">Módulos fotovoltaicos</div>

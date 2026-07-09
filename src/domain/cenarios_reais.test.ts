@@ -454,3 +454,106 @@ describe('CONFRONTO — LumenSolar vs WT Energia Solar', () => {
     expect(7.04 / contaReal).toBeLessThan(0.02);
   });
 });
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ESTRATÉGIA DE DIMENSIONAMENTO — o que o LumenSolar calcula vs o que a WT fez
+// ═══════════════════════════════════════════════════════════════════════════════
+describe('Estratégia de dimensionamento — comparativo direto', () => {
+
+  const HSP     = 5.4;
+  const PERDAS  = 0.20;
+
+  it('[S01] Rafael: mínimo correto é 3,18 kWp (100%), WT propôs 6 kWp (188%)', () => {
+    const consumoRafael = 411.83;
+    const kWpMinimo = consumoRafael / (HSP * 30.4167 * (1 - PERDAS));
+    expect(kWpMinimo).toBeCloseTo(3.18, 1);
+    // WT propôs 6 kWp = 188% do mínimo — superdimensionamento de 88%
+    const percWT = 6.0 / kWpMinimo;
+    expect(percWT).toBeGreaterThan(1.80);
+  });
+
+  it('[S02] Rafael com 120% de reserva: bastaria 3,82 kWp', () => {
+    const consumoRafael = 411.83;
+    const kWpMinimo = consumoRafael / (HSP * 30.4167 * (1 - PERDAS));
+    const kWp120 = kWpMinimo * 1.20;
+    expect(kWp120).toBeGreaterThan(3.5);  // ~3.76 kWp
+    expect(kWp120).toBeLessThan(4.0);
+    // 6 kWp da WT ainda é >50% maior que o 120% recomendado
+    expect(6.0 / kWp120).toBeGreaterThan(1.50);
+  });
+
+  it('[S03] Rafael com 150% (reserva grande para EV): 4,77 kWp', () => {
+    const consumoRafael = 411.83;
+    const kWpMinimo = consumoRafael / (HSP * 30.4167 * (1 - PERDAS));
+    const kWp150 = kWpMinimo * 1.50;
+    expect(kWp150).toBeGreaterThan(4.5);  // ~4.70 kWp
+    expect(kWp150).toBeLessThan(5.0);
+    // Mesmo com 150%, 6 kWp da WT ainda é >25% maior
+    expect(6.0 / kWp150).toBeGreaterThan(1.20);
+  });
+
+  it('[S04] Ana Maria: mínimo 2,09-2,14 kWp — 4 módulos 550Wp = 2,2 kWp (~103-105%)', () => {
+    // kWpMinimo depende da perda usada (18% ou 20%)
+    const consumoAna = 281.5;
+    const kWpMinimo18 = consumoAna / (HSP * 30.4167 * 0.82); // 2.09 com 18%
+    const kWpMinimo20 = consumoAna / (HSP * 30.4167 * 0.80); // 2.14 com 20%
+    expect(kWpMinimo18).toBeCloseTo(2.09, 1);
+    expect(kWpMinimo20).toBeCloseTo(2.14, 1);
+    // 4 × 550Wp = 2.2 kWp — cobre de 103% a 105% dependendo das perdas
+    const percMin = 2.2 / kWpMinimo20;
+    const percMax = 2.2 / kWpMinimo18;
+    expect(percMin).toBeGreaterThan(1.00);
+    expect(percMax).toBeLessThan(1.10); // não superdimensionado
+  });
+
+  it('[S05] dimensionarSistema respeita percentualCompensacaoDesejado', () => {
+    const consumo = 400;
+    const dim100 = dimensionarSistema({consumoMedioMensalKWh:consumo, hspLocal:HSP, perdasSistema:PERDAS, potenciaModuloWp:550, percentualCompensacaoDesejado:1.00});
+    const dim130 = dimensionarSistema({consumoMedioMensalKWh:consumo, hspLocal:HSP, perdasSistema:PERDAS, potenciaModuloWp:550, percentualCompensacaoDesejado:1.30});
+    const dim150 = dimensionarSistema({consumoMedioMensalKWh:consumo, hspLocal:HSP, perdasSistema:PERDAS, potenciaModuloWp:550, percentualCompensacaoDesejado:1.50});
+    // Sistema maior quando mais reserva
+    expect(dim130.numeroModulos).toBeGreaterThan(dim100.numeroModulos);
+    expect(dim150.numeroModulos).toBeGreaterThan(dim130.numeroModulos);
+    // Geração proporcional
+    expect(dim130.geracaoMensalEstimadaKWh / consumo).toBeGreaterThan(1.25);
+    expect(dim150.geracaoMensalEstimadaKWh / consumo).toBeGreaterThan(1.45);
+  });
+
+  it('[S06] Com 110%: +28 kWh/mês de reserva para Ana Maria', () => {
+    const consumoAna = 281.5;
+    const kWpMinimo = consumoAna / (HSP * 30.4167 * (1 - PERDAS));
+    const reserva10pct = kWpMinimo * 0.10 * HSP * 30.4167 * (1 - PERDAS);
+    expect(Math.abs(reserva10pct - consumoAna * 0.10)).toBeLessThan(2);
+    // 10% de reserva = ~28 kWh/mês extras para créditos
+    expect(reserva10pct).toBeCloseTo(28.15, 0);
+  });
+
+  it('[S07] Impacto financeiro do superdimensionamento da WT', () => {
+    // Se Rafael pagou R$15.000 por 6 kWp,
+    // o sistema correto de 3,2 kWp custaria ~R$8.000 (proporcionalmente)
+    const custoWT = 15000;
+    const proporcao = 3.18 / 6.0;
+    const custoCorrecto = custoWT * proporcao;
+    // Cliente pagou ~R$7.000 a mais pelo superdimensionamento
+    const excesso = custoWT - custoCorrecto;
+    expect(excesso).toBeGreaterThan(6000);
+    // Em termos de payback: o excesso poderia ter sido investido
+    // Payback do sistema correto seria ainda melhor
+  });
+
+  it('[S08] percentualCompensacaoDesejado = 0 → 0 módulos (sem sistema)', () => {
+    // Percentual 0 significa 'não dimensione sistema' → 0 módulos retornados
+    const dim = dimensionarSistema({consumoMedioMensalKWh:400, hspLocal:HSP, perdasSistema:PERDAS, potenciaModuloWp:550, percentualCompensacaoDesejado:0});
+    expect(dim.numeroModulos).toBe(0);
+    expect(dim.geracaoMensalEstimadaKWh).toBe(0);
+    // Percentual negativo deve lançar
+    expect(() => dimensionarSistema({consumoMedioMensalKWh:400, hspLocal:HSP, perdasSistema:PERDAS, potenciaModuloWp:550, percentualCompensacaoDesejado:-0.5})).toThrow();
+  });
+
+  it('[S09] percentualCompensacaoDesejado = 2.0 → sistema gera 200% do consumo', () => {
+    const dim = dimensionarSistema({consumoMedioMensalKWh:300, hspLocal:HSP, perdasSistema:PERDAS, potenciaModuloWp:550, percentualCompensacaoDesejado:2.0});
+    expect(dim.geracaoMensalEstimadaKWh / 300).toBeGreaterThan(1.90);
+    expect(dim.percentualCompensacaoReal).toBeGreaterThan(1.90);
+  });
+});
