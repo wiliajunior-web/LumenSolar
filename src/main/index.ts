@@ -103,6 +103,7 @@ function createWindow() {
   });
 
   win.once('ready-to-show', () => win?.show());
+  win.webContents.openDevTools({ mode: 'detach' }); // debug temporário
   win.webContents.setWindowOpenHandler(({ url }) => { shell.openExternal(url); return { action: 'deny' }; });
 
   if (VITE_DEV_SERVER_URL) {

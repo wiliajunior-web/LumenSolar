@@ -1,7 +1,9 @@
 /**
- * Serviço de persistência — comunicação com o processo principal via IPC.
- * IMPORTANTE: require('electron') é chamado DENTRO de cada função (lazy),
- * não no nível do módulo, para evitar crash na inicialização do renderer.
+ * Serviço de persistência — comunicação via IPC com o processo principal.
+ *
+ * Usa window.require('electron') em vez de require() diretamente,
+ * para que o Vite não tente transformar/bundlar o módulo electron.
+ * Com nodeIntegration: true, window.require é idêntico ao require do Node.js.
  */
 
 export interface ProposalMeta {
@@ -15,10 +17,11 @@ export interface ProposalMeta {
   precoVenda?: number;
 }
 
-// Helper lazy — só carrega ipcRenderer quando a função é chamada
-function ipc() {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  return require('electron').ipcRenderer;
+// window.require não é transformado pelo Vite (só bare require() é interceptado)
+// Funciona em Electron com nodeIntegration: true e contextIsolation: false
+function ipc(): Electron.IpcRenderer {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (window as any).require('electron').ipcRenderer;
 }
 
 export async function listarPropostas(): Promise<ProposalMeta[]> {
@@ -45,5 +48,4 @@ export async function salvarEmpresa(empresa: any): Promise<void> {
   await ipc().invoke('empresa:save', empresa);
 }
 
-// Re-export from utils for convenience
 export { gerarId } from './utils';

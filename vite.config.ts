@@ -12,7 +12,6 @@ export default defineConfig({
       preload: { input: 'src/preload/index.ts' },
       renderer: {},
     }),
-    // Permite que o renderer use módulos Node.js (resolve require() de dependências)
     renderer(),
   ],
   base: './',
@@ -25,9 +24,16 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     commonjsOptions: {
-      // Transforma módulos CJS mistos (como @react-pdf/renderer) para ESM
       transformMixedEsModules: true,
     },
+    rollupOptions: {
+      // electron não deve ser bundlado — disponível em runtime via nodeIntegration
+      external: ['electron'],
+    },
+  },
+  optimizeDeps: {
+    // Não tentar pré-bundlar o módulo electron
+    exclude: ['electron'],
   },
   test: {
     globals: false,
