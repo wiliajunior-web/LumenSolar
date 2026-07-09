@@ -810,66 +810,42 @@ function TabConsumo({ onPrev, onNext }: { onPrev:()=>void; onNext:()=>void }) {
         </div>
         <div className="card-body">
           <div className="info-box info-box-blue" style={{ marginBottom: 12, fontSize: 12 }}>
-            📄 Copie da tabela <strong>"Histórico de Consumo"</strong> da conta — do mês mais recente para o mais antigo, como aparece na fatura CEMIG. Só precisa da coluna <strong>kWh</strong>.
+            📄 Digite os valores de <strong>kWh</strong> da tabela "Histórico de Consumo" da conta. Mês 1 = o mais recente, Mês 2 = o anterior, e assim por diante. Só o kWh importa.
           </div>
           {/* Tabela no estilo da conta CEMIG */}
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-            <thead>
-              <tr style={{ borderBottom: `2px solid ${D.border}` }}>
-                <th style={{ padding: '6px 10px', textAlign: 'left', color: D.textMuted, fontWeight: 700, fontSize: 11, letterSpacing: '.04em', textTransform: 'uppercase' }}>MÊS/ANO</th>
-                <th style={{ padding: '6px 10px', textAlign: 'right', color: D.textMuted, fontWeight: 700, fontSize: 11, letterSpacing: '.04em', textTransform: 'uppercase' }}>Cons. kWh</th>
-                <th style={{ width: 32 }}></th>
-              </tr>
-            </thead>
-            <tbody>
-              {s.consumo.contas.map((conta, i) => (
-                <tr key={i} style={{ borderBottom: `1px solid ${D.border}22`, background: i%2===0 ? 'transparent' : '#080a12' }}>
-                  <td style={{ padding: '5px 10px' }}>
-                    <input
-                      className="inp"
-                      value={conta.mes}
-                      onChange={e => s.atualizarConta(i, { mes: e.target.value.toUpperCase() })}
-                      style={{ width: 80, padding: '3px 6px', fontSize: 13, fontFamily: 'monospace', background: 'transparent', border: 'none', borderBottom: `1px solid ${D.border}44`, borderRadius: 0, color: D.text }}
-                      placeholder="JUN/26"
-                    />
-                  </td>
-                  <td style={{ padding: '5px 10px', textAlign: 'right' }}>
-                    <input
-                      className="inp inp-num"
-                      type="number" min="0" step="1"
-                      value={conta.kWh || ''}
-                      onChange={e => s.atualizarConta(i, { kWh: Number(e.target.value) })}
-                      placeholder="0"
-                      style={{ width: 90, padding: '3px 8px', fontSize: 14, fontWeight: conta.kWh > 0 ? 700 : 400, textAlign: 'right',
-                        color: conta.kWh > 0 ? D.text : D.textMuted }}
-                    />
-                  </td>
-                  <td style={{ padding: '5px 4px', textAlign: 'center' }}>
-                    <button onClick={() => s.removerConta(i)}
-                      style={{ background:'none', border:'none', color: '#3a3d52', cursor:'pointer', fontSize: 15, lineHeight: 1, padding: '0 4px' }}
-                      title="Remover">×</button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-            {mediaKWh > 0 && (
-              <tfoot>
-                <tr style={{ borderTop: `2px solid ${D.border}` }}>
-                  <td style={{ padding: '8px 10px', fontSize: 12, fontWeight: 700, color: D.textMuted, letterSpacing: '.04em' }}>MÉDIA</td>
-                  <td style={{ padding: '8px 10px', textAlign: 'right', fontSize: 16, fontWeight: 900, color: D.gold, fontVariantNumeric: 'tabular-nums' }}>
-                    {fmtNum(mediaKWh, 0)} kWh
-                  </td>
-                  <td></td>
-                </tr>
-              </tfoot>
-            )}
-          </table>
-          <div style={{ marginTop: 10 }}>
-            <button onClick={s.adicionarConta}
-              style={{ background:'none', border:`1px dashed ${D.border}`, color: D.textMuted, borderRadius: 6, padding:'5px 14px', fontSize: 12, cursor:'pointer' }}>
-              + Adicionar mês
-            </button>
+          {/* Grade compacta de kWh — 3 colunas */}
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap: 8, marginBottom: 14 }}>
+            {s.consumo.contas.map((conta, i) => (
+              <div key={i} style={{ display:'flex', alignItems:'center', gap: 8, background:'#080a12', borderRadius: 8, padding:'8px 12px', border:`1px solid ${conta.kWh > 0 ? D.gold+'33' : D.border}` }}>
+                <span style={{ fontSize: 11, color: D.textMuted, minWidth: 42, fontWeight: 600 }}>Mês {i+1}</span>
+                <input
+                  className="inp inp-num"
+                  type="number" min="0" step="1"
+                  value={conta.kWh || ''}
+                  onChange={e => s.atualizarConta(i, { kWh: Number(e.target.value) })}
+                  placeholder="kWh"
+                  autoFocus={i===0}
+                  style={{ flex: 1, padding:'4px 8px', fontSize: 14, fontWeight: conta.kWh > 0 ? 700 : 400, textAlign:'right', color: conta.kWh > 0 ? D.text : D.textMuted, background:'transparent', border:'none', borderBottom:`1px solid ${D.border}44`, borderRadius: 0, minWidth: 0 }}
+                />
+                {s.consumo.contas.length > 3 && (
+                  <button onClick={() => s.removerConta(i)}
+                    style={{ background:'none', border:'none', color:'#3a3d52', cursor:'pointer', fontSize: 14, lineHeight: 1, padding: '0 2px', flexShrink: 0 }}
+                    title="Remover">×</button>
+                )}
+              </div>
+            ))}
           </div>
+          {/* Média */}
+          {mediaKWh > 0 && (
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', background:`${D.gold}11`, border:`1px solid ${D.gold}33`, borderRadius: 8, padding:'10px 16px', marginBottom: 10 }}>
+              <span style={{ fontSize: 12, color: D.textMuted, fontWeight: 700 }}>Média dos {s.consumo.contas.filter(c=>c.kWh>0).length} meses preenchidos</span>
+              <span style={{ fontSize: 20, fontWeight: 900, color: D.gold, fontVariantNumeric:'tabular-nums' }}>{fmtNum(mediaKWh, 0)} kWh/mês</span>
+            </div>
+          )}
+          <button onClick={s.adicionarConta}
+            style={{ background:'none', border:`1px dashed ${D.border}`, color: D.textMuted, borderRadius: 6, padding:'5px 14px', fontSize: 12, cursor:'pointer' }}>
+            + Adicionar mês
+          </button>
         </div>
       </div>
       {/* Validação consumo */}
