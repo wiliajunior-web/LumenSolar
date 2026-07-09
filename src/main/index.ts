@@ -33,6 +33,7 @@ function createWindow() {
   });
 
   win.once('ready-to-show', () => win?.show());
+  win.webContents.openDevTools({ mode: 'detach' }); // diagnóstico — remover depois
   win.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url);
     return { action: 'deny' };
