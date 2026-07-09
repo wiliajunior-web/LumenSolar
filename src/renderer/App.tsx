@@ -225,8 +225,8 @@ const Sidebar = ({ aba, setAba, logo, nomeEmpresa, onEmpresa, stepStatus }: {
       {/* Logo */}
       <div style={{ padding: '0 20px 20px', borderBottom: `1px solid #1e2030` }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          {empresa.logoBase64
-            ? <img src={empresa.logoBase64} style={{ width: 28, height: 28, borderRadius: '50%', objectFit: 'contain' }} />
+          {logo
+            ? <img src={logo} style={{ width: 28, height: 28, borderRadius: '50%', objectFit: 'contain' }} />
             : <div style={{ width: 28, height: 28, borderRadius: '50%', background: D.gold, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 900, color: D.header }}>L</div>
           }
           <div style={{ lineHeight: 1.1 }}>
