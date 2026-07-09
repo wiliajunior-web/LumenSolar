@@ -1,12 +1,8 @@
 /**
  * Serviço de persistência — comunicação com o processo principal via IPC.
- * Salva e carrega propostas e configurações da empresa em disco.
- * Localização: %APPDATA%/LumenSolar/ (Windows)
+ * IMPORTANTE: require('electron') é chamado DENTRO de cada função (lazy),
+ * não no nível do módulo, para evitar crash na inicialização do renderer.
  */
-
-// Com nodeIntegration: true, podemos usar require() no renderer
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const { ipcRenderer } = require('electron');
 
 export interface ProposalMeta {
   id: string;
@@ -19,34 +15,34 @@ export interface ProposalMeta {
   precoVenda?: number;
 }
 
-/** Lista todas as propostas salvas (ordenadas por data de atualização). */
+// Helper lazy — só carrega ipcRenderer quando a função é chamada
+function ipc() {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  return require('electron').ipcRenderer;
+}
+
 export async function listarPropostas(): Promise<ProposalMeta[]> {
-  return ipcRenderer.invoke('proposal:list');
+  return ipc().invoke('proposal:list');
 }
 
-/** Salva (cria ou atualiza) uma proposta. */
 export async function salvarProposta(data: any): Promise<void> {
-  await ipcRenderer.invoke('proposal:save', data);
+  await ipc().invoke('proposal:save', data);
 }
 
-/** Carrega uma proposta pelo ID. */
 export async function carregarProposta(id: string): Promise<any> {
-  return ipcRenderer.invoke('proposal:load', id);
+  return ipc().invoke('proposal:load', id);
 }
 
-/** Exclui uma proposta pelo ID. */
 export async function excluirProposta(id: string): Promise<void> {
-  await ipcRenderer.invoke('proposal:delete', id);
+  await ipc().invoke('proposal:delete', id);
 }
 
-/** Carrega as configurações da empresa salvas em disco. */
 export async function carregarEmpresa(): Promise<any | null> {
-  return ipcRenderer.invoke('empresa:get');
+  return ipc().invoke('empresa:get');
 }
 
-/** Persiste as configurações da empresa em disco. */
 export async function salvarEmpresa(empresa: any): Promise<void> {
-  await ipcRenderer.invoke('empresa:save', empresa);
+  await ipc().invoke('empresa:save', empresa);
 }
 
 // Re-export from utils for convenience
