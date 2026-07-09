@@ -347,7 +347,7 @@ export default function App() {
     // Limpa o store para uma nova proposta
     useProjetoStore.setState({
       cliente: { nome:'', cpf:'', rg:'', estadoCivil:'solteiro', profissao:'', endereco:'', telefone:'', email:'', cidade:'', uf:'MG' },
-      consumo: { contas: ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'].map(m=>({mes:m,kWh:0,valorRS:0})), codigoDistribuidora:'CEMIG', tipoLigacao:'monofasica', cipMensalRS:18, tarifaRealKWhComICMS:0 },
+      consumo: { contas: gerarUltimos12Meses(), codigoDistribuidora:'CEMIG', tipoLigacao:'monofasica', cipMensalRS:18, tarifaRealKWhComICMS:0 },
       kit: { tipoModulo:'bifacial_ntype' as const, marcaModulo:'', modeloModulo:'', potenciaModuloWp:550, quantidade:0, marcaInversor:'', modeloInversor:'', potenciaInversorKW:0, eficienciaInversorPercent:98.4, custoKitRS:0, dataProtocoloAcesso: new Date().toISOString().slice(0,10), vmppV:0, imppA:0, vocV:0, iscA:0, comprimentoMm:0, larguraMm:0, pesoKgModulo:0, certificacoes:'INMETRO, IEC 61215, IEC 61730', garantiaProdutoAnos:12, garantiaPotenciaAnos:25, potenciaGarantidaPercent:80, numStrings:1, modulosPorString:1, faixaMpptMinV:0, faixaMpptMaxV:0, tensaoMaxEntradaV:0, tensaoSaidaV:220, corrMaxSaidaA:0, numMppt:1, ipGabinete:'IP65', fatorPotencia:'>0.99', thd:'<3%' },
       preco: { estruturaRS:0, materiaisEletricosRS:0, maoDeObraRS:0, projetoArtRS:useProjetoStore.getState().empresa.valorProjetoArt, outrosCustosRS:0, aliquotaImpostos:useProjetoStore.getState().empresa.aliquotaImpostos, margemDesejada:useProjetoStore.getState().empresa.margemPadrao },
       dimensionamento: null, enquadramento: null, custosRecorrentes: null, precificacao: null, indicadores: null,
@@ -804,33 +804,71 @@ function TabConsumo({ onPrev, onNext }: { onPrev:()=>void; onNext:()=>void }) {
       </div>
 
       <div className="card">
-        <div className="card-head">
-          Histórico de consumo
-          {mediaKWh > 0 && <span className="badge badge-gold" style={{ marginLeft: 'auto' }}>Média: {fmtNum(mediaKWh, 0)} kWh/mês · {fmtBRL(mediaRS)}/mês</span>}
+        <div className="card-head" style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+          <span>Histórico de Consumo</span>
+          {mediaKWh > 0 && <span className="badge badge-gold">Média: {fmtNum(mediaKWh, 0)} kWh/mês</span>}
         </div>
-        <div style={{ overflowX: 'auto' }}>
-          <table className="tbl">
+        <div className="card-body">
+          <div className="info-box info-box-blue" style={{ marginBottom: 12, fontSize: 12 }}>
+            📄 Copie da tabela <strong>"Histórico de Consumo"</strong> da conta — do mês mais recente para o mais antigo, como aparece na fatura CEMIG. Só precisa da coluna <strong>kWh</strong>.
+          </div>
+          {/* Tabela no estilo da conta CEMIG */}
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
-              <tr>
-                <th>Mês</th>
-                <th style={{ textAlign: 'right' }}>kWh consumido</th>
-                <th style={{ textAlign: 'right' }}>Valor da conta (R$)</th>
-                <th style={{ width: 36 }}></th>
+              <tr style={{ borderBottom: `2px solid ${D.border}` }}>
+                <th style={{ padding: '6px 10px', textAlign: 'left', color: D.textMuted, fontWeight: 700, fontSize: 11, letterSpacing: '.04em', textTransform: 'uppercase' }}>MÊS/ANO</th>
+                <th style={{ padding: '6px 10px', textAlign: 'right', color: D.textMuted, fontWeight: 700, fontSize: 11, letterSpacing: '.04em', textTransform: 'uppercase' }}>Cons. kWh</th>
+                <th style={{ width: 32 }}></th>
               </tr>
             </thead>
             <tbody>
-              {s.consumo.contas.map((c, i) => (
-                <tr key={i}>
-                  <td><input className="inp" value={c.mes} onChange={e => s.atualizarConta(i, { mes: e.target.value })} style={{ width: 80, padding: '4px 6px' }} /></td>
-                  <td style={{ textAlign: 'right' }}><input className="inp inp-num" type="number" value={c.kWh || ''} onChange={e => s.atualizarConta(i, { kWh: Number(e.target.value) })} style={{ width: 100, padding: '4px 8px' }} /></td>
-                  <td style={{ textAlign: 'right' }}><input className="inp inp-num" type="number" step="0.01" value={c.valorRS || ''} onChange={e => s.atualizarConta(i, { valorRS: Number(e.target.value) })} style={{ width: 120, padding: '4px 8px' }} /></td>
-                  <td><button onClick={() => s.removerConta(i)} style={{ background:'none', border:'none', color: D.textMuted, cursor:'pointer', fontSize: 16, padding: '2px 4px' }}>×</button></td>
+              {s.consumo.contas.map((conta, i) => (
+                <tr key={i} style={{ borderBottom: `1px solid ${D.border}22`, background: i%2===0 ? 'transparent' : '#080a12' }}>
+                  <td style={{ padding: '5px 10px' }}>
+                    <input
+                      className="inp"
+                      value={conta.mes}
+                      onChange={e => s.atualizarConta(i, { mes: e.target.value.toUpperCase() })}
+                      style={{ width: 80, padding: '3px 6px', fontSize: 13, fontFamily: 'monospace', background: 'transparent', border: 'none', borderBottom: `1px solid ${D.border}44`, borderRadius: 0, color: D.text }}
+                      placeholder="JUN/26"
+                    />
+                  </td>
+                  <td style={{ padding: '5px 10px', textAlign: 'right' }}>
+                    <input
+                      className="inp inp-num"
+                      type="number" min="0" step="1"
+                      value={conta.kWh || ''}
+                      onChange={e => s.atualizarConta(i, { kWh: Number(e.target.value) })}
+                      placeholder="0"
+                      style={{ width: 90, padding: '3px 8px', fontSize: 14, fontWeight: conta.kWh > 0 ? 700 : 400, textAlign: 'right',
+                        color: conta.kWh > 0 ? D.text : D.textMuted }}
+                    />
+                  </td>
+                  <td style={{ padding: '5px 4px', textAlign: 'center' }}>
+                    <button onClick={() => s.removerConta(i)}
+                      style={{ background:'none', border:'none', color: '#3a3d52', cursor:'pointer', fontSize: 15, lineHeight: 1, padding: '0 4px' }}
+                      title="Remover">×</button>
+                  </td>
                 </tr>
               ))}
             </tbody>
+            {mediaKWh > 0 && (
+              <tfoot>
+                <tr style={{ borderTop: `2px solid ${D.border}` }}>
+                  <td style={{ padding: '8px 10px', fontSize: 12, fontWeight: 700, color: D.textMuted, letterSpacing: '.04em' }}>MÉDIA</td>
+                  <td style={{ padding: '8px 10px', textAlign: 'right', fontSize: 16, fontWeight: 900, color: D.gold, fontVariantNumeric: 'tabular-nums' }}>
+                    {fmtNum(mediaKWh, 0)} kWh
+                  </td>
+                  <td></td>
+                </tr>
+              </tfoot>
+            )}
           </table>
-          <div style={{ padding: '8px 12px' }}>
-            <button onClick={s.adicionarConta} style={{ background:'none', border:`1px dashed ${D.border}`, color: D.textMuted, borderRadius: 6, padding:'4px 12px', fontSize: 12, cursor:'pointer' }}>+ mês</button>
+          <div style={{ marginTop: 10 }}>
+            <button onClick={s.adicionarConta}
+              style={{ background:'none', border:`1px dashed ${D.border}`, color: D.textMuted, borderRadius: 6, padding:'5px 14px', fontSize: 12, cursor:'pointer' }}>
+              + Adicionar mês
+            </button>
           </div>
         </div>
       </div>
