@@ -349,7 +349,13 @@ export default function App() {
       cliente: { nome:'', cpf:'', rg:'', estadoCivil:'solteiro', profissao:'', endereco:'', telefone:'', email:'', cidade:'', uf:'MG' },
       consumo: { contas: gerarUltimos12Meses(), codigoDistribuidora:'CEMIG', tipoLigacao:'monofasica', cipMensalRS:18, tarifaRealKWhComICMS:0 },
       kit: { tipoModulo:'bifacial_ntype' as const, marcaModulo:'', modeloModulo:'', potenciaModuloWp:550, quantidade:0, marcaInversor:'', modeloInversor:'', potenciaInversorKW:0, eficienciaInversorPercent:98.4, custoKitRS:0, dataProtocoloAcesso: new Date().toISOString().slice(0,10), vmppV:0, imppA:0, vocV:0, iscA:0, comprimentoMm:0, larguraMm:0, pesoKgModulo:0, certificacoes:'INMETRO, IEC 61215, IEC 61730', garantiaProdutoAnos:12, garantiaPotenciaAnos:25, potenciaGarantidaPercent:80, numStrings:1, modulosPorString:1, faixaMpptMinV:0, faixaMpptMaxV:0, tensaoMaxEntradaV:0, tensaoSaidaV:220, corrMaxSaidaA:0, numMppt:1, ipGabinete:'IP65', fatorPotencia:'>0.99', thd:'<3%' },
-      preco: { estruturaRS:0, materiaisEletricosRS:0, maoDeObraRS:0, projetoArtRS:useProjetoStore.getState().empresa.valorProjetoArt, outrosCustosRS:0, aliquotaImpostos:useProjetoStore.getState().empresa.aliquotaImpostos, margemDesejada:useProjetoStore.getState().empresa.margemPadrao },
+      preco: {
+        estruturaRS: 0, materiaisEletricosRS: 0, maoDeObraRS: 0,
+        projetoArtRS: useProjetoStore.getState().empresa.valorProjetoArt,
+        outrosCustosRS: 0,
+        aliquotaImpostos: useProjetoStore.getState().empresa.aliquotaImpostos,
+        margemDesejada: useProjetoStore.getState().empresa.margemPadrao,
+      },
       dimensionamento: null, enquadramento: null, custosRecorrentes: null, precificacao: null, indicadores: null,
       percentuaisFioBPorAno: {}, detalhamentoPerdas: [],
     } as any);
@@ -1286,7 +1292,6 @@ function TabResultado({ onPrev }: { onPrev:()=>void }) {
   }
 
   async function gerarPDFCliente() {
-    if (!s.dimensionamento) return;
     setGerando(true);
     try {
       const { PropostaComercialPDF } = await import('@domain/proposta/PropostaComercialPDF');
@@ -1296,11 +1301,11 @@ function TabResultado({ onPrev }: { onPrev:()=>void }) {
       a.href = url;
       a.download = 'Proposta_' + (s.cliente.nome||'Cliente').replace(/\s+/g,'_') + '_' + new Date().toISOString().slice(0,10) + '.pdf';
       a.click(); URL.revokeObjectURL(url);
+    } catch(e) { alert('Erro ao gerar Proposta: ' + (e instanceof Error ? e.message : String(e)));
     } finally { setGerando(false); }
   }
 
   async function gerarPDFTecnico() {
-    if (!s.dimensionamento) return;
     setGerando(true);
     try {
       const blob = await pdf(<PropostaPDF data={buildData()} />).toBlob();
@@ -1309,6 +1314,7 @@ function TabResultado({ onPrev }: { onPrev:()=>void }) {
       a.href = url;
       a.download = 'DocTecnica_' + (s.cliente.nome||'Cliente').replace(/\s+/g,'_') + '_' + new Date().toISOString().slice(0,10) + '.pdf';
       a.click(); URL.revokeObjectURL(url);
+    } catch(e) { alert('Erro ao gerar Doc. Técnica: ' + (e instanceof Error ? e.message : String(e)));
     } finally { setGerando(false); }
   }
 
@@ -1368,6 +1374,7 @@ function TabResultado({ onPrev }: { onPrev:()=>void }) {
               <Btn onClick={gerarPDFCliente} disabled={gerando}>{gerando ? '⏳...' : '📄 Proposta'}</Btn>
               <Btn onClick={gerarMemorial}    disabled={gerando} variant="ghost">{gerando ? '⏳...' : '📋 Memorial'}</Btn>
               <Btn onClick={gerarProcuracao}  disabled={gerando} variant="ghost">{gerando ? '⏳...' : '✍ Procuração'}</Btn>
+              <Btn onClick={gerarPDFTecnico}  disabled={gerando} variant="ghost">{gerando ? '⏳...' : '🔧 Técnica'}</Btn>
             </div>
       </div>
 

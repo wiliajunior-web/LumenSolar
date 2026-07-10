@@ -29,6 +29,7 @@ export function validarCliente(cliente: any): ResultadoValidacao {
 export function validarConsumo(consumo: any): ResultadoValidacao {
   const erros: ErroValidacao[] = [];
   const mesesValidos = (consumo.contas ?? []).filter((c: any) => c.kWh > 0).length;
+  if ((consumo.cipMensalRS ?? 0) < 0) erros.push({ campo: 'cip', mensagem: 'CIP/COSIP não pode ser negativo' });
   if (mesesValidos < 3) erros.push({ campo: 'contas', mensagem: `Preencha pelo menos 3 meses de consumo (${mesesValidos}/3 preenchidos)` });
   if (consumo.cipMensalRS < 0) erros.push({ campo: 'cip', mensagem: 'CIP/COSIP não pode ser negativo' });
 
