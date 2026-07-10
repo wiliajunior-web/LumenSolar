@@ -825,7 +825,7 @@ function TabConsumo({ onPrev, onNext }: { onPrev:()=>void; onNext:()=>void }) {
                   onChange={e => s.atualizarConta(i, { kWh: Number(e.target.value) })}
                   placeholder="kWh"
                   autoFocus={i===0}
-                  style={{ flex: 1, padding:'4px 8px', fontSize: 14, fontWeight: conta.kWh > 0 ? 700 : 400, textAlign:'right', color: conta.kWh > 0 ? D.text : D.textMuted, background:'transparent', border:'none', borderBottom:`1px solid ${D.border}44`, borderRadius: 0, minWidth: 0 }}
+                  style={{ flex: 1, padding:'4px 8px', fontSize: 14, fontWeight: conta.kWh > 0 ? 700 : 400, textAlign:'right', color:'#d0d4f0', background:'transparent', border:'none', borderBottom:`1px solid ${D.border}`, borderRadius: 0, minWidth: 0, outline:'none' }}
                 />
                 {s.consumo.contas.length > 3 && (
                   <button onClick={() => s.removerConta(i)}
@@ -1313,7 +1313,6 @@ function TabResultado({ onPrev }: { onPrev:()=>void }) {
   }
 
   async function gerarMemorial() {
-    if (!s.dimensionamento) return;
     setGerando(true);
     try {
       const { MemorialDescritivo } = await import('@domain/proposta/MemorialDescritivo');
@@ -1324,6 +1323,8 @@ function TabResultado({ onPrev }: { onPrev:()=>void }) {
       a.href = url;
       a.download = 'Memorial_' + (s.cliente.nome||'Cliente').replace(/\s+/g,'_') + '_' + new Date().toISOString().slice(0,10) + '.pdf';
       a.click(); URL.revokeObjectURL(url);
+    } catch(e) {
+      alert('Erro ao gerar Memorial Descritivo: ' + (e instanceof Error ? e.message : String(e)));
     } finally { setGerando(false); }
   }
 
@@ -1338,6 +1339,8 @@ function TabResultado({ onPrev }: { onPrev:()=>void }) {
       a.href = url;
       a.download = 'Procuracao_' + (s.cliente.nome||'Cliente').replace(/\s+/g,'_') + '_' + new Date().toISOString().slice(0,10) + '.pdf';
       a.click(); URL.revokeObjectURL(url);
+    } catch(e) {
+      alert('Erro ao gerar Procuração: ' + (e instanceof Error ? e.message : String(e)));
     } finally { setGerando(false); }
   }
 
