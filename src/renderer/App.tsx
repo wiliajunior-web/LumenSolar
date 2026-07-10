@@ -442,7 +442,7 @@ export default function App() {
               </button>
             </div>
           )}
-          <div style={{ padding: '28px 32px', flex: 1 }}>
+          <div style={{ padding: '20px 24px', flex: 1 }}>
             {showEmpresa && <TabEmpresa onClose={() => { setShowEmpresa(false); salvarEmpresa(useProjetoStore.getState().empresa).catch(()=>{}); }} />}
             {!showEmpresa && aba === 'home' && <TabHome onNovaProposta={novaProposta} onAbrirProposta={abrirProposta} />}
             {!showEmpresa && aba === 'cliente'   && <TabCliente   onNext={() => setAba('consumo')} />}
@@ -490,7 +490,7 @@ function TabHome({ onNovaProposta, onAbrirProposta }: { onNovaProposta: ()=>void
   };
 
   return (
-    <div style={{ maxWidth: 860 }}>
+    <div>
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:28 }}>
         <div>
           <h1 style={{ fontSize:24, fontWeight:800, color:D.text }}>Propostas</h1>
@@ -568,7 +568,7 @@ function TabHome({ onNovaProposta, onAbrirProposta }: { onNovaProposta: ()=>void
 function TabEmpresa({ onClose }: { onClose: () => void }) {
   const { empresa, atualizarEmpresa } = useProjetoStore();
   return (
-    <div style={{ maxWidth: 680 }}>
+    <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
         <div>
           <h1 style={{ fontSize: 22, fontWeight: 800, color: '#1a1a28' }}>Configurações da empresa</h1>
@@ -580,7 +580,7 @@ function TabEmpresa({ onClose }: { onClose: () => void }) {
       <div className="card" style={{ marginBottom: 14 }}>
         <div className="card-head">Dados institucionais</div>
         <div className="card-body">
-          <div className="g2" style={{ rowGap: 14 }}>
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:14 }}>
             <Campo label="Razão Social"><input className="inp" value={empresa.razaoSocial} onChange={e => atualizarEmpresa({ razaoSocial: e.target.value })} /></Campo>
             <Campo label="Nome Fantasia"><input className="inp" value={empresa.nomeFantasia} onChange={e => atualizarEmpresa({ nomeFantasia: e.target.value })} /></Campo>
             <Campo label="CNPJ"><input className="inp" value={empresa.cnpj} onChange={e => atualizarEmpresa({ cnpj: e.target.value })} /></Campo>
@@ -690,7 +690,7 @@ function TabEmpresa({ onClose }: { onClose: () => void }) {
       <div className="card">
         <div className="card-head">Parâmetros de análise financeira</div>
         <div className="card-body">
-          <div className="g2" style={{ rowGap: 14 }}>
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:14 }}>
             <Campo label="Reajuste tarifário esperado (%/ano)" hint="Média histórica ANEEL: 6% a 10%/ano. Conservador: 6%.">
               <input className="inp inp-num" type="number" step="0.5" value={+(empresa.reajusteTarifarioAnual*100).toFixed(1)} onChange={e => atualizarEmpresa({ reajusteTarifarioAnual: Number(e.target.value)/100 })} />
             </Campo>
@@ -711,11 +711,11 @@ function TabEmpresa({ onClose }: { onClose: () => void }) {
 function TabCliente({ onNext }: { onNext: () => void }) {
   const { cliente, atualizarCliente } = useProjetoStore();
   return (
-    <div style={{ maxWidth: 600 }}>
+    <div>
       <PageTitle title="Dados do cliente" sub="Informações que aparecem na capa da proposta." />
       <div className="card">
         <div className="card-body">
-          <div className="g2" style={{ rowGap: 14 }}>
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:14 }}>
             <Campo label="Nome completo *" hint="Nome ou razão social do cliente" tip="Aparece na capa da proposta comercial. Pessoa física: nome completo. Empresa: razão social ou nome fantasia.">
               <input className="inp" value={cliente.nome} onChange={e => atualizarCliente({ nome: e.target.value })} placeholder="Ex: João Silva / Empresa Ltda" autoFocus />
             </Campo>
@@ -749,7 +749,7 @@ function TabConsumo({ onPrev, onNext }: { onPrev:()=>void; onNext:()=>void }) {
   const mediaRS  = validas.filter(c => c.valorRS > 0).length > 0
     ? validas.filter(c => c.valorRS > 0).reduce((a,c) => a + c.valorRS, 0) / validas.filter(c => c.valorRS > 0).length : 0;
   return (
-    <div style={{ maxWidth: 700 }}>
+    <div>
       <PageTitle title="Consumo de energia" sub="Preencha com os dados das faturas do cliente dos últimos 12 meses." />
       <div className="card" style={{ marginBottom: 14 }}>
         <div className="card-head">Distribuidora e tarifas</div>
@@ -814,7 +814,7 @@ function TabConsumo({ onPrev, onNext }: { onPrev:()=>void; onNext:()=>void }) {
           </div>
           {/* Tabela no estilo da conta CEMIG */}
           {/* Grade compacta de kWh — 3 colunas */}
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap: 8, marginBottom: 14 }}>
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap: 8, marginBottom: 14 }}>
             {s.consumo.contas.map((conta, i) => (
               <div key={i} style={{ display:'flex', alignItems:'center', gap: 8, background:'#080a12', borderRadius: 8, padding:'8px 12px', border:`1px solid ${conta.kWh > 0 ? D.gold+'33' : D.border}` }}>
                 <span style={{ fontSize: 11, color: D.textMuted, minWidth: 42, fontWeight: 600 }}>Mês {i+1}</span>
@@ -869,13 +869,13 @@ function TabLocal({ onPrev, onNext }: { onPrev:()=>void; onNext:()=>void }) {
   const loc = s.localizacao;
   const upd = s.atualizarLocalizacao;
   return (
-    <div style={{ maxWidth: 680 }}>
+    <div>
       <PageTitle title="Local de instalação" sub="Dados do telhado e coordenadas — necessários para o Memorial Descritivo (CEMIG/distribuidora)." />
 
       <div className="card" style={{ marginBottom: 14 }}>
         <div className="card-head">Telhado</div>
         <div className="card-body">
-          <div className="g2" style={{ rowGap: 14 }}>
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:14 }}>
             <Campo label="Tipo de telhado" tip="Determina o tipo de estrutura de fixação e pode afetar o peso distribuído.">
               <select className="inp" value={loc.tipoTelhado} onChange={e => upd({ tipoTelhado: e.target.value as TipoTelhado })}>
                 {Object.entries(TIPO_TELHADO_LABELS).map(([k,v]) => <option key={k} value={k}>{v}</option>)}
@@ -1090,7 +1090,7 @@ function TabKit({ onPrev, onNext }: { onPrev:()=>void; onNext:()=>void }) {
   const mediaKWh = validas.length > 0 ? validas.reduce((a, c) => a + c.kWh, 0) / validas.length : 0;
   const potKWp = (s.kit.potenciaModuloWp * s.kit.quantidade) / 1000;
   return (
-    <div style={{ maxWidth: 680 }}>
+    <div>
       <PageTitle title="Kit Solar" sub={mediaKWh > 0 ? `Consumo médio do cliente: ${fmtNum(mediaKWh,0)} kWh/mês` : 'Preencha com os dados do kit escolhido no fornecedor.'} />
 
       {/* ── Estratégia de dimensionamento ── */}
@@ -1200,7 +1200,7 @@ function TabPreco({ onPrev, onCalc }: { onPrev:()=>void; onCalc:()=>void }) {
   const imposto = precoVenda * s.preco.aliquotaImpostos;
 
   return (
-    <div style={{ maxWidth: 680 }}>
+    <div>
       <PageTitle title="Precificação" sub="Valores preenchidos automaticamente pelos parâmetros da empresa. Ajuste se necessário." />
       <div className="card" style={{ marginBottom: 14 }}>
         <div className="card-head">Composição de custos</div>
@@ -1357,7 +1357,7 @@ function TabResultado({ onPrev }: { onPrev:()=>void }) {
   const maxGen = Math.max(...ind.geracaoMensalKWh, s.consumoMedioMensalKWh ?? 1);
 
   return (
-    <div style={{ maxWidth: 900 }}>
+    <div>
       {/* Cabeçalho */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 22 }}>
         <div>
@@ -1371,8 +1371,8 @@ function TabResultado({ onPrev }: { onPrev:()=>void }) {
             </div>
       </div>
 
-      {/* KPIs principais */}
-      <div className="g4" style={{ marginBottom: 16 }}>
+      {/* KPIs principais — linha única */}
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(6,1fr)', gap:10, marginBottom:16 }}>
         <KPI label="Potência instalada" val={`${fmtNum(dim.potenciaInstaladaRealKWp)} kWp`} sub={`${dim.numeroModulos} módulos`} color={D.text} />
         <KPI label="Geração mensal" val={`${fmtNum(dim.geracaoMensalEstimadaKWh, 0)} kWh`} sub={`${fmtNum(dim.percentualCompensacaoReal*100,0)}% de compensação`} />
         <KPI label="Economia mensal" val={fmtBRL(cr.economiaMensalRS)} sub={`${fmtBRL(cr.economiaMensalRS*12)}/ano`} color={D.success} />
