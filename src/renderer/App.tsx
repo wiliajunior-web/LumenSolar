@@ -597,6 +597,11 @@ function TabEmpresa({ onClose }: { onClose: () => void }) {
             <Campo label="Validade padrão (dias)"><input className="inp inp-num" type="number" value={empresa.validadeProposta} onChange={e => atualizarEmpresa({ validadeProposta: Number(e.target.value) })} /></Campo>
             <Campo label="CPF do engenheiro responsável" tip="Necessário para a Procuração. Formato: 000.000.000-00"><input className="inp" value={empresa.cpfEngenheiro} onChange={e => atualizarEmpresa({ cpfEngenheiro: e.target.value })} placeholder="000.000.000-00" /></Campo>
           </div>
+          <div style={{ marginTop:16 }}>
+            <Campo label="Chave API Anthropic" hint="Para importar datasheets automaticamente — sk-ant-..." tip="Necessário para extrair dados de datasheets de módulos e inversores com IA. Obtenha em console.anthropic.com. Armazenada localmente no seu computador, nunca enviada a terceiros.">
+              <input className="inp" type="password" value={(empresa as any).anthropicApiKey || ''} onChange={e => atualizarEmpresa({ anthropicApiKey: e.target.value } as any)} placeholder="sk-ant-api03-..." />
+            </Campo>
+          </div>
           <div className="sep" />
           <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
             {empresa.logoBase64 && <img src={empresa.logoBase64} style={{ width: 48, height: 48, borderRadius: '50%', objectFit: 'contain', border: `1px solid ${D.border}` }} />}
@@ -1089,6 +1094,325 @@ function StrategiaKwp({ mediaKWh, uf, s }: { mediaKWh: number; uf: string; s: an
   );
 }
 
+// ─── Componentes Recomendados (NBR 5410) ─────────────────────────────────────
+/**
+ * Dimensionamento automático de componentes elétricos.
+ * Referências: NBR 5410:2004 (instalações CA) + ABNT NBR 16690 (CC fotovoltaico)
+ */
+function ComponentesRecomendados({ kit }: { kit: any }) {
+  // ── Lado CA ──────────────────────────────────────────────────────────────
+  const potCA_kW = kit.potenciaInversorKW || 0;
+  const tensaoCA = kit.tensaoSaidaV || 220;
+  const fp = parseFloat((kit.fatorPotencia || '>0.99').replace('>','')) || 0.99;
+  const nInv = kit.numMppt || 1; // número de inversores (aproximação pelo MPPT)
+
+  // Corrente nominal CA = P / (V × FP)
+  const icaNominal = potCA_kW > 0 ? (potCA_kW * 1000) / (tensaoCA * fp) : 0;
+  // Corrente de projeto CA (NBR 5410: fator 1.25 para carga contínua)
+  const icaProjeto = icaNominal * 1.25;
+
+  // Seções de cabo e capacidades de corrente em eletroduto, cabos 70°C, instalação B2
+  // (Tabela 36 da NBR 5410 — condutores em eletroduto embutido em parede)
+  const SECOES_CA = [
+    { secao: 1.5,  imax: 15.5 },
+    { secao: 2.5,  imax: 21.0 },
+    { secao: 4.0,  imax: 28.0 },
+    { secao: 6.0,  imax: 36.0 },
+    { secao: 10.0, imax: 50.0 },
+    { secao: 16.0, imax: 66.0 },
+    { secao: 25.0, imax: 84.0 },
+  ];
+  const cableCA = SECOES_CA.find(s => s.imax >= icaProjeto) || SECOES_CA[SECOES_CA.length - 1];
+
+  // Disjuntor bipolar CA: próximo padrão acima da corrente de projeto
+  const DISJUNTORES = [10, 16, 20, 25, 32, 40, 50, 63, 80, 100];
+  const disjCA = DISJUNTORES.find(d => d >= icaProjeto) || DISJUNTORES[DISJUNTORES.length - 1];
+
+  // DPS CA 275 V — classe por potência/risco
+  // NBR IEC 62305-3: Class II 20 kA para residencial/comercial padrão
+  const dpskA = potCA_kW <= 3 ? 15 : potCA_kW <= 12 ? 20 : 45;
+  const dpsDesc = dpskA === 15 ? 'Residencial baixa exposição' : dpskA === 20 ? 'Residencial/comercial padrão' : 'Alta exposição / industrial';
+
+  // ── Lado CC (string) ──────────────────────────────────────────────────────
+  const isc = kit.iscA || 0;
+  const nStrings = kit.numStrings || 1;
+  // Corrente CC total = Isc × numStrings
+  const iccTotal = isc * nStrings;
+  // Fator de correção CC: 1.25 (NBR 16690 / IEC 60364-7-712)
+  const iccProjeto = iccTotal * 1.25;
+
+  // Seções para cabo CC solar (ABNT NBR 16690, cabo unipolar 90°C, ex: cabo solar PV1-F)
+  const SECOES_CC = [
+    { secao: 4.0,  imax: 32.0 },
+    { secao: 6.0,  imax: 41.0 },
+    { secao: 10.0, imax: 57.0 },
+    { secao: 16.0, imax: 76.0 },
+  ];
+  const cableCC = SECOES_CC.find(s => s.imax >= iccProjeto) || SECOES_CC[SECOES_CC.length - 1];
+
+  // DPS CC (entre strings e inversor)
+  const dpsCC_kA = isc > 0 ? (isc <= 12 ? 5 : 10) : 0;
+  const vocTotal = (kit.vocV || 0) * (kit.modulosPorString || 1);
+
+  const naoPreenchido = potCA_kW === 0;
+
+  const Tag = ({ cor, children }: { cor: string; children: React.ReactNode }) => (
+    <span style={{ background: cor+'22', color: cor, border: `1px solid ${cor}44`, borderRadius: 6, padding: '2px 10px', fontSize: 12, fontWeight: 700 }}>
+      {children}
+    </span>
+  );
+
+  const Linha = ({ label, valor, sub, destaque }: { label: string; valor: string; sub?: string; destaque?: string }) => (
+    <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'9px 0', borderBottom:`1px solid #1a1d2e` }}>
+      <div>
+        <div style={{ fontSize:13, color:'#c0c4e0', fontWeight:600 }}>{label}</div>
+        {sub && <div style={{ fontSize:11, color:'#5a5d7a', marginTop:2 }}>{sub}</div>}
+      </div>
+      <div style={{ textAlign:'right' }}>
+        <div style={{ fontSize:15, fontWeight:800, color:'#e8eaf8', fontVariantNumeric:'tabular-nums' }}>{valor}</div>
+        {destaque && <Tag cor="#c9a227">{destaque}</Tag>}
+      </div>
+    </div>
+  );
+
+  if (naoPreenchido) {
+    return (
+      <div style={{ background:'#0d0f1a', border:`1px dashed #2a2d3e`, borderRadius:12, padding:'20px 24px', marginBottom:18, textAlign:'center' }}>
+        <div style={{ fontSize:14, color:'#4a4d6a' }}>⚡ Preencha a potência do inversor para ver os componentes recomendados</div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ background:'#0d0f1a', border:`1px solid #1e2135`, borderRadius:14, padding:'18px 24px', marginBottom:18 }}>
+      <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:16 }}>
+        <span style={{ fontSize:16 }}>⚡</span>
+        <div>
+          <div style={{ fontSize:13, fontWeight:800, color:'#e8eaf8' }}>Componentes Recomendados — NBR 5410 / NBR 16690</div>
+          <div style={{ fontSize:11, color:'#5a5d7a' }}>Calculado automaticamente para {potCA_kW} kW CA / {tensaoCA} V</div>
+        </div>
+      </div>
+
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:24 }}>
+        {/* Lado CA */}
+        <div>
+          <div style={{ fontSize:11, fontWeight:700, color:'#c9a227', letterSpacing:'.08em', textTransform:'uppercase', marginBottom:8 }}>
+            ▸ Lado CA (inversor → quadro)
+          </div>
+          <Linha
+            label="Corrente nominal CA"
+            valor={`${icaNominal.toFixed(1)} A`}
+            sub={`P/(V×FP) = ${potCA_kW}kW / (${tensaoCA}V × ${fp})`}
+          />
+          <Linha
+            label="Corrente de projeto (×1,25)"
+            valor={`${icaProjeto.toFixed(1)} A`}
+            sub="NBR 5410 — carga contínua"
+          />
+          <Linha
+            label="Cabo CA (fase, neutro, PE)"
+            valor={`${cableCA.secao} mm²`}
+            sub={`Suporta até ${cableCA.imax} A (eletroduto embutido)`}
+            destaque="3 condutores"
+          />
+          <Linha
+            label="Disjuntor bipolar CA"
+            valor={`${disjCA} A`}
+            sub="Próximo padrão acima da corrente de projeto"
+            destaque="Bipolar"
+          />
+          <Linha
+            label="DPS CA — 275 V"
+            valor={`${dpskA} kA — Classe II`}
+            sub={dpsDesc}
+          />
+        </div>
+
+        {/* Lado CC */}
+        <div>
+          <div style={{ fontSize:11, fontWeight:700, color:'#4ea8de', letterSpacing:'.08em', textTransform:'uppercase', marginBottom:8 }}>
+            ▸ Lado CC (módulos → inversor)
+          </div>
+          {isc > 0 ? (<>
+            <Linha
+              label="Isc por string"
+              valor={`${isc} A`}
+              sub="Do datasheet do módulo"
+            />
+            <Linha
+              label="Corrente CC total (×1,25)"
+              valor={`${iccProjeto.toFixed(1)} A`}
+              sub={`${isc} A × ${nStrings} string(s) × 1,25`}
+            />
+            <Linha
+              label="Cabo CC solar (PV1-F)"
+              valor={`${cableCC.secao} mm²`}
+              sub={`Suporta até ${cableCC.imax} A (cabo solar 90°C)`}
+              destaque="Unipolar"
+            />
+            <Linha
+              label="Tensão máxima CC"
+              valor={`${vocTotal.toFixed(0)} V`}
+              sub={`Voc ${kit.vocV}V × ${kit.modulosPorString} módulos/string`}
+            />
+            {dpsCC_kA > 0 && (
+              <Linha
+                label="DPS CC (opcional)"
+                valor={`${dpsCC_kA} kA`}
+                sub="Entre string box e inversor (>15m de cabo CC)"
+              />
+            )}
+            <Linha
+              label={nStrings >= 3 ? "String box" : "String box"}
+              valor={nStrings >= 3 ? "Recomendada" : nStrings === 2 ? "Opcional" : "Não necessária"}
+              sub={nStrings >= 3
+                ? `${nStrings} strings em paralelo — use caixa de combinação com fusíveis`
+                : nStrings === 2
+                ? "2 strings: DPS CC em cada string direto no inversor é suficiente"
+                : "1 string: proteção direto no quadro geral (QDG)"}
+              destaque={nStrings >= 3 ? "Usar" : nStrings === 2 ? "Avaliar" : "QDG"}
+            />
+          </>) : (
+            <div style={{ fontSize:13, color:'#4a4d6a', paddingTop:12 }}>
+              Preencha Isc e nº de strings para ver o dimensionamento CC
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div style={{ marginTop:14, padding:'8px 12px', background:'#0a0c14', borderRadius:8, fontSize:11, color:'#4a4d6a', lineHeight:1.6 }}>
+        <strong style={{ color:'#6b6d82' }}>Notas:</strong> Cabo CA: seção mínima conforme Tabela 36 da NBR 5410 (eletroduto embutido, 70°C).
+        Cabo CC: NBR 16690 / IEC 60364-7-712 (cabo solar unipolar 90°C).
+        DPS CA: NBR IEC 62305-3 Classe II.
+        Sempre verifique com o memorial de cálculo e o responsável técnico da instalação.
+      </div>
+    </div>
+  );
+}
+
+// ─── Importar Datasheet via IA ───────────────────────────────────────────────
+function ImportarDatasheet({ tipo, onExtracted }: { tipo: 'modulo' | 'inversor'; onExtracted: (dados: any) => void }) {
+  const [estado, setEstado] = React.useState<'idle' | 'lendo' | 'extraindo' | 'ok' | 'erro'>('idle');
+  const [erro, setErro] = React.useState('');
+  const apiKey = useProjetoStore(s => (s.empresa as any).anthropicApiKey || '');
+  const fileRef = React.useRef<HTMLInputElement>(null);
+
+  const PROMPT_MODULO = `Analise este datasheet de módulo fotovoltaico e extraia APENAS as especificações técnicas em JSON puro (sem markdown, sem backticks, sem explicações).
+Retorne SOMENTE este JSON:
+{
+  "marcaModulo": "nome do fabricante",
+  "modeloModulo": "modelo exato",
+  "potenciaModuloWp": 0,
+  "vmppV": 0,
+  "imppA": 0,
+  "vocV": 0,
+  "iscA": 0,
+  "coefTempPmaxPorCent": 0,
+  "coefTempVocPorCent": 0,
+  "coefTempIscPorCent": 0,
+  "noct": 0,
+  "comprimentoMm": 0,
+  "larguraMm": 0,
+  "pesoKg": 0,
+  "garantiaProdutoAnos": 0,
+  "garantiaPotenciaAnos": 0,
+  "potenciaGarantidaPercent": 80
+}
+Use valores numéricos reais. coefTempPmax deve ser negativo (ex: -0.35). Se não encontrar um valor, use 0.`;
+
+  const PROMPT_INVERSOR = `Analise este datasheet de inversor solar e extraia APENAS as especificações técnicas em JSON puro (sem markdown, sem backticks, sem explicações).
+Retorne SOMENTE este JSON:
+{
+  "marcaInversor": "fabricante",
+  "modeloInversor": "modelo",
+  "potenciaInversorKW": 0,
+  "faixaMpptMinV": 0,
+  "faixaMpptMaxV": 0,
+  "tensaoMaxEntradaV": 0,
+  "tensaoSaidaV": 220,
+  "corrMaxSaidaA": 0,
+  "eficienciaInversorPercent": 0,
+  "numMppt": 1,
+  "ipGabinete": "IP65",
+  "fatorPotencia": ">0.99",
+  "thd": "<3%"
+}
+Use valores numéricos reais. Se não encontrar um valor, use 0.`;
+
+  async function processar(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!apiKey) { setEstado('erro'); setErro('Chave API Anthropic não configurada. Vá em ⚙ Empresa e cadastre a chave sk-ant-...'); return; }
+    setEstado('lendo');
+    try {
+      // Ler PDF como base64
+      const base64 = await new Promise<string>((res, rej) => {
+        const r = new FileReader();
+        r.onload = () => res((r.result as string).split(',')[1]);
+        r.onerror = rej;
+        r.readAsDataURL(file);
+      });
+      setEstado('extraindo');
+      // Chamar Anthropic API
+      const resp = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-6',
+          max_tokens: 1000,
+          messages: [{
+            role: 'user',
+            content: [
+              { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 } },
+              { type: 'text', text: tipo === 'modulo' ? PROMPT_MODULO : PROMPT_INVERSOR },
+            ],
+          }],
+        }),
+      });
+      if (!resp.ok) throw new Error(`API erro ${resp.status}: ${await resp.text()}`);
+      const data = await resp.json();
+      const texto = data.content?.[0]?.text || '';
+      const jsonStr = texto.replace(/```json?|```/g, '').trim();
+      const extraido = JSON.parse(jsonStr);
+      onExtracted(extraido);
+      setEstado('ok');
+      setTimeout(() => setEstado('idle'), 3000);
+    } catch(err) {
+      setEstado('erro');
+      setErro(err instanceof Error ? err.message : String(err));
+    }
+    if (fileRef.current) fileRef.current.value = '';
+  }
+
+  const label = tipo === 'modulo' ? '📋 Importar Datasheet do Módulo' : '📋 Importar Datasheet do Inversor';
+  const colors = { idle:'#2a2d3e', lendo:'#1a3a6e', extraindo:'#7c3aed', ok:'#166534', erro:'#7f1d1d' };
+  const texts  = { idle: label, lendo:'📖 Lendo PDF...', extraindo:'🤖 Extraindo dados...', ok:'✅ Dados importados!', erro:`❌ ${erro.slice(0,60)}` };
+
+  return (
+    <div>
+      <input ref={fileRef} type="file" accept=".pdf" style={{ display:'none' }} onChange={processar} />
+      <button
+        onClick={() => fileRef.current?.click()}
+        disabled={estado === 'lendo' || estado === 'extraindo'}
+        style={{
+          padding:'7px 16px', borderRadius:8, border:`1px solid ${colors[estado]}`,
+          background: estado !== 'idle' ? colors[estado]+'44' : 'transparent',
+          color: estado === 'ok' ? '#86efac' : estado === 'erro' ? '#fca5a5' : estado === 'idle' ? '#8a8d9e' : '#a0aaff',
+          fontSize:12, fontWeight:600, cursor: estado === 'idle' ? 'pointer' : 'default',
+          transition:'all .2s', whiteSpace:'nowrap',
+        }}
+        title={estado === 'erro' ? erro : `Faça upload do PDF do datasheet ${tipo === 'modulo' ? 'do módulo' : 'do inversor'}`}
+      >
+        {texts[estado]}
+      </button>
+    </div>
+  );
+}
+
 // ─── Tab Kit ──────────────────────────────────────────────────────────────────
 function TabKit({ onPrev, onNext }: { onPrev:()=>void; onNext:()=>void }) {
   const s = useProjetoStore();
@@ -1152,6 +1476,7 @@ function TabKit({ onPrev, onNext }: { onPrev:()=>void; onNext:()=>void }) {
           </div>
         </div>
       </div>
+      <ComponentesRecomendados kit={s.kit} />
       {/* Specs técnicas — para Memorial Descritivo */}
       <div className="card" style={{ marginBottom: 14 }}>
         <div className="card-head">Especificações técnicas do módulo — do datasheet</div>
