@@ -1,5 +1,5 @@
 /**
- * MEMORIAL DESCRITIVO — documento técnico para aprovação junto à distribuidora.
+ * MEMORIAL DESCRITIVO - documento técnico para aprovação junto à distribuidora.
  * Baseado no modelo exigido pela CEMIG (ND 5.30) e padrões ANEEL.
  * Referência normativa: Lei 14.300/2022, REN ANEEL 1000/2021.
  */
@@ -79,7 +79,7 @@ function PageHeader({ title, empresa, logo }: { title:string; empresa:any; logo?
           </View>
       }
       <Text style={S.pageHeaderTitle}>MEMORIAL DESCRITIVO</Text>
-      <Text style={S.pageHeaderPage} render={({pageNumber,totalPages})=>`Pág. ${pageNumber}/${totalPages}`} />
+      <Text style={S.pageHeaderPage} render={({pageNumber,totalPages})=>`Pag. ${pageNumber}/${totalPages}`} />
     </View>
   );
 }
@@ -87,8 +87,8 @@ function PageHeader({ title, empresa, logo }: { title:string; empresa:any; logo?
 function Footer({ empresa }: { empresa:any }) {
   return (
     <View style={S.footer} fixed>
-      <Text style={S.footerTxt}>{empresa.razaoSocial} · CNPJ: {empresa.cnpj}</Text>
-      <Text style={S.footerTxt}>{empresa.responsavelTecnico} · CREA-{empresa.uf} {empresa.crea}</Text>
+      <Text style={S.footerTxt}>{empresa.razaoSocial} - CNPJ: {empresa.cnpj}</Text>
+      <Text style={S.footerTxt}>{empresa.responsavelTecnico} - CREA-{empresa.uf} {empresa.crea}</Text>
     </View>
   );
 }
@@ -132,7 +132,7 @@ export function MemorialDescritivo({ data }: { data:any }) {
   const tensaoSistCC = kit.vocV * kit.modulosPorString;
 
   return (
-    <Document title={`Memorial Descritivo — ${cliente.nome}`} author={empresa.razaoSocial}>
+    <Document title={`Memorial Descritivo - ${cliente.nome}`} author={empresa.razaoSocial}>
 
       {/* ═══ CAPA ═══ */}
       <Page size="A4" style={S.page}>
@@ -145,7 +145,7 @@ export function MemorialDescritivo({ data }: { data:any }) {
                 </View>
             }
             <Text style={{fontSize:13,fontFamily:'Helvetica-Bold',color:BLUE,marginBottom:4}}>{empresa.razaoSocial}</Text>
-            <Text style={{fontSize:9,color:MUTED}}>{empresa.email} · {empresa.telefone}</Text>
+            <Text style={{fontSize:9,color:MUTED}}>{empresa.email} - {empresa.telefone}</Text>
           </View>
 
           <View style={S.capaTitleBox}>
@@ -174,7 +174,7 @@ export function MemorialDescritivo({ data }: { data:any }) {
               </View>
               <View style={S.empCellLast}>
                 <Text style={S.empLabel}>Responsável:</Text>
-                <Text style={S.empVal}>{empresa.responsavelTecnico} – CREA {empresa.crea}</Text>
+                <Text style={S.empVal}>{empresa.responsavelTecnico} - CREA {empresa.crea}</Text>
               </View>
             </View>
             <View style={S.empRow}>
@@ -200,7 +200,7 @@ export function MemorialDescritivo({ data }: { data:any }) {
             {empresa.cidade && <View style={S.empRow}>
               <View style={[S.empCellLast,{flex:2}]}>
                 <Text style={S.empLabel}>Endereço para correspondência:</Text>
-                <Text style={S.empVal}>{empresa.cidade} – {empresa.uf}</Text>
+                <Text style={S.empVal}>{empresa.cidade} - {empresa.uf}</Text>
               </View>
             </View>}
             <View style={S.empRevRow}>
@@ -221,11 +221,11 @@ export function MemorialDescritivo({ data }: { data:any }) {
           <Text style={S.secNum}>OBJETIVO DO PROJETO</Text>
           <Text style={S.para}>
             O objetivo deste projeto é a INSTALAÇÃO DE UMA UNIDADE DE MICROGERAÇÃO DE ENERGIA SOLAR FOTOVOLTAICA CONECTADA À REDE ELÉTRICA COM POTÊNCIA INSTALADA DE{' '}
-            <Text style={S.bold}>{fmtN(potKWp)} kWp</Text>, cuja finalidade é a geração de energia elétrica e injeção do excedente de energia, se houver, na rede de Baixa Tensão da concessionária distribuidora de energia, caracterizando o sistema de compensação de energia elétrica previsto na Lei nº 14.300/2022 e na RN nº 482 da ANEEL.
+            <Text style={S.bold}>{fmtN(potKWp)} kWp</Text>, cuja finalidade é a geração de energia elétrica e injeção do excedente de energia, se houver, na rede de Baixa Tensão da concessionária distribuidora de energia, caracterizando o sistema de compensação de energia elétrica previsto na Lei no 14.300/2022 e na RN no 482 da ANEEL.
           </Text>
           <Text style={S.para}>
             O presente documento descreve os principais aspectos técnicos deste sistema fotovoltaico de capacidade já referida a ser instalado, daqui em diante denominado "UFV (Unidade Fotovoltaica) <Text style={S.bold}>{cliente.nome}</Text>", para fins de consulta de acesso junto à{' '}
-            <Text style={S.bold}>{distrib.nome || distrib.nomeAbreviado}</Text>, considerando o disposto na Lei nº 14.300, de 6 de janeiro de 2022, e nas normas da distribuidora local.
+            <Text style={S.bold}>{distrib.nome || distrib.nomeAbreviado}</Text>, considerando o disposto na Lei no 14.300, de 6 de janeiro de 2022, e nas normas da distribuidora local.
           </Text>
         </View>
         <Footer empresa={empresa} />
@@ -238,14 +238,14 @@ export function MemorialDescritivo({ data }: { data:any }) {
 
           <Text style={S.secNum}>1  LOCALIZAÇÃO DO SISTEMA FOTOVOLTAICO</Text>
           <Text style={S.para}>
-            A instalação irá ocupar aproximadamente <Text style={S.bold}>{area} m²</Text> do telhado, área esta a ser coberta pelos módulos fotovoltaicos que estarão distribuídos em um arranjo com{' '}
+            A instalação irá ocupar aproximadamente <Text style={S.bold}>{area} m2</Text> do telhado, área esta a ser coberta pelos módulos fotovoltaicos que estarão distribuídos em um arranjo com{' '}
             <Text style={S.bold}>{dim.numeroModulos} módulos</Text>. A instalação será realizada no{' '}
             <Text style={S.bold}>{TIPO_TELHADO_LABELS[localizacao.tipoTelhado] ?? localizacao.tipoTelhado}</Text> do(a){' '}
             <Text style={S.bold}>{cliente.nome}</Text>, no município de{' '}
             <Text style={S.bold}>{cliente.cidade}, {cliente.uf}</Text>, com inclinação de{' '}
             <Text style={S.bold}>{localizacao.inclinacaoGraus}°</Text> e orientada ao{' '}
             <Text style={S.bold}>{localizacao.orientacaoPrincipal}</Text>
-            {localizacao.desvioAzimuthalGraus !== 0 ? ` com desvio azimutal de ${Math.abs(localizacao.desvioAzimuthalGraus)}°` : ''}.
+            {localizacao.desvioAzimuthalGraus !== 0 ? ` com desvio azimutal de ${Math.abs(localizacao.desvioAzimuthalGraus)}o` : ''}.
           </Text>
           {(localizacao.utmE || localizacao.utmN) && (
             <Text style={S.para}>
@@ -256,7 +256,7 @@ export function MemorialDescritivo({ data }: { data:any }) {
             </Text>
           )}
           {localizacao.numeroUC && (
-            <Text style={S.para}>Número da Unidade Consumidora (UC): <Text style={S.bold}>{localizacao.numeroUC}</Text>{localizacao.numeroMedidor ? ` · Nº do medidor: ${localizacao.numeroMedidor}` : ''}.</Text>
+            <Text style={S.para}>Número da Unidade Consumidora (UC): <Text style={S.bold}>{localizacao.numeroUC}</Text>{localizacao.numeroMedidor ? ` - No do medidor: ${localizacao.numeroMedidor}` : ''}.</Text>
           )}
 
           <Text style={S.secNum}>2  DESCRIÇÃO GERAL DO SISTEMA SOLAR FOTOVOLTAICO</Text>
@@ -264,7 +264,7 @@ export function MemorialDescritivo({ data }: { data:any }) {
             Um sistema fotovoltaico montado sobre o telhado é constituído pelos seguintes elementos: o sistema de geração fotovoltaica (módulos fotovoltaicos), os cabos de conexão, o inversor (podendo ser mais de um inversor ou microinversores) e o medidor bidirecional.
           </Text>
           <Text style={S.para}>
-            Por meio de cabos a corrente contínua dos módulos fotovoltaicos passa pelo Dispositivo contra Surtos – DPS, chega ao inversor onde é convertida em corrente alternada. Esta energia é consumida localmente e o excedente é injetado na rede pública, mensurado pelo medidor bidirecional.
+            Por meio de cabos a corrente contínua dos módulos fotovoltaicos passa pelo Dispositivo contra Surtos - DPS, chega ao inversor onde é convertida em corrente alternada. Esta energia é consumida localmente e o excedente é injetado na rede pública, mensurado pelo medidor bidirecional.
           </Text>
           <Text style={S.para}>
             Os módulos fotovoltaicos são montados sobre suportes ou trilhos fixos, que por sua vez são fixados sobre o telhado de forma adequada. Os cabos provenientes dos conjuntos de módulos podem ser conectados diretamente ao inversor ou por meio de String Box, dependendo do número de fileiras (strings).
@@ -276,7 +276,7 @@ export function MemorialDescritivo({ data }: { data:any }) {
         <Footer empresa={empresa} />
       </Page>
 
-      {/* ═══ PÁG 4: DESCRIÇÃO DA UFV — MÓDULOS + INVERSOR ═══ */}
+      {/* ═══ PÁG 4: DESCRIÇÃO DA UFV - MÓDULOS + INVERSOR ═══ */}
       <Page size="A4" style={S.page}>
         <PageHeader title="MEMORIAL DESCRITIVO" empresa={empresa} logo={empresa.logoBase64} />
         <View style={S.body}>
@@ -289,38 +289,38 @@ export function MemorialDescritivo({ data }: { data:any }) {
             O sistema fotovoltaico terá uma potência de pico de <Text style={S.bold}>{fmtN(potKWp)} kWp</Text>, composto por{' '}
             <Text style={S.bold}>{dim.numeroModulos} módulos fotovoltaicos</Text> com potência de{' '}
             <Text style={S.bold}>{kit.potenciaModuloWp} Wp</Text> cada um (modelo <Text style={S.bold}>{kit.marcaModulo} {kit.modeloModulo}</Text>).
-            {kit.numStrings > 0 && ` O arranjo é composto por ${kit.numStrings} fileira(s) (string) de ${kit.modulosPorString} módulos cada.`}
+            {kit.numStrings > 0 && ` O arranjo e composto por ${kit.numStrings} fileira(s) (string) de ${kit.modulosPorString} modulos cada.`}
           </Text>
 
           <Text style={S.secNumSub}>3.1  Módulos fotovoltaicos</Text>
           <Text style={S.para}>
             Os módulos fotovoltaicos são do tipo <Text style={S.bold}>{PRESETS_MODULO[kit.tipoModulo as keyof typeof PRESETS_MODULO]?.label ?? kit.tipoModulo}</Text>, protegidos por vidro antirreflexo texturizado.
-            {kit.garantiaPotenciaAnos > 0 && ` A garantia de potência tem duração de ${kit.garantiaPotenciaAnos} anos, com ${kit.potenciaGarantidaPercent}% de potência garantida ao final do período.`}
-            {kit.garantiaProdutoAnos > 0 && ` Garantia contra defeitos de fabricação: ${kit.garantiaProdutoAnos} anos.`}
+            {kit.garantiaPotenciaAnos > 0 && ` A garantia de potencia tem duracao de ${kit.garantiaPotenciaAnos} anos, com ${kit.potenciaGarantidaPercent}% de potencia garantida ao final do periodo.`}
+            {kit.garantiaProdutoAnos > 0 && ` Garantia contra defeitos de fabricacao: ${kit.garantiaProdutoAnos} anos.`}
           </Text>
 
-          <Text style={S.tblTitle}>Tabela I – Características técnicas do módulo {kit.marcaModulo} {kit.modeloModulo}</Text>
+          <Text style={S.tblTitle}>Tabela I - Características técnicas do módulo {kit.marcaModulo} {kit.modeloModulo}</Text>
           <View style={S.tbl}>
             <View style={S.tblHead}>
               <Text style={[S.tblHeadCell,{flex:2}]}>CARACTERÍSTICA TÉCNICA</Text>
               <Text style={[S.tblHeadCell,{flex:2}]}>VALOR</Text>
             </View>
             {[
-              ['Marca',                           kit.marcaModulo || '—'],
-              ['Modelo',                           kit.modeloModulo || '—'],
-              ['Potência Nominal (Pmax)',           `${kit.potenciaModuloWp} Wp`],
-              ['Tensão de Máxima Potência (Vmpp)', kit.vmppV > 0 ? `${kit.vmppV} V` : '—'],
-              ['Corrente de Máxima Potência (Impp)',kit.imppA > 0 ? `${kit.imppA} A` : '—'],
-              ['Tensão de Circuito Aberto (Voc)',  kit.vocV > 0 ? `${kit.vocV} V` : '—'],
-              ['Corrente de Curto-Circuito (Isc)', kit.iscA > 0 ? `${kit.iscA} A` : '—'],
-              ['Comprimento',                      kit.comprimentoMm > 0 ? `${kit.comprimentoMm} mm` : '—'],
-              ['Largura',                          kit.larguraMm > 0 ? `${kit.larguraMm} mm` : '—'],
-              ['Área do Módulo',                   kit.comprimentoMm > 0 && kit.larguraMm > 0 ? `${fmtN((kit.comprimentoMm*kit.larguraMm)/1e6,4)} m²` : '—'],
-              ['Peso',                             kit.pesoKgModulo > 0 ? `${kit.pesoKgModulo} kg` : '—'],
-              ['Coef. Temperatura Pmax',           `${PRESETS_MODULO[kit.tipoModulo as keyof typeof PRESETS_MODULO]?.coef ?? -0.34}%/°C`],
-              ['Garantia de Potência',             kit.garantiaPotenciaAnos > 0 ? `${kit.garantiaPotenciaAnos} anos (${kit.potenciaGarantidaPercent}%)` : '25 anos'],
+              ['Marca',                           kit.marcaModulo || '-'],
+              ['Modelo',                           kit.modeloModulo || '-'],
+              ['Potencia Nominal (Pmax)',           `${kit.potenciaModuloWp} Wp`],
+              ['Tensao de Maxima Potencia (Vmpp)', kit.vmppV > 0 ? `${kit.vmppV} V` : '-'],
+              ['Corrente de Maxima Potencia (Impp)',kit.imppA > 0 ? `${kit.imppA} A` : '-'],
+              ['Tensao de Circuito Aberto (Voc)',  kit.vocV > 0 ? `${kit.vocV} V` : '-'],
+              ['Corrente de Curto-Circuito (Isc)', kit.iscA > 0 ? `${kit.iscA} A` : '-'],
+              ['Comprimento',                      kit.comprimentoMm > 0 ? `${kit.comprimentoMm} mm` : '-'],
+              ['Largura',                          kit.larguraMm > 0 ? `${kit.larguraMm} mm` : '-'],
+              ['Area do Modulo',                   kit.comprimentoMm > 0 && kit.larguraMm > 0 ? `${fmtN((kit.comprimentoMm*kit.larguraMm)/1e6,4)} m2` : '-'],
+              ['Peso',                             kit.pesoKgModulo > 0 ? `${kit.pesoKgModulo} kg` : '-'],
+              ['Coef. Temperatura Pmax',           `${PRESETS_MODULO[kit.tipoModulo as keyof typeof PRESETS_MODULO]?.coef ?? -0.34}%/oC`],
+              ['Garantia de Potencia',             kit.garantiaPotenciaAnos > 0 ? `${kit.garantiaPotenciaAnos} anos (${kit.potenciaGarantidaPercent}%)` : '25 anos'],
               ['Garantia do Produto',              kit.garantiaProdutoAnos > 0 ? `${kit.garantiaProdutoAnos} anos` : '10 anos'],
-              ['Certificações',                    kit.certificacoes || 'INMETRO, IEC 61215, IEC 61730'],
+              ['Certificacoes',                    kit.certificacoes || 'INMETRO, IEC 61215, IEC 61730'],
             ].map(([lbl,val],i) => <SpecRow key={i} label={lbl} val={val} alt={i%2===1} />)}
           </View>
 
@@ -329,27 +329,27 @@ export function MemorialDescritivo({ data }: { data:any }) {
             O inversor solar realiza a conversão da energia elétrica em corrente contínua (CC), gerada pelos módulos fotovoltaicos, em corrente alternada (CA), sincronizada com a rede elétrica local. O equipamento é dotado de proteções que impedem o funcionamento em modo ilhado.
           </Text>
 
-          <Text style={S.tblTitle}>Tabela II – Características técnicas do inversor {kit.marcaInversor} {kit.modeloInversor}</Text>
+          <Text style={S.tblTitle}>Tabela II - Características técnicas do inversor {kit.marcaInversor} {kit.modeloInversor}</Text>
           <View style={S.tbl}>
             <View style={S.tblHead}>
               <Text style={[S.tblHeadCell,{flex:2}]}>CARACTERÍSTICA TÉCNICA</Text>
               <Text style={[S.tblHeadCell,{flex:2}]}>VALOR</Text>
             </View>
             {[
-              ['Marca',                    kit.marcaInversor || '—'],
-              ['Modelo',                   kit.modeloInversor || '—'],
-              ['Potência Nominal de Saída', `${kit.potenciaInversorKW} kW`],
-              ['Faixa de Tensão MPPT',     kit.faixaMpptMinV > 0 ? `${kit.faixaMpptMinV}V – ${kit.faixaMpptMaxV}V` : '—'],
-              ['Tensão Máxima de Entrada', kit.tensaoMaxEntradaV > 0 ? `${kit.tensaoMaxEntradaV} V` : '—'],
-              ['Número de MPPTs',          `${kit.numMppt}`],
-              ['Tensão Nominal de Saída',  `${kit.tensaoSaidaV} V CA`],
-              ['Corrente Máxima de Saída', kit.corrMaxSaidaA > 0 ? `${kit.corrMaxSaidaA} A` : '—'],
-              ['Frequência Nominal',       '60 Hz'],
-              ['Fator de Potência',        kit.fatorPotencia || '>0.99'],
-              ['Distorção Harmônica (THD)', kit.thd || '<3%'],
-              ['Eficiência Máxima',        `${kit.eficienciaInversorPercent}%`],
-              ['Classificação do Gabinete', kit.ipGabinete || 'IP65'],
-              ['Tensão Máx. CC do Sistema',tensaoSistCC > 0 ? `${fmtN(tensaoSistCC,0)} V` : '—'],
+              ['Marca',                    kit.marcaInversor || '-'],
+              ['Modelo',                   kit.modeloInversor || '-'],
+              ['Potencia Nominal de Saida', `${kit.potenciaInversorKW} kW`],
+              ['Faixa de Tensao MPPT',     kit.faixaMpptMinV > 0 ? `${kit.faixaMpptMinV}V - ${kit.faixaMpptMaxV}V` : '-'],
+              ['Tensao Maxima de Entrada', kit.tensaoMaxEntradaV > 0 ? `${kit.tensaoMaxEntradaV} V` : '-'],
+              ['Numero de MPPTs',          `${kit.numMppt}`],
+              ['Tensao Nominal de Saida',  `${kit.tensaoSaidaV} V CA`],
+              ['Corrente Maxima de Saida', kit.corrMaxSaidaA > 0 ? `${kit.corrMaxSaidaA} A` : '-'],
+              ['Frequencia Nominal',       '60 Hz'],
+              ['Fator de Potencia',        kit.fatorPotencia || '>0.99'],
+              ['Distorcao Harmonica (THD)', kit.thd || '<3%'],
+              ['Eficiencia Maxima',        `${kit.eficienciaInversorPercent}%`],
+              ['Classificacao do Gabinete', kit.ipGabinete || 'IP65'],
+              ['Tensao Max. CC do Sistema',tensaoSistCC > 0 ? `${fmtN(tensaoSistCC,0)} V` : '-'],
             ].map(([lbl,val],i) => <SpecRow key={i} label={lbl} val={val} alt={i%2===1} />)}
           </View>
         </View>
@@ -391,7 +391,7 @@ export function MemorialDescritivo({ data }: { data:any }) {
 
           {ind?.geracaoMensalKWh && (
             <View style={S.genChart}>
-              <Text style={S.genTitle}>Figura – Expectativa de Geração Mensal (kWh)</Text>
+              <Text style={S.genTitle}>Figura - Expectativa de Geração Mensal (kWh)</Text>
               <GeracaoBarChart geracaoMensal={ind.geracaoMensalKWh} />
             </View>
           )}

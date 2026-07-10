@@ -91,8 +91,8 @@ interface FooterProps { empresa: DadosEmpresa; }
 function Footer({ empresa }: FooterProps) {
   return (
     <View style={S.footer} fixed>
-      <Text style={S.footerTexto}>{empresa.nomeFantasia || empresa.razaoSocial} · {empresa.telefone} · {empresa.email}</Text>
-      <Text style={S.pageNumber} render={({ pageNumber, totalPages }) => `Página ${pageNumber} de ${totalPages}`} />
+      <Text style={S.footerTexto}>{empresa.nomeFantasia || empresa.razaoSocial} - {empresa.telefone} - {empresa.email}</Text>
+      <Text style={S.pageNumber} render={({ pageNumber, totalPages }) => `Pagina ${pageNumber} de ${totalPages}`} />
     </View>
   );
 }
@@ -138,7 +138,7 @@ export function PropostaPDF({ data }: { data: PropostaData }) {
   const anoAtual = new Date().getFullYear();
 
   return (
-    <Document title={`Proposta Solar — ${cliente.nome}`} author={empresa.razaoSocial}>
+    <Document title={`Proposta Solar - ${cliente.nome}`} author={empresa.razaoSocial}>
 
       {/* ===== CAPA ===== */}
       <Page size="A4" style={S.page}>
@@ -152,7 +152,7 @@ export function PropostaPDF({ data }: { data: PropostaData }) {
               <Text style={S.capaTitulo}>Proposta Comercial</Text>
               <Text style={S.capaSubtitulo}>Sistema de Energia Solar Fotovoltaica</Text>
               <Text style={S.capaCliente}>{cliente.nome}</Text>
-              <Text style={S.capaData}>{cliente.cidade}{cliente.cidade && cliente.uf ? ` — ${cliente.uf}` : cliente.uf} · {hoje()}</Text>
+              <Text style={S.capaData}>{cliente.cidade}{cliente.cidade && cliente.uf ? ` - ${cliente.uf}` : cliente.uf} - {hoje()}</Text>
             </View>
             <View>
               {/* Números de destaque na capa */}
@@ -173,7 +173,7 @@ export function PropostaPDF({ data }: { data: PropostaData }) {
               <View style={S.capaRodape}>
                 <Text style={S.capaEmpresa}>{empresa.razaoSocial}</Text>
                 <Text style={S.capaEmpresaInfo}>
-                  {[empresa.cnpj && `CNPJ: ${empresa.cnpj}`, empresa.crea && `CREA: ${empresa.crea}`, empresa.telefone, empresa.email].filter(Boolean).join('  ·  ')}
+                  {[empresa.cnpj && `CNPJ: ${empresa.cnpj}`, empresa.crea && `CREA: ${empresa.crea}`, empresa.telefone, empresa.email].filter(Boolean).join('  -  ')}
                 </Text>
                 <Text style={{ fontSize: 9, color: '#7fb3d3', marginTop: 6 }}>
                   Esta proposta é válida por {empresa.validadeProposta} dias a partir da data de emissão.
@@ -218,12 +218,12 @@ export function PropostaPDF({ data }: { data: PropostaData }) {
             </View>
             <View style={S.tabelaRow}>
               <Text style={[S.tabelaCell, { flex: 1 }]}>Módulo fotovoltaico</Text>
-              <Text style={[S.tabelaCellBold, { flex: 2 }]}>{kit.marcaModulo} {kit.modeloModulo} — {kit.potenciaModuloWp}Wp {kit.tipoModulo}</Text>
+              <Text style={[S.tabelaCellBold, { flex: 2 }]}>{kit.marcaModulo} {kit.modeloModulo} - {kit.potenciaModuloWp}Wp {kit.tipoModulo}</Text>
               <Text style={[S.tabelaCell, { flex: 1, textAlign: 'right' }]}>{kit.quantidade} un.</Text>
             </View>
             <View style={S.tabelaRowAlt}>
               <Text style={[S.tabelaCell, { flex: 1 }]}>Inversor solar</Text>
-              <Text style={[S.tabelaCellBold, { flex: 2 }]}>{kit.marcaInversor} {kit.modeloInversor} — {kit.potenciaInversorKW} kW</Text>
+              <Text style={[S.tabelaCellBold, { flex: 2 }]}>{kit.marcaInversor} {kit.modeloInversor} - {kit.potenciaInversorKW} kW</Text>
               <Text style={[S.tabelaCell, { flex: 1, textAlign: 'right' }]}>1 un.</Text>
             </View>
             <View style={S.tabelaRow}>
@@ -238,7 +238,7 @@ export function PropostaPDF({ data }: { data: PropostaData }) {
             </View>
             <View style={S.tabelaRow}>
               <Text style={[S.tabelaCell, { flex: 1 }]}>Projeto + ART</Text>
-              <Text style={[S.tabelaCell, { flex: 2 }]}>Projeto elétrico, memorial descritivo e ART CREA{empresa.crea ? ` nº ${empresa.crea}` : ''}</Text>
+              <Text style={[S.tabelaCell, { flex: 2 }]}>Projeto elétrico, memorial descritivo e ART CREA{empresa.crea ? ` no ${empresa.crea}` : ''}</Text>
               <Text style={[S.tabelaCell, { flex: 1, textAlign: 'right' }]}>1 cj.</Text>
             </View>
           </View>
@@ -283,7 +283,7 @@ export function PropostaPDF({ data }: { data: PropostaData }) {
             <Text style={S.linhaItemValor}>{R(custosRecorrentes.cipRS)}/mês</Text>
           </View>
           <View style={S.linhaItem}>
-            <Text style={S.linhaItemLabel}>Componente Fio B — TUSD Distribuição ({N((percentuaisFioBPorAno[anoAtual] ?? 0) * 100, 0)}% em {anoAtual})</Text>
+            <Text style={S.linhaItemLabel}>Componente Fio B - TUSD Distribuição ({N((percentuaisFioBPorAno[anoAtual] ?? 0) * 100, 0)}% em {anoAtual})</Text>
             <Text style={S.linhaItemValor}>{R(custosRecorrentes.custoBFioMensalRS)}/mês</Text>
           </View>
           <View style={{ ...S.linhaItem, borderBottomWidth: 0 }}>
@@ -305,11 +305,11 @@ export function PropostaPDF({ data }: { data: PropostaData }) {
             </View>
           </View>
 
-          <Text style={S.secaoTitulo}>Impacto do Fio B — Lei nº 14.300/2022</Text>
+          <Text style={S.secaoTitulo}>Impacto do Fio B - Lei no 14.300/2022</Text>
           {enquadramento.elegivelArt26 ? (
             <View style={S.alertaVerde}>
               <Text style={S.alertaTexto}>
-                ✅  Este sistema está enquadrado na regra de transição do art. 26 da Lei 14.300/2022.{'\n'}
+                [OK]  Este sistema está enquadrado na regra de transição do art. 26 da Lei 14.300/2022.{'\n'}
                 O Fio B (componente de distribuição) não incide sobre a energia compensada até 31/12/2045, garantindo máxima economia ao longo de toda a vida útil do sistema.
               </Text>
             </View>
@@ -357,11 +357,11 @@ export function PropostaPDF({ data }: { data: PropostaData }) {
               <Text style={[S.tabelaHeaderCell, { flex: 1, textAlign: 'right' }]}>Valor</Text>
             </View>
             {[
-              ['Kit solar (módulos + inversor)', precificacao.custoKit],
-              ['Estrutura de fixação', precificacao.custoEstrutura],
-              ['Materiais elétricos', precificacao.custoMateriais],
-              ['Mão de obra de instalação', precificacao.custoMaoDeObra],
-              ['Projeto elétrico + ART CREA', precificacao.custoProjetoArt],
+              ['Kit solar (modulos + inversor)', precificacao.custoKit],
+              ['Estrutura de fixacao', precificacao.custoEstrutura],
+              ['Materiais eletricos', precificacao.custoMateriais],
+              ['Mao de obra de instalacao', precificacao.custoMaoDeObra],
+              ['Projeto eletrico + ART CREA', precificacao.custoProjetoArt],
               ...(precificacao.custoOutros > 0 ? [['Outros', precificacao.custoOutros]] as [string, number][] : []),
             ].map(([label, valor], idx) => (
               <View key={idx} style={idx % 2 === 0 ? S.tabelaRow : S.tabelaRowAlt}>
@@ -410,7 +410,7 @@ export function PropostaPDF({ data }: { data: PropostaData }) {
               <View style={{ borderTopWidth: 1, borderTopColor: '#ccc', width: 200, paddingTop: 8, alignItems: 'center' }}>
                 <Text style={{ fontSize: 9, color: COR_TEXTO }}>{empresa.responsavelTecnico}</Text>
                 <Text style={{ fontSize: 8, color: COR_CINZA }}>{empresa.razaoSocial}</Text>
-                {empresa.crea && <Text style={{ fontSize: 8, color: COR_CINZA }}>CREA-{empresa.uf} nº {empresa.crea}</Text>}
+                {empresa.crea && <Text style={{ fontSize: 8, color: COR_CINZA }}>CREA-{empresa.uf} no {empresa.crea}</Text>}
               </View>
             </View>
           )}

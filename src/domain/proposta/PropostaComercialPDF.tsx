@@ -1,5 +1,5 @@
 /**
- * PROPOSTA COMERCIAL — para envio ao cliente.
+ * PROPOSTA COMERCIAL - para envio ao cliente.
  * NÃO mostra: ART, estrutura, materiais, impostos, margem, custos internos.
  * Foco: benefícios, economia, sistema, financiamento, validade.
  */
@@ -117,7 +117,7 @@ const hoje = () => new Date().toLocaleDateString('pt-BR', { day: '2-digit', mont
 
 const Footer = ({ empresa }: { empresa: any }) => (
   <View style={S.footer} fixed>
-    <Text style={S.footerTxt}>{empresa.nomeFantasia || empresa.razaoSocial} · {empresa.telefone} · {empresa.email}</Text>
+    <Text style={S.footerTxt}>{empresa.nomeFantasia || empresa.razaoSocial} - {empresa.telefone} - {empresa.email}</Text>
     <Text style={S.pageNum} render={({ pageNumber, totalPages }) => `${pageNumber}/${totalPages}`} />
   </View>
 );
@@ -175,9 +175,9 @@ export function PropostaComercialPDF({ data }: { data: any }) {
   const simul = ind?.simulacoesFinanciamento ?? [];
 
   return (
-    <Document title={`Proposta Solar — ${cliente.nome}`} author={empresa.razaoSocial}>
+    <Document title={`Proposta Solar - ${cliente.nome}`} author={empresa.razaoSocial}>
 
-      {/* ════ CAPA — foto Lumen como background full-bleed ════ */}
+      {/* ════ CAPA - foto Lumen como background full-bleed ════ */}
       <Page size="A4" style={{ fontFamily: 'Helvetica', padding: 0 }}>
         {/* Imagem de capa full-page */}
         <Image
@@ -190,14 +190,14 @@ export function PropostaComercialPDF({ data }: { data: any }) {
             {cliente.nome || 'Cliente'}
           </Text>
           <Text style={{ color: '#c9a227', fontSize: 10, marginBottom: 10 }}>
-            {cliente.cidade}{cliente.cidade && cliente.uf ? ` — ${cliente.uf}` : cliente.uf}
+            {cliente.cidade}{cliente.cidade && cliente.uf ? ` - ${cliente.uf}` : cliente.uf}
           </Text>
           {/* Métricas */}
           <View style={{ flexDirection: 'row', gap: 0, marginBottom: 10 }}>
             {[
-              [N(dim.potenciaInstaladaRealKWp) + ' kWp', 'Potência instalada'],
-              [R(cr.economiaMensalRS) + '/mês', 'Economia estimada'],
-              [ind?.paybackSimples ?? '—', 'Retorno do invest.'],
+              [N(dim.potenciaInstaladaRealKWp) + ' kWp', 'Potencia instalada'],
+              [R(cr.economiaMensalRS) + '/mes', 'Economia estimada'],
+              [ind?.paybackSimples ?? '-', 'Retorno do invest.'],
             ].map(([val, lbl], i) => (
               <View key={i} style={{ flex: 1, paddingRight: 12 }}>
                 <Text style={{ color: '#c9a227', fontFamily: 'Helvetica-Bold', fontSize: 14 }}>{val}</Text>
@@ -206,7 +206,7 @@ export function PropostaComercialPDF({ data }: { data: any }) {
             ))}
           </View>
           <Text style={{ color: '#666688', fontSize: 8 }}>
-            Válida por {empresa.validadeProposta} dias · {hoje()} · {empresa.email} · {empresa.telefone}
+            Válida por {empresa.validadeProposta} dias - {hoje()} - {empresa.email} - {empresa.telefone}
           </Text>
         </View>
       </Page>
@@ -218,12 +218,12 @@ export function PropostaComercialPDF({ data }: { data: any }) {
         <View style={S.row} wrap={false}>
           <View style={S.band} />
           <View style={S.body}>
-            <SectionHeader title="Por que investir em energia solar?" sub="Energia solar é o investimento mais rentável da atualidade — protege contra reajustes tarifários e gera retorno por décadas." />
+            <SectionHeader title="Por que investir em energia solar?" sub="Energia solar é o investimento mais rentável da atualidade - protege contra reajustes tarifários e gera retorno por décadas." />
             <View style={S.benefGrid}>
               {[
-                { cor:'#c9a227', letra:'R$', title:'Economia imediata',         text:`Reduza sua conta de energia em até ${N(dim.percentualCompensacaoReal * 100, 0)}%. A partir do primeiro mês após a conexão.` },
-                { cor:'#2563eb', letra:'%',  title:'Proteção contra reajustes', text:'A ANEEL reajusta as tarifas anualmente. Com energia solar, você gera sua própria energia e fica protegido.' },
-                { cor:'#16a34a', letra:'UP', title:'Valorização do imóvel',     text:'Imóveis com sistema fotovoltaico valem em média 5-8% a mais no mercado. É uma benfeitoria permanente.' },
+                { cor:'#c9a227', letra:'R$', title:'Economia imediata',         text:`Reduza sua conta de energia em ate ${N(dim.percentualCompensacaoReal * 100, 0)}%. A partir do primeiro mes apos a conexao.` },
+                { cor:'#2563eb', letra:'%',  title:'Protecao contra reajustes', text:'A ANEEL reajusta as tarifas anualmente. Com energia solar, voce gera sua propria energia e fica protegido.' },
+                { cor:'#16a34a', letra:'UP', title:'Valorizacao do imovel',     text:'Imoveis com sistema fotovoltaico valem em media 5-8% a mais no mercado. E uma benfeitoria permanente.' },
                 { cor:'#059669', letra:'CO', title:'Sustentabilidade',          text:'Energia 100% renovavel, sem emissoes de CO2. Cada kWh solar substitui energia de fontes fosseis.' },
                 { cor:'#7c3aed', letra:'60x',title:'Financiamento facilitado',  text:'Parcele em ate 60x com carencia de 60 dias. O sistema se paga com a economia antes de terminar de pagar.' },
                 { cor:'#dc2626', letra:'25', title:'Vida util de 25+ anos',     text:'Modulos modernos tem garantia de 25 anos de potencia linear. O sistema continua gerando por decadas.' },
@@ -247,15 +247,15 @@ export function PropostaComercialPDF({ data }: { data: any }) {
         <View style={S.row}>
           <View style={S.band} />
           <View style={S.body}>
-            <SectionHeader title="Seu sistema personalizado" sub={`Dimensionado especificamente para compensar o consumo médio de ${N(consumoMedioMensalKWh, 0)} kWh/mês.`} />
+            <SectionHeader title="Seu sistema personalizado" sub={`Dimensionado especificamente para compensar o consumo medio de ${N(consumoMedioMensalKWh, 0)} kWh/mes.`} />
 
             {/* Métricas do sistema */}
             <View style={S.sysGrid}>
               {[
-                [N(dim.potenciaInstaladaRealKWp) + ' kWp', 'Potência instalada'],
-                [dim.numeroModulos + ' módulos', kit.marcaModulo || 'Fotovoltaicos'],
-                [N(dim.geracaoMensalEstimadaKWh, 0) + ' kWh/mês', 'Geração estimada'],
-                [N(ind?.areaNecessariaM2 ?? 0) + ' m²', 'Área no telhado'],
+                [N(dim.potenciaInstaladaRealKWp) + ' kWp', 'Potencia instalada'],
+                [dim.numeroModulos + ' modulos', kit.marcaModulo || 'Fotovoltaicos'],
+                [N(dim.geracaoMensalEstimadaKWh, 0) + ' kWh/mes', 'Geracao estimada'],
+                [N(ind?.areaNecessariaM2 ?? 0) + ' m2', 'Area no telhado'],
               ].map(([val, lbl], i) => (
                 <View key={i} style={S.sysStat}>
                   <Text style={S.sysStatVal}>{val}</Text>
@@ -273,11 +273,11 @@ export function PropostaComercialPDF({ data }: { data: any }) {
                 <Text style={[S.tblHeadTxt, { flex: 1 }]}>QUANTIDADE</Text>
               </View>
               {[
-                ['Módulo fotovoltaico', `${kit.marcaModulo} ${kit.modeloModulo} — ${kit.potenciaModuloWp}Wp ${kit.tipoModulo}`, `${kit.quantidade} un.`],
-                ['Inversor solar', `${kit.marcaInversor} ${kit.modeloInversor} — ${kit.potenciaInversorKW} kW`, '1 un.'],
-                ['Estrutura de fixação', 'Alumínio anodizado — adequada ao tipo de telhado', '1 cj.'],
-                ['Cabeamento e proteções', 'Cabos solar 6mm², DPS, disjuntores, conectores MC4', '1 cj.'],
-                ['Projeto + documentação', 'Projeto elétrico, ART, memorial descritivo', '1 cj.'],
+                ['Modulo fotovoltaico', `${kit.marcaModulo} ${kit.modeloModulo} - ${kit.potenciaModuloWp}Wp ${kit.tipoModulo}`, `${kit.quantidade} un.`],
+                ['Inversor solar', `${kit.marcaInversor} ${kit.modeloInversor} - ${kit.potenciaInversorKW} kW`, '1 un.'],
+                ['Estrutura de fixacao', 'Aluminio anodizado - adequada ao tipo de telhado', '1 cj.'],
+                ['Cabeamento e protecoes', 'Cabos solar 6mm2, DPS, disjuntores, conectores MC4', '1 cj.'],
+                ['Projeto + documentacao', 'Projeto eletrico, ART, memorial descritivo', '1 cj.'],
               ].map(([comp, spec, qty], i) => (
                 <View key={i} style={i % 2 === 0 ? S.tblRow : S.tblRowAlt}>
                   <Text style={[S.tblCellB, { flex: 2 }]}>{comp}</Text>
@@ -288,7 +288,7 @@ export function PropostaComercialPDF({ data }: { data: any }) {
             </View>
 
             {/* Gráfico geração mensal */}
-            <Text style={{ fontSize: 12, fontFamily: 'Helvetica-Bold', color: C.dark, marginBottom: 10 }}>Geração × Consumo estimados por mês</Text>
+            <Text style={{ fontSize: 12, fontFamily: 'Helvetica-Bold', color: C.dark, marginBottom: 10 }}>Geração x Consumo estimados por mês</Text>
             {ind?.geracaoMensalKWh && (
               <GraficoGeracaoConsumo geracaoMensal={ind.geracaoMensalKWh} consumoMedio={consumoMedioMensalKWh} />
             )}
@@ -324,11 +324,11 @@ export function PropostaComercialPDF({ data }: { data: any }) {
             <Text style={{ fontSize: 12, fontFamily: 'Helvetica-Bold', color: C.dark, marginBottom: 10 }}>Indicadores de viabilidade</Text>
             <View style={{ backgroundColor: C.card, borderRadius: 10, padding: '14 16', marginBottom: 16, borderWidth: 1, borderColor: C.border }}>
               {[
-                ['Payback simples', ind?.paybackSimples ?? '—', C.success],
-                ['TIR — Taxa interna de retorno', ind?.tirAnualPercent != null ? `${N(ind.tirAnualPercent, 1)}% ao ano` : '—', C.success],
-                ['Economia anual estimada (1º ano)', R(cr.economiaMensalRS * 12), C.success],
+                ['Payback simples', ind?.paybackSimples ?? '-', C.success],
+                ['TIR - Taxa interna de retorno', ind?.tirAnualPercent != null ? `${N(ind.tirAnualPercent, 1)}% ao ano` : '-', C.success],
+                ['Economia anual estimada (1o ano)', R(cr.economiaMensalRS * 12), C.success],
                 ['Economia total em 25 anos', R(ind?.economia25Anos ?? 0), C.success],
-                ['Conta mínima mensal após o solar', R(cr.totalFixoMensalRS), C.text],
+                ['Conta minima mensal apos o solar', R(cr.totalFixoMensalRS), C.text],
               ].map(([lbl, val, col], i) => (
                 <View key={i} style={S.fRow}>
                   <Text style={S.fRowLbl}>{lbl}</Text>
@@ -341,8 +341,8 @@ export function PropostaComercialPDF({ data }: { data: any }) {
             <View style={{ backgroundColor: enq?.elegivelArt26 ? '#f0fdf4' : '#fffbeb', borderRadius: 8, padding: '10 12', borderLeftWidth: 3, borderLeftColor: enq?.elegivelArt26 ? C.success : C.gold }}>
               <Text style={{ fontSize: 9, color: enq?.elegivelArt26 ? '#14532d' : '#78350f', lineHeight: 1.5 }}>
                 {enq?.elegivelArt26
-                  ? '✅ Componente Fio B isenta sobre a energia compensada até 31/12/2045 (Lei 14.300/2022, art. 26). Máxima economia ao longo da vida útil do sistema.'
-                  : `⚠️ Componente Fio B (Lei 14.300/2022): custo gradual de ${N((pfb[anoAtual] ?? 0)*100,0)}% em ${anoAtual}, aumentando até 100% em 2029. Já considerado na projeção financeira.`}
+                  ? '[OK] Componente Fio B isenta sobre a energia compensada ate 31/12/2045 (Lei 14.300/2022, art. 26). Maxima economia ao longo da vida util do sistema.'
+                  : `[!]️ Componente Fio B (Lei 14.300/2022): custo gradual de ${N((pfb[anoAtual] ?? 0)*100,0)}% em ${anoAtual}, aumentando ate 100% em 2029. Ja considerado na projecao financeira.`}
               </Text>
             </View>
           </View>
@@ -376,7 +376,7 @@ export function PropostaComercialPDF({ data }: { data: any }) {
               <View style={[S.finOpt, { borderTopColor: C.success }]}>
                 <Text style={{ fontSize: 11, fontFamily: 'Helvetica-Bold', color: C.dark, marginBottom: 6 }}>À vista</Text>
                 <Text style={{ fontSize: 22, fontFamily: 'Helvetica-Bold', color: C.success, marginBottom: 4 }}>{R(pre.precoVenda)}</Text>
-                <Text style={S.finOptDesc}>Melhor condição — sem juros</Text>
+                <Text style={S.finOptDesc}>Melhor condição - sem juros</Text>
                 <View style={{ borderTopWidth: 1, borderTopColor: C.border, paddingTop: 8, marginTop: 4 }}>
                   <Text style={S.finOptDetail}>Payback: {ind?.paybackSimples}</Text>
                   <Text style={S.finOptDetail}>Economia 25 anos: {R(ind?.economia25Anos ?? 0)}</Text>
@@ -391,7 +391,7 @@ export function PropostaComercialPDF({ data }: { data: any }) {
                   <Text style={S.finOptDesc}>60 dias de carência</Text>
                   <View style={{ borderTopWidth: 1, borderTopColor: C.border, paddingTop: 8, marginTop: 4 }}>
                     <Text style={S.finOptDetail}>Total: {R(simul[0].totalPago)}</Text>
-                    <Text style={S.finOptDetail}>Payback: {simul[0].paybackAnos != null ? N(simul[0].paybackAnos, 1) + ' anos' : '—'}</Text>
+                    <Text style={S.finOptDetail}>Payback: {simul[0].paybackAnos != null ? N(simul[0].paybackAnos, 1) + ' anos' : '-'}</Text>
                   </View>
                 </View>
               )}
@@ -404,7 +404,7 @@ export function PropostaComercialPDF({ data }: { data: any }) {
                   <Text style={S.finOptDesc}>60 dias de carência</Text>
                   <View style={{ borderTopWidth: 1, borderTopColor: C.border, paddingTop: 8, marginTop: 4 }}>
                     <Text style={S.finOptDetail}>Total: {R(simul[1].totalPago)}</Text>
-                    <Text style={S.finOptDetail}>Payback: {simul[1].paybackAnos != null ? N(simul[1].paybackAnos, 1) + ' anos' : '—'}</Text>
+                    <Text style={S.finOptDetail}>Payback: {simul[1].paybackAnos != null ? N(simul[1].paybackAnos, 1) + ' anos' : '-'}</Text>
                   </View>
                 </View>
               )}
@@ -414,14 +414,14 @@ export function PropostaComercialPDF({ data }: { data: any }) {
             <Text style={{ fontSize: 12, fontFamily: 'Helvetica-Bold', color: C.dark, marginBottom: 12 }}>O que está incluso</Text>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
               {[
-                'Fornecimento e instalação de todos os equipamentos',
-                'Estrutura de fixação adequada ao seu telhado',
-                'Cabeamento e proteções elétricas (DPS, disjuntores)',
-                'Projeto elétrico e ART do engenheiro responsável',
-                'Registro e aprovação junto à distribuidora local',
+                'Fornecimento e instalacao de todos os equipamentos',
+                'Estrutura de fixacao adequada ao seu telhado',
+                'Cabeamento e protecoes eletricas (DPS, disjuntores)',
+                'Projeto eletrico e ART do engenheiro responsavel',
+                'Registro e aprovacao junto a distribuidora local',
                 'Comissionamento e testes do sistema',
-                'Suporte técnico pós-instalação',
-                'Documentação completa do projeto',
+                'Suporte tecnico pos-instalacao',
+                'Documentacao completa do projeto',
               ].map((svc, i) => (
                 <View key={i} style={S.svcRow}>
                   <View style={S.svcDot}><Text style={S.svcDotTxt}>{i+1}</Text></View>
@@ -443,10 +443,10 @@ export function PropostaComercialPDF({ data }: { data: any }) {
 
             <View style={{ backgroundColor: C.card, borderRadius: 10, padding: '16 20', marginBottom: 20, borderWidth: 1, borderColor: C.border }}>
               {[
-                'Os valores de geração de energia são estimativas baseadas no Atlas Solarimétrico CRESESB. A geração real varia conforme condições climáticas, sombreamento e manutenção.',
-                'O sistema foi dimensionado para o perfil de consumo atual. Alterações significativas no consumo podem exigir reavaliação do dimensionamento.',
-                'Não estão inclusos eventuais serviços de alvenaria, reforço estrutural do telhado ou adequações na rede da distribuidora.',
-                'Após aprovação da proposta, será realizada vistoria técnica para confirmação das condições de instalação.',
+                'Os valores de geracao de energia sao estimativas baseadas no Atlas Solarimetrico CRESESB. A geracao real varia conforme condicoes climaticas, sombreamento e manutencao.',
+                'O sistema foi dimensionado para o perfil de consumo atual. Alteracoes significativas no consumo podem exigir reavaliacao do dimensionamento.',
+                'Nao estao inclusos eventuais servicos de alvenaria, reforco estrutural do telhado ou adequacoes na rede da distribuidora.',
+                'Apos aprovacao da proposta, sera realizada vistoria tecnica para confirmacao das condicoes de instalacao.',
               ].map((obs, i) => (
                 <View key={i} style={{ flexDirection: 'row', marginBottom: 10, gap: 8 }}>
                   <Text style={{ fontSize: 9, color: C.gold, fontFamily: 'Helvetica-Bold', width: 14 }}>{i+1}.</Text>
