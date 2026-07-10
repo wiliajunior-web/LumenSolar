@@ -1,195 +1,176 @@
 /**
  * PROCURAÇÃO — Instrumento Particular de Mandato
- * Estrutura conforme modelo enviado pelo cliente (Lumen Soluções)
+ * Usa apenas caracteres ASCII/Latin-1 para garantir renderização correta no PDF.
  */
 import { Document, Page, Text, View, StyleSheet, Image } from '@react-pdf/renderer';
 import { DISTRIBUIDORAS } from '../../data/distribuidoras';
 
-const DARK = '#0a0a1e';
-const GOLD = '#c9a227';
-const TEXT = '#1a1a1a';
-const BLUE = '#1a3a6e';
-const MUTED = '#555';
+const GOLD  = '#c9a227';
+const BLUE  = '#1a3a6e';
+const TEXT  = '#1a1a1a';
+const MUTED = '#555555';
 
 const S = StyleSheet.create({
-  page: {
-    fontFamily: 'Helvetica',
-    fontSize: 11,
-    color: TEXT,
-    backgroundColor: '#fff',
-    padding: '40 60 50 60',
-    lineHeight: 1.6,
-  },
-  // Cabeçalho
-  header: { alignItems: 'center', marginBottom: 32 },
-  logo:   { width: 90, height: 90, objectFit: 'contain', marginBottom: 8 },
-  logoPlaceholder: { width: 70, height: 70, backgroundColor: GOLD, borderRadius: 35, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
-  logoLetter: { color: DARK, fontFamily: 'Helvetica-Bold', fontSize: 28 },
-  empresaNome: { fontSize: 14, fontFamily: 'Helvetica-Bold', color: BLUE },
-  empresaSub:  { fontSize: 9,  color: MUTED },
-  linha: { height: 2, backgroundColor: GOLD, width: 120, marginTop: 10, alignSelf: 'center' },
-
-  // Título
-  titulo: { fontSize: 18, fontFamily: 'Helvetica-Bold', color: BLUE, textAlign: 'center', letterSpacing: 4, marginTop: 20, marginBottom: 6 },
-  subtitulo: { fontSize: 10, textAlign: 'center', color: MUTED, marginBottom: 28 },
-
-  // Seções
-  secaoLabel: { fontSize: 11, fontFamily: 'Helvetica-Bold', color: BLUE, marginBottom: 4, marginTop: 18 },
-  bloco: { textAlign: 'justify', fontSize: 11, color: TEXT, lineHeight: 1.7 },
-  bold: { fontFamily: 'Helvetica-Bold' },
-  underline: { textDecoration: 'underline' },
-
-  // Validade
-  validadeBox: { marginTop: 20, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#ddd' },
-
-  // Local e data
-  localData: { textAlign: 'center', marginTop: 28, fontSize: 11 },
-
-  // Assinaturas
-  assinaturasRow: { flexDirection: 'row', justifyContent: 'space-around', marginTop: 50 },
-  assinaturaBox: { alignItems: 'center', width: '44%' },
-  assinaturaLinha: { borderTopWidth: 1, borderTopColor: TEXT, width: '100%', paddingTop: 8, alignItems: 'center', marginTop: 30 },
-  assinaturaNome: { fontSize: 10, fontFamily: 'Helvetica-Bold', textAlign: 'center' },
-  assinaturaDetalhe: { fontSize: 9, color: MUTED, textAlign: 'center', marginTop: 2 },
-
-  // Rodapé
-  rodape: { position: 'absolute', bottom: 18, left: 60, right: 60, borderTopWidth: 1, borderTopColor: '#eee', paddingTop: 5, flexDirection: 'row', justifyContent: 'space-between' },
-  rodapeTxt: { fontSize: 7, color: '#aaa' },
+  page: { fontFamily:'Helvetica', fontSize:11, color:TEXT, backgroundColor:'#ffffff', padding:'45 55 55 55', lineHeight:1.65 },
+  header:    { alignItems:'center', marginBottom:30 },
+  logo:      { width:80, height:80, objectFit:'contain', marginBottom:10 },
+  logoBox:   { width:60, height:60, backgroundColor:GOLD, borderRadius:30, alignItems:'center', justifyContent:'center', marginBottom:10 },
+  logoL:     { color:'#1a1a1a', fontFamily:'Helvetica-Bold', fontSize:26 },
+  razao:     { fontSize:14, fontFamily:'Helvetica-Bold', color:BLUE, textAlign:'center' },
+  cnpj:      { fontSize:9, color:MUTED, textAlign:'center', marginTop:2 },
+  faixa:     { height:3, backgroundColor:GOLD, width:100, marginTop:10, alignSelf:'center' },
+  titulo:    { fontSize:19, fontFamily:'Helvetica-Bold', color:BLUE, textAlign:'center', letterSpacing:4, marginTop:22, marginBottom:4 },
+  subtit:    { fontSize:10, textAlign:'center', color:MUTED, marginBottom:26, letterSpacing:1 },
+  secLabel:  { fontSize:11, fontFamily:'Helvetica-Bold', color:BLUE, marginTop:18, marginBottom:5, borderBottomWidth:1, borderBottomColor:'#dddddd', paddingBottom:3 },
+  corpo:     { fontSize:11, color:TEXT, textAlign:'justify', lineHeight:1.7 },
+  bold:      { fontFamily:'Helvetica-Bold' },
+  validBox:  { marginTop:18, padding:'10 14', backgroundColor:'#f8f8f8', borderRadius:6 },
+  localData: { textAlign:'center', marginTop:26, fontSize:11, color:MUTED },
+  assinatRow:{ flexDirection:'row', justifyContent:'space-around', marginTop:48 },
+  assinatBox:{ alignItems:'center', width:'44%' },
+  linha:     { borderTopWidth:1, borderTopColor:TEXT, width:'100%', paddingTop:8, alignItems:'center', marginTop:28 },
+  assinatNome:   { fontSize:10, fontFamily:'Helvetica-Bold', textAlign:'center' },
+  assinatDetalhe:{ fontSize:9, color:MUTED, textAlign:'center', marginTop:2 },
+  rodape:    { position:'absolute', bottom:20, left:55, right:55, borderTopWidth:1, borderTopColor:'#eeeeee', paddingTop:5, flexDirection:'row', justifyContent:'space-between' },
+  rodapeTxt: { fontSize:7, color:'#aaaaaa' },
 });
+
+// Formatar apenas caracteres seguros para PDF
+const safe = (s?: string) => (s || '').replace(/[À-Å]/g,'A').replace(/[à-å]/g,'a').replace(/Ç/g,'C').replace(/ç/g,'c').replace(/[È-Ë]/g,'E').replace(/[è-ë]/g,'e').replace(/[Ì-Ï]/g,'I').replace(/[ì-ï]/g,'i').replace(/[Ò-Ö]/g,'O').replace(/[ò-ö]/g,'o').replace(/[Ù-Ü]/g,'U').replace(/[ù-ü]/g,'u').replace(/Ñ/g,'N').replace(/ñ/g,'n').replace(/º/g,'o').replace(/ª/g,'a');
+
+const fmtCPF = (v?: string) => {
+  const d = (v||'').replace(/\D/g,'');
+  return d.length === 11 ? `${d.slice(0,3)}.${d.slice(3,6)}.${d.slice(6,9)}-${d.slice(9)}` : (v||'___.___.___-__');
+};
 
 const hoje = () => {
   const d = new Date();
-  const meses = ['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
-  return `${d.getDate()} de ${meses[d.getMonth()]} de ${d.getFullYear()}`;
-};
-
-const fmtCPF = (cpf: string) => {
-  const s = (cpf || '').replace(/\D/g, '');
-  if (s.length === 11) return `${s.slice(0,3)}.${s.slice(3,6)}.${s.slice(6,9)}-${s.slice(9)}`;
-  return cpf || '___.___.___-__';
+  const M = ['janeiro','fevereiro','marco','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+  return `${d.getDate()} de ${M[d.getMonth()]} de ${d.getFullYear()}`;
 };
 
 export function Procuracao({ data }: { data: any }) {
-  const { empresa, cliente, consumo, localizacao } = data;
+  const empresa  = data?.empresa  || {};
+  const cliente  = data?.cliente  || {};
+  const consumo  = data?.consumo  || {};
+  const loc      = data?.localizacao || {};
 
-  // Distribuidora
-  const distribItem = DISTRIBUIDORAS.find((d: any) => d.codigo === consumo?.codigoDistribuidora);
-  const distribNome = distribItem?.nome?.toUpperCase() || 'CEMIG – COMPANHIA ENERGÉTICA DE MINAS GERAIS';
+  const distrib = DISTRIBUIDORAS.find((d:any) => d.codigo === consumo.codigoDistribuidora);
+  const distribNome = safe(distrib?.nome?.toUpperCase() || 'CEMIG - COMPANHIA ENERGETICA DE MINAS GERAIS');
 
-  const estadoCivilMap: Record<string, string> = {
-    solteiro: 'solteiro(a)', casado: 'casado(a)', divorciado: 'divorciado(a)', viuvo: 'viúvo(a)', outro: '',
-  };
+  const ecMap: Record<string,string> = { solteiro:'solteiro(a)', casado:'casado(a)', divorciado:'divorciado(a)', viuvo:'viuvo(a)', outro:'' };
 
-  const nomeCliente    = (cliente?.nome || '___________________________').toUpperCase();
-  const cpfCliente     = fmtCPF(cliente?.cpf || '');
-  const rgCliente      = cliente?.rg   || '______________';
-  const profCliente    = cliente?.profissao || '______________';
-  const ecCliente      = estadoCivilMap[cliente?.estadoCivil] || 'solteiro(a)';
-  const endCliente     = cliente?.endereco || '___________________________';
-  const cidadeCliente  = [cliente?.cidade, cliente?.uf].filter(Boolean).join(' – ') || '_______________';
-  const endInstalacao  = localizacao?.enderecoInstalacao || endCliente;
-  const ucNumero       = localizacao?.numeroUC || '';
+  const nomeCliente = safe(cliente.nome || '___________________________').toUpperCase();
+  const cpfCliente  = fmtCPF(cliente.cpf);
+  const rgCliente   = safe(cliente.rg || '______________');
+  const profissao   = safe(cliente.profissao || '______________');
+  const ecCivil     = ecMap[cliente.estadoCivil] || 'solteiro(a)';
+  const endereco    = safe(cliente.endereco || '___________________________');
+  const cidade      = safe([cliente.cidade, cliente.uf].filter(Boolean).join(' - ') || '_______________');
+  const ucNum       = loc.numeroUC || '';
+  const endInst     = safe(loc.enderecoInstalacao || endereco);
 
-  const nomeEng   = empresa?.responsavelTecnico || '___________________________';
-  const cpfEng    = fmtCPF(empresa?.cpfEngenheiro || '');
-  const creaEng   = empresa?.crea   ? `CREA-${empresa.uf || 'MG'} ${empresa.crea}` : '____________';
-  const razaoSoc  = empresa?.razaoSocial  || '___________________________';
-  const cnpjEmp   = empresa?.cnpj   || '__.___.___/____-__';
-  const cidadeEmp = [empresa?.cidade, empresa?.uf].filter(Boolean).join(' – ') || '_______________';
+  const razaoSoc    = safe(empresa.razaoSocial || 'Lumen Solucoes Ltda');
+  const cnpjEmp     = empresa.cnpj || '__.___.___/____-__';
+  const cidadeEmp   = safe([empresa.cidade, empresa.uf].filter(Boolean).join(' - ') || '');
+  const nomeEng     = safe(empresa.responsavelTecnico || '___________________________');
+  const cpfEng      = fmtCPF(empresa.cpfEngenheiro);
+  const creaEng     = empresa.crea ? `CREA-${empresa.uf || 'MG'} ${empresa.crea}` : '____________';
+  const cidadeLoc   = safe(cliente.cidade || empresa.cidade || '_________________');
 
   return (
-    <Document title={`Procuração – ${cliente?.nome || ''}`} author={razaoSoc}>
+    <Document title={`Procuracao - ${cliente.nome || ''}`} author={razaoSoc}>
       <Page size="A4" style={S.page}>
 
-        {/* ── Cabeçalho ── */}
+        {/* Cabecalho */}
         <View style={S.header}>
-          {empresa?.logoBase64
+          {empresa.logoBase64
             ? <Image src={empresa.logoBase64} style={S.logo} />
-            : <View style={S.logoPlaceholder}><Text style={S.logoLetter}>L</Text></View>
+            : <View style={S.logoBox}><Text style={S.logoL}>L</Text></View>
           }
-          <Text style={S.empresaNome}>{razaoSoc}</Text>
-          <Text style={S.empresaSub}>CNPJ: {cnpjEmp}{empresa?.cidade ? ` · ${empresa.cidade}` : ''}</Text>
-          <View style={S.linha} />
+          <Text style={S.razao}>{razaoSoc}</Text>
+          <Text style={S.cnpj}>CNPJ: {cnpjEmp}{cidadeEmp ? ` - ${cidadeEmp}` : ''}</Text>
+          <View style={S.faixa} />
         </View>
 
-        {/* ── Título ── */}
-        <Text style={S.titulo}>PROCURAÇÃO</Text>
-        <Text style={S.subtitulo}>INSTRUMENTO PARTICULAR DE MANDATO</Text>
+        {/* Titulo */}
+        <Text style={S.titulo}>PROCURACAO</Text>
+        <Text style={S.subtit}>INSTRUMENTO PARTICULAR DE MANDATO</Text>
 
-        {/* ── OUTORGANTE ── */}
-        <Text style={S.secaoLabel}>OUTORGANTE:</Text>
-        <Text style={S.bloco}>
+        {/* OUTORGANTE */}
+        <Text style={S.secLabel}>OUTORGANTE:</Text>
+        <Text style={S.corpo}>
           <Text style={S.bold}>{nomeCliente}</Text>
-          {`, brasileiro(a), ${ecCliente}, ${profCliente}, `}
-          {`inscrito(a) no RG nº: `}<Text style={S.bold}>{rgCliente}</Text>
-          {` e no CPF sob o nº: `}<Text style={S.bold}>{cpfCliente}</Text>
+          {`, brasileiro(a), ${ecCivil}, ${profissao}, inscrito(a) no RG no: `}
+          <Text style={S.bold}>{rgCliente}</Text>
+          {` e no CPF sob o no: `}
+          <Text style={S.bold}>{cpfCliente}</Text>
           {`, residente e domiciliado(a) `}
-          <Text style={S.bold}>{endCliente}</Text>
-          {`, na cidade de `}<Text style={S.bold}>{cidadeCliente}</Text>.
+          <Text style={S.bold}>{endereco}</Text>
+          {`, na cidade de `}
+          <Text style={S.bold}>{cidade}</Text>
+          {'.'}
         </Text>
 
-        {/* ── OUTORGADO ── */}
-        <Text style={S.secaoLabel}>OUTORGADO(S):</Text>
-        <Text style={S.bloco}>
+        {/* OUTORGADO */}
+        <Text style={S.secLabel}>OUTORGADO(S):</Text>
+        <Text style={S.corpo}>
           <Text style={S.bold}>{razaoSoc}</Text>
-          {`, CNPJ nº `}<Text style={S.bold}>{cnpjEmp}</Text>
-          {empresa?.cidade ? `, com sede em ${cidadeEmp}` : ''}
-          {`, na pessoa do(a) Engenheiro(a) `}
+          {`, CNPJ no ${cnpjEmp}${cidadeEmp ? `, com sede em ${cidadeEmp}` : ''}, na pessoa do(a) Engenheiro(a) `}
           <Text style={S.bold}>{nomeEng}</Text>
-          {cpfEng ? `, inscrito(a) no CPF sob o nº `  : ''}
-          {cpfEng ? <Text style={S.bold}>{cpfEng}</Text> : ''}
-          {`, e no `}<Text style={S.bold}>{creaEng}</Text>.
+          {cpfEng !== '___.___.___-__' ? `, CPF no ${cpfEng}` : ''}
+          {`, inscrito(a) no `}
+          <Text style={S.bold}>{creaEng}</Text>
+          {'.'}
         </Text>
 
-        {/* ── PODERES ── */}
-        <Text style={S.secaoLabel}>PODERES:</Text>
-        <Text style={S.bloco}>
-          {'Através do presente instrumento particular de mandato, o(a) OUTORGANTE nomeia e constitui como seu(s) procurador(es) o(s) OUTORGADO(S), a quem confere '}
+        {/* PODERES */}
+        <Text style={S.secLabel}>PODERES:</Text>
+        <Text style={S.corpo}>
+          {'Atraves do presente instrumento particular de mandato, o(a) OUTORGANTE nomeia e constitui como seu(s) procurador(es) o(s) OUTORGADO(S), a quem confere '}
           <Text style={S.bold}>amplos poderes</Text>
-          {' para efetuar requerimentos, juntar documentos, verificar andamento de processos, solicitar informações, satisfazer exigências, retirar cópias, certidões, extratos, guias, documentos e informações, regularizar, enfim, praticar todos os atos necessários para representar e defender os direitos e interesses do(a) OUTORGANTE relativos à '}
+          {' para efetuar requerimentos, juntar documentos, verificar andamento de processos, solicitar informacoes, satisfazer exigencias, retirar copias, certidoes, extratos, guias, documentos e informacoes, regularizar, enfim, praticar todos os atos necessarios para representar e defender os direitos e interesses do(a) OUTORGANTE relativos a '}
           <Text style={S.bold}>{distribNome}</Text>
-          {', referentes à solicitação de acesso ao Sistema de Compensação de Energia Elétrica (SCEE) e à instalação do sistema de microgeração solar fotovoltaica no imóvel situado em '}
-          <Text style={S.bold}>{endInstalacao}</Text>
-          {ucNumero ? `, UC nº ${ucNumero}` : ''}
-          {', nos termos da Lei nº 14.300/2022 e das normas da ANEEL.'}
+          {', referentes a solicitacao de acesso ao Sistema de Compensacao de Energia Eletrica (SCEE) e a instalacao do sistema de microgeracao solar fotovoltaica no imovel situado em '}
+          <Text style={S.bold}>{endInst}</Text>
+          {ucNum ? `, UC no ${ucNum}` : ''}
+          {', nos termos da Lei no 14.300/2022 e das normas da ANEEL.'}
         </Text>
 
-        {/* ── Validade ── */}
-        <View style={S.validadeBox}>
-          <Text style={S.bloco}>
-            <Text style={S.bold}>A presente Procuração tem validade indeterminada</Text>
-            {', permanecendo em vigor até o cumprimento integral do seu objeto ou até revogação expressa pelo(a) Outorgante.'}
+        {/* Validade */}
+        <View style={S.validBox}>
+          <Text style={S.corpo}>
+            <Text style={S.bold}>A presente Procuracao tem validade indeterminada</Text>
+            {', permanecendo em vigor ate o cumprimento integral do seu objeto ou ate revogacao expressa pelo(a) Outorgante.'}
           </Text>
         </View>
 
-        {/* ── Local e Data ── */}
-        <Text style={S.localData}>
-          {cliente?.cidade || empresa?.cidade || '_________________'}, {hoje()}.
-        </Text>
+        {/* Local e data */}
+        <Text style={S.localData}>{cidadeLoc}, {hoje()}.</Text>
 
-        {/* ── Assinaturas ── */}
-        <View style={S.assinaturasRow}>
-          <View style={S.assinaturaBox}>
-            <View style={S.assinaturaLinha}>
-              <Text style={S.assinaturaNome}>{nomeCliente}</Text>
-              <Text style={S.assinaturaDetalhe}>OUTORGANTE</Text>
-              <Text style={S.assinaturaDetalhe}>CPF: {cpfCliente}</Text>
+        {/* Assinaturas */}
+        <View style={S.assinatRow}>
+          <View style={S.assinatBox}>
+            <View style={S.linha}>
+              <Text style={S.assinatNome}>{nomeCliente}</Text>
+              <Text style={S.assinatDetalhe}>OUTORGANTE</Text>
+              {cpfCliente !== '___.___.___-__' && <Text style={S.assinatDetalhe}>CPF: {cpfCliente}</Text>}
             </View>
           </View>
-          <View style={S.assinaturaBox}>
-            <View style={S.assinaturaLinha}>
-              <Text style={S.assinaturaNome}>{razaoSoc}</Text>
-              <Text style={S.assinaturaDetalhe}>OUTORGADO</Text>
-              <Text style={S.assinaturaDetalhe}>{nomeEng}</Text>
-              <Text style={S.assinaturaDetalhe}>{creaEng}</Text>
+          <View style={S.assinatBox}>
+            <View style={S.linha}>
+              <Text style={S.assinatNome}>{razaoSoc}</Text>
+              <Text style={S.assinatDetalhe}>OUTORGADO</Text>
+              <Text style={S.assinatDetalhe}>{nomeEng}</Text>
+              <Text style={S.assinatDetalhe}>{creaEng}</Text>
             </View>
           </View>
         </View>
 
-        {/* ── Rodapé ── */}
+        {/* Rodape */}
         <View style={S.rodape}>
-          <Text style={S.rodapeTxt}>{razaoSoc} · CNPJ: {cnpjEmp}</Text>
-          <Text style={S.rodapeTxt}>{empresa?.email || ''} · {empresa?.telefone || ''}</Text>
+          <Text style={S.rodapeTxt}>{razaoSoc} - CNPJ: {cnpjEmp}</Text>
+          <Text style={S.rodapeTxt}>{safe(empresa.email || '')} - {safe(empresa.telefone || '')}</Text>
         </View>
 
       </Page>

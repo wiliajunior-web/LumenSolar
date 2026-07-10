@@ -221,17 +221,19 @@ export function PropostaComercialPDF({ data }: { data: any }) {
             <SectionHeader title="Por que investir em energia solar?" sub="Energia solar é o investimento mais rentável da atualidade — protege contra reajustes tarifários e gera retorno por décadas." />
             <View style={S.benefGrid}>
               {[
-                ['💰', 'Economia imediata', `Reduza sua conta de energia em até ${N(dim.percentualCompensacaoReal * 100, 0)}%. A partir do primeiro mês após a conexão.`],
-                ['📈', 'Proteção contra reajustes', 'A ANEEL reajusta as tarifas anualmente. Com energia solar, você gera sua própria energia e fica protegido.'],
-                ['🏠', 'Valorização do imóvel', 'Imóveis com sistema fotovoltaico valem em média 5-8% a mais no mercado. É uma benfeitoria permanente.'],
-                ['🌱', 'Sustentabilidade', 'Energia 100% renovável, sem emissões de CO₂. Cada kWh solar substitui energia de fontes fósseis.'],
-                ['💳', 'Financiamento facilitado', 'Parcele em até 60× com carência de 60 dias. O sistema se paga com a economia antes de terminar de pagar.'],
-                ['⏱', 'Vida útil de 25+ anos', 'Módulos modernos têm garantia de 25 anos de potência linear. O sistema continua gerando por décadas.'],
-              ].map(([icon, title, text], i) => (
+                { cor:'#c9a227', letra:'R$', title:'Economia imediata',         text:`Reduza sua conta de energia em até ${N(dim.percentualCompensacaoReal * 100, 0)}%. A partir do primeiro mês após a conexão.` },
+                { cor:'#2563eb', letra:'%',  title:'Proteção contra reajustes', text:'A ANEEL reajusta as tarifas anualmente. Com energia solar, você gera sua própria energia e fica protegido.' },
+                { cor:'#16a34a', letra:'UP', title:'Valorização do imóvel',     text:'Imóveis com sistema fotovoltaico valem em média 5-8% a mais no mercado. É uma benfeitoria permanente.' },
+                { cor:'#059669', letra:'CO', title:'Sustentabilidade',          text:'Energia 100% renovavel, sem emissoes de CO2. Cada kWh solar substitui energia de fontes fosseis.' },
+                { cor:'#7c3aed', letra:'60x',title:'Financiamento facilitado',  text:'Parcele em ate 60x com carencia de 60 dias. O sistema se paga com a economia antes de terminar de pagar.' },
+                { cor:'#dc2626', letra:'25', title:'Vida util de 25+ anos',     text:'Modulos modernos tem garantia de 25 anos de potencia linear. O sistema continua gerando por decadas.' },
+              ].map((b, i) => (
                 <View key={i} style={S.benefCard}>
-                  <Text style={S.benefIcon}>{icon}</Text>
-                  <Text style={S.benefTitle}>{title}</Text>
-                  <Text style={S.benefText}>{text}</Text>
+                  <View style={{ width:36, height:36, borderRadius:8, backgroundColor:b.cor, alignItems:'center', justifyContent:'center', marginBottom:8 }}>
+                    <Text style={{ color:'#fff', fontSize:10, fontFamily:'Helvetica-Bold', textAlign:'center' }}>{b.letra}</Text>
+                  </View>
+                  <Text style={S.benefTitle}>{b.title}</Text>
+                  <Text style={S.benefText}>{b.text}</Text>
                 </View>
               ))}
             </View>
