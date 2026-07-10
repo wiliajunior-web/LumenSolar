@@ -1648,7 +1648,7 @@ function TabResultado({ onPrev }: { onPrev:()=>void }) {
     try {
       const { MemorialDescritivo } = await import('@domain/proposta/MemorialDescritivo');
       const d = buildData();
-      const blob = await pdf(<MemorialDescritivo data={{...d, localizacao: s.localizacao, kit: s.kit}} />).toBlob();
+      const blob = await pdf(<MemorialDescritivo data={{...d, consumo: s.consumo, localizacao: s.localizacao, kit: s.kit}} />).toBlob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -1664,7 +1664,7 @@ function TabResultado({ onPrev }: { onPrev:()=>void }) {
     try {
       const { Procuracao } = await import('@domain/proposta/Procuracao');
       const d = buildData();
-      const blob = await pdf(<Procuracao data={{...d, localizacao: s.localizacao}} />).toBlob();
+      const blob = await pdf(<Procuracao data={{...d, consumo: s.consumo, localizacao: s.localizacao}} />).toBlob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
