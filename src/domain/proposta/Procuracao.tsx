@@ -55,8 +55,8 @@ const safe = (s?: string) => (s || '')
   .replace(/[ÙÚÛÜ]/g,'U').replace(/[ùúûü]/g,'u')
   .replace(/Ñ/g,'N').replace(/ñ/g,'n')
   .replace(/°/g,'o').replace(/²/g,'2').replace(/³/g,'3')
-  .replace(/×/g,'x').replace(/–/g,'-').replace(/—/g,'-')
-  .replace(/[""]/g,'"').replace(/['']/g,"'");
+  .replace(/\u00d7/g,'x').replace(/\u2013/g,'-').replace(/\u2014/g,'-')
+  .replace(/[\u201c\u201d]/g,'"').replace(/[\u2018\u2019]/g,"'");
 
 const fmtCPF = (v?: string) => {
   const d = (v || '').replace(/\D/g, '');

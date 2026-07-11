@@ -342,7 +342,7 @@ export function PropostaComercialPDF({ data }: { data: any }) {
               <Text style={{ fontSize: 9, color: enq?.elegivelArt26 ? '#14532d' : '#78350f', lineHeight: 1.5 }}>
                 {enq?.elegivelArt26
                   ? '[OK] Componente Fio B isenta sobre a energia compensada ate 31/12/2045 (Lei 14.300/2022, art. 26). Maxima economia ao longo da vida util do sistema.'
-                  : `[!]️ Componente Fio B (Lei 14.300/2022): custo gradual de ${N((pfb[anoAtual] ?? 0)*100,0)}% em ${anoAtual}, aumentando ate 100% em 2029. Ja considerado na projecao financeira.`}
+                  : `! Componente Fio B (Lei 14.300/2022): custo gradual de ${N((pfb[anoAtual] ?? 0)*100,0)}% em ${anoAtual}, aumentando ate 100% em 2029. Ja considerado na projecao financeira.`}
               </Text>
             </View>
           </View>
