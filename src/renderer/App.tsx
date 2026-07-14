@@ -1251,27 +1251,39 @@ function ComponentesRecomendados({ kit }: { kit: any }) {
               destaque="Unipolar"
             />
             <Linha
-              label="Tensão máxima CC"
-              valor={`${vocTotal.toFixed(0)} V`}
-              sub={`Voc ${kit.vocV}V × ${kit.modulosPorString} módulos/string`}
+              label="Voc STC do sistema"
+              valor={`${vocSistema.toFixed(0)} V`}
+              sub={`${vocMod}V × ${nModStr} módulos/string (condições STC)`}
+            />
+            <Linha
+              label="Voc máx. corrigido (Tmin=5°C)"
+              valor={`${vocMax.toFixed(1)} V`}
+              sub={`NBR 16690 5.3.3: Voc_STC × [1 + ${coefVoc}%/°C × (5-25)] = +${((vocMax/vocSistema-1)*100).toFixed(1)}% vs STC`}
+              destaque={vocMax > LIMITE_VDC ? "⚠ >1000V" : "< 1000V ✓"}
             />
             {dpsCC_kA > 0 && (
               <Linha
                 label="DPS CC (opcional)"
                 valor={`${dpsCC_kA} kA`}
-                sub="Entre string box e inversor (>15m de cabo CC)"
+                sub="Recomendado quando cabo CC > 10m (NBR 16690)"
               />
             )}
             <Linha
-              label={nStrings >= 3 ? "String box" : "String box"}
-              valor={nStrings >= 3 ? "Recomendada" : nStrings === 2 ? "Opcional" : "Não necessária"}
-              sub={nStrings >= 3
-                ? `${nStrings} strings em paralelo — use caixa de combinação com fusíveis`
-                : nStrings === 2
-                ? "2 strings: DPS CC em cada string direto no inversor é suficiente"
-                : "1 string: proteção direto no quadro geral (QDG)"}
-              destaque={nStrings >= 3 ? "Usar" : nStrings === 2 ? "Avaliar" : "QDG"}
+              label="String box / Fusíveis"
+              valor={nStrings >= 2 ? "Necessária" : "Não necessária"}
+              sub={nStrings >= 2
+                ? `NBR 16690 5.4.2: ${nStrings} strings em paralelo exigem proteção individual de string`
+                : "1 string: proteção direto no QDG — sem string box necessária"}
+              destaque={nStrings >= 2 ? "NBR 16690" : "QDG"}
             />
+            {nStrings >= 2 && fuseIdeal > 0 && (
+              <Linha
+                label="Fusível por string"
+                valor={`${fuseIdeal} A`}
+                sub={`${isc.toFixed(1)} A (Isc) ≤ ${fuseIdeal} A ≤ ${(2.5*isc).toFixed(1)} A (2.5×Isc)`}
+                destaque="PV Fuse"
+              />
+            )}
           </>) : (
             <div style={{ fontSize:13, color:'#4a4d6a', paddingTop:12 }}>
               Preencha Isc e nº de strings para ver o dimensionamento CC
