@@ -318,6 +318,7 @@ export default function App() {
   const [showEmpresa, setShowEmpresa] = useState(false);
   const [proposalId, setProposalId] = useState<string | null>(null);
   const [saving, setSaving] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const [nomeArquivoAtual, setNomeArquivoAtual] = useState<string>('');
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
 
   // Carregar empresa do disco ao iniciar
@@ -371,21 +372,19 @@ export default function App() {
     const id = proposalId ?? gerarId();
     if (!proposalId) setId(id);
     setSaving('saving');
-    // Carregar proposta existente para preservar criadoEm original
-    let criadoEmOriginal = new Date().toISOString();
-    try {
-      const existing = await importarArquivo(id).catch(() => null);
-      if (existing?.criadoEm) criadoEmOriginal = existing.criadoEm;
-    } catch { /* nova proposta */ }
+    // Preservar criadoEm original via localStorage
+    const criadoEmOriginal = localStorage.getItem('lumen:criado:' + id) || new Date().toISOString();
+    localStorage.setItem('lumen:criado:' + id, criadoEmOriginal);
     const data = {
       id, nomeCliente: s.cliente.nome || 'Sem nome', cidade: s.cliente.cidade,
       uf: s.cliente.uf, criadoEm: criadoEmOriginal, atualizadoEm: new Date().toISOString(),
       potenciaKWp: s.dimensionamento?.potenciaInstaladaRealKWp, precoVenda: s.precificacao?.precoVenda,
       empresa: s.empresa, cliente: s.cliente, consumo: s.consumo, localizacao: s.localizacao, kit: s.kit, preco: s.preco,
     };
-    await salvarProposta(data).catch(console.error);
+    const nomeArq = await salvarArquivo(data);
+    setNomeArquivoAtual(nomeArq);
     // Salvar empresa também
-    await salvarEmpresa(s.empresa).catch(console.error);
+    salvarEmpresa(s.empresa);
     setSaving('saved');
     setTimeout(() => setSaving('idle'), 2000);
   }
@@ -399,7 +398,6 @@ export default function App() {
     if (data.kit)         st.atualizarKit(data.kit);
     if (data.preco)       st.atualizarPreco(data.preco);
     setId(data.id || gerarId());
-    setCriadoEm(data.criadoEm || new Date().toISOString());
     setNomeArquivoAtual('');
     setValidationErrors([]);
     setStepStatus(calcStepStatus());
@@ -416,7 +414,7 @@ export default function App() {
     }
   }
 
-  // Recentes: o arquivo está no disco — usuário deve importar
+  // Recentes: o arquivo está no disco — usuário deve importar manualmente
   async function abrirProposta(_id: string) {
     await abrirImportado();
   }
@@ -488,14 +486,18 @@ function TabHome({ onNovaProposta, onAbrirProposta }: { onNovaProposta: ()=>void
   const [excluindo, setExcluindo] = React.useState<string | null>(null);
 
   React.useEffect(() => {
-    listarRecentes().then(p => { setPropostas(p); setCarregando(false); }).catch(() => setCarregando(false));
+    try {
+      const p = listarRecentes();
+      setPropostas(p);
+    } catch { /* ignora */ }
+    setCarregando(false);
   }, []);
 
   async function handleExcluir(id: string, e: React.MouseEvent) {
     e.stopPropagation();
     if (!confirm('Excluir esta proposta permanentemente?')) return;
     setExcluindo(id);
-    await removerRecente(id).catch(() => {});
+    removerRecente(id);
     setPropostas(p => p.filter(x => x.id !== id));
     setExcluindo(null);
   }
