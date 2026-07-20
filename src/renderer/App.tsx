@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { pdf } from '@react-pdf/renderer';
 import { useProjetoStore, PRESETS_MODULO, type TipoModuloPreset } from './store/useProjetoStore';
-import { listarPropostas, salvarProposta, carregarProposta, excluirProposta, carregarEmpresa, salvarEmpresa, gerarId, type ProposalMeta } from './services/persistence';
+import { salvarArquivo, importarArquivo, listarRecentes, removerRecente, carregarEmpresa, salvarEmpresa, gerarId, type MetadataProposta } from './services/persistence';
 import { validarCliente, validarConsumo, validarKit, validarPreco, validarProjetoCompleto, type StatusPasso } from './services/validation';
 import { DISTRIBUIDORAS } from '@data/distribuidoras';
 import { TIPO_TELHADO_LABELS, ORIENTACOES, type TipoTelhado } from '@data/localizacao';
@@ -360,7 +360,7 @@ export default function App() {
       percentuaisFioBPorAno: {}, detalhamentoPerdas: [],
     } as any);
     const newId = gerarId();
-    setProposalId(newId);
+    setId(newId);
     setSaving('idle');
     setValidationErrors([]);
     setAba('cliente');
@@ -369,12 +369,12 @@ export default function App() {
   async function salvar() {
     const s = useProjetoStore.getState();
     const id = proposalId ?? gerarId();
-    if (!proposalId) setProposalId(id);
+    if (!proposalId) setId(id);
     setSaving('saving');
     // Carregar proposta existente para preservar criadoEm original
     let criadoEmOriginal = new Date().toISOString();
     try {
-      const existing = await carregarProposta(id).catch(() => null);
+      const existing = await importarArquivo(id).catch(() => null);
       if (existing?.criadoEm) criadoEmOriginal = existing.criadoEm;
     } catch { /* nova proposta */ }
     const data = {
@@ -390,18 +390,35 @@ export default function App() {
     setTimeout(() => setSaving('idle'), 2000);
   }
 
-  async function abrirProposta(id: string) {
-    const data = await carregarProposta(id).catch(() => null);
-    if (!data) return;
-    setProposalId(id);
-    const store = useProjetoStore.getState();
-    if (data.empresa) store.atualizarEmpresa(data.empresa);
-    if (data.cliente) store.atualizarCliente(data.cliente);
-    if (data.consumo) store.atualizarConsumo(data.consumo);
-    if (data.localizacao) store.atualizarLocalizacao(data.localizacao);
-    if (data.kit) store.atualizarKit(data.kit);
-    if (data.preco) store.atualizarPreco(data.preco);
+  function restaurarDados(data: any) {
+    const st = useProjetoStore.getState();
+    if (data.empresa)     st.atualizarEmpresa(data.empresa);
+    if (data.cliente)     st.atualizarCliente(data.cliente);
+    if (data.consumo)     st.atualizarConsumo(data.consumo);
+    if (data.localizacao) st.atualizarLocalizacao(data.localizacao);
+    if (data.kit)         st.atualizarKit(data.kit);
+    if (data.preco)       st.atualizarPreco(data.preco);
+    setId(data.id || gerarId());
+    setCriadoEm(data.criadoEm || new Date().toISOString());
+    setNomeArquivoAtual('');
+    setValidationErrors([]);
+    setStepStatus(calcStepStatus());
     setAba('cliente');
+  }
+
+  async function abrirImportado() {
+    try {
+      const data = await importarArquivo();
+      if (!data) return;
+      restaurarDados(data);
+    } catch (e: any) {
+      alert('Erro ao importar:\n\n' + String(e));
+    }
+  }
+
+  // Recentes: o arquivo está no disco — usuário deve importar
+  async function abrirProposta(_id: string) {
+    await abrirImportado();
   }
 
   function tentarCalcular() {
@@ -471,14 +488,14 @@ function TabHome({ onNovaProposta, onAbrirProposta }: { onNovaProposta: ()=>void
   const [excluindo, setExcluindo] = React.useState<string | null>(null);
 
   React.useEffect(() => {
-    listarPropostas().then(p => { setPropostas(p); setCarregando(false); }).catch(() => setCarregando(false));
+    listarRecentes().then(p => { setPropostas(p); setCarregando(false); }).catch(() => setCarregando(false));
   }, []);
 
   async function handleExcluir(id: string, e: React.MouseEvent) {
     e.stopPropagation();
     if (!confirm('Excluir esta proposta permanentemente?')) return;
     setExcluindo(id);
-    await excluirProposta(id).catch(() => {});
+    await removerRecente(id).catch(() => {});
     setPropostas(p => p.filter(x => x.id !== id));
     setExcluindo(null);
   }
