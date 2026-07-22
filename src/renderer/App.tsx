@@ -7,6 +7,7 @@ import { DISTRIBUIDORAS } from '@data/distribuidoras';
 import { TIPO_TELHADO_LABELS, ORIENTACOES, type TipoTelhado } from '@data/localizacao';
 import { HSP_MEDIO_POR_UF } from '@data/hspPorUF';
 import { PropostaPDF } from '@domain/proposta/PropostaPDF';
+// Excel gerarExcel importado dinamicamente para não impactar o bundle inicial
 
 // ─── Sistema de Design ───────────────────────────────────────────────────────
 const D = {
@@ -1674,6 +1675,21 @@ function TabResultado({ onPrev }: { onPrev:()=>void }) {
     } finally { setGerando(false); }
   }
 
+  async function gerarExcel() {
+    setGerando(true);
+    try {
+      const { gerarExcelAuditoria } = await import('@domain/excel/gerarExcel');
+      const st = useProjetoStore.getState();
+      gerarExcelAuditoria({
+        empresa: st.empresa, cliente: st.cliente, consumo: st.consumo,
+        localizacao: st.localizacao, kit: st.kit, preco: st.preco,
+        dimensionamento: st.dimensionamento, custosRecorrentes: st.custosRecorrentes,
+        precificacao: st.precificacao, indicadores: st.indicadores,
+      });
+    } catch(e) { alert('Erro ao gerar Excel: ' + (e instanceof Error ? e.message : String(e)));
+    } finally { setGerando(false); }
+  }
+
   async function gerarMemorial() {
     setGerando(true);
     try {
@@ -1731,6 +1747,7 @@ function TabResultado({ onPrev }: { onPrev:()=>void }) {
               <Btn onClick={gerarMemorial}    disabled={gerando} variant="ghost">{gerando ? '⏳...' : '📋 Memorial'}</Btn>
               <Btn onClick={gerarProcuracao}  disabled={gerando} variant="ghost">{gerando ? '⏳...' : '✍ Procuração'}</Btn>
               <Btn onClick={gerarPDFTecnico}  disabled={gerando} variant="ghost">{gerando ? '⏳...' : '🔧 Técnica'}</Btn>
+              <Btn onClick={gerarExcel}       disabled={gerando} variant="ghost">{gerando ? '⏳...' : '📊 Excel'}</Btn>
             </div>
       </div>
 
