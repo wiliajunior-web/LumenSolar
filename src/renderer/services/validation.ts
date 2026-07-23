@@ -78,3 +78,44 @@ export function validarProjetoCompleto(state: any): { podeCalcular: boolean; err
     erros: todosErros,
   };
 }
+
+/** Valida CPF brasileiro — algoritmo oficial Receita Federal */
+export function validarCPF(cpf: string): boolean {
+  const s = cpf.replace(/\D/g, '');
+  if (s.length !== 11 || /^(\d)\1{10}$/.test(s)) return false;
+  let soma = 0;
+  for (let i = 0; i < 9; i++) soma += parseInt(s[i]) * (10 - i);
+  let resto = (soma * 10) % 11;
+  if (resto === 10 || resto === 11) resto = 0;
+  if (resto !== parseInt(s[9])) return false;
+  soma = 0;
+  for (let i = 0; i < 10; i++) soma += parseInt(s[i]) * (11 - i);
+  resto = (soma * 10) % 11;
+  if (resto === 10 || resto === 11) resto = 0;
+  return resto === parseInt(s[10]);
+}
+
+/** Valida CNPJ brasileiro — algoritmo oficial Receita Federal */
+export function validarCNPJ(cnpj: string): boolean {
+  const s = cnpj.replace(/\D/g, '');
+  if (s.length !== 14 || /^(\d)\1{13}$/.test(s)) return false;
+  const calc = (n: number) => {
+    let soma = 0;
+    let pos = n - 7;
+    for (let i = 0; i < n; i++) {
+      soma += parseInt(s[i]) * pos--;
+      if (pos < 2) pos = 9;
+    }
+    const r = soma % 11;
+    return r < 2 ? 0 : 11 - r;
+  };
+  return calc(12) === parseInt(s[12]) && calc(13) === parseInt(s[13]);
+}
+
+/** Formata CPF: 000.000.000-00 */
+export function formatarCPF(cpf: string): string {
+  const s = cpf.replace(/\D/g, '').slice(0, 11);
+  return s.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4')
+          .replace(/(\d{3})(\d{3})(\d{1,3})$/, '$1.$2.$3')
+          .replace(/(\d{3})(\d{1,3})$/, '$1.$2');
+}

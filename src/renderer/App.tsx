@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { pdf } from '@react-pdf/renderer';
 import { useProjetoStore, PRESETS_MODULO, type TipoModuloPreset } from './store/useProjetoStore';
 import { salvarArquivo, importarArquivo, listarRecentes, removerRecente, carregarEmpresa, salvarEmpresa, gerarId, type MetadataProposta } from './services/persistence';
-import { validarCliente, validarConsumo, validarKit, validarPreco, validarProjetoCompleto, type StatusPasso } from './services/validation';
+import { validarCliente, validarConsumo, validarKit, validarPreco, validarProjetoCompleto, validarCPF, validarCNPJ, formatarCPF, type StatusPasso } from './services/validation';
 import { DISTRIBUIDORAS } from '@data/distribuidoras';
 import { TIPO_TELHADO_LABELS, ORIENTACOES, type TipoTelhado } from '@data/localizacao';
 import { HSP_MEDIO_POR_UF } from '@data/hspPorUF';
@@ -1446,6 +1446,63 @@ Use valores numéricos reais. Se não encontrar um valor, use 0.`;
   );
 }
 
+// ─── Buscador de Coordenadas UTM via Nominatim (OpenStreetMap, gratuito) ────────
+function latLonToUTM(lat: number, lon: number): { utmE: number; utmN: number; fuso: number } {
+  const a = 6378137.0, f = 1/298.257223563;
+  const b = a*(1-f), e2 = 1-(b/a)**2;
+  const k0 = 0.9996, E0 = 500000;
+  const fuso = Math.floor((lon+180)/6)+1;
+  const lon0 = ((fuso-1)*6-180+3)*Math.PI/180;
+  const phi = lat*Math.PI/180, lam = lon*Math.PI/180;
+  const N = a/Math.sqrt(1-e2*Math.sin(phi)**2);
+  const T = Math.tan(phi)**2, C = (e2/(1-e2))*Math.cos(phi)**2;
+  const A = Math.cos(phi)*(lam-lon0);
+  const e4=e2**2, e6=e2**3;
+  const M = a*((1-e2/4-3*e4/64-5*e6/256)*phi-(3*e2/8+3*e4/32+45*e6/1024)*Math.sin(2*phi)+(15*e4/256+45*e6/1024)*Math.sin(4*phi)-(35*e6/3072)*Math.sin(6*phi));
+  const utmE = Math.round(k0*N*(A+(1-T+C)*A**3/6+(5-18*T+T**2+72*C-58*(e2/(1-e2)))*A**5/120)+E0);
+  const utmN = Math.round(k0*(M+N*Math.tan(phi)*(A**2/2+(5-T+9*C+4*C**2)*A**4/24+(61-58*T+T**2+600*C-330*(e2/(1-e2)))*A**6/720)));
+  return { utmE, utmN, fuso };
+}
+
+function BuscadorCoordenadas({ endereco, cidade, uf, onEncontrado }: {
+  endereco: string; cidade: string; uf: string;
+  onEncontrado: (utmE: number, utmN: number, fuso: number) => void;
+}) {
+  const [estado, setEstado] = React.useState<'idle'|'buscando'|'ok'|'erro'>('idle');
+  const [msg, setMsg] = React.useState('');
+
+  async function buscar() {
+    const q = [endereco, cidade, uf, 'Brasil'].filter(Boolean).join(', ');
+    if (!q.trim()) { setEstado('erro'); setMsg('Preencha o endereço primeiro'); return; }
+    setEstado('buscando');
+    try {
+      const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=1&countrycodes=br`;
+      const r = await fetch(url, { headers: { 'User-Agent': 'LumenSolar/2.0 (wilianjunior@lumen.eng.br)' } });
+      const data = await r.json();
+      if (!data.length) { setEstado('erro'); setMsg('Endereço não encontrado — ajuste e tente novamente'); return; }
+      const { lat, lon } = data[0];
+      const { utmE, utmN, fuso } = latLonToUTM(parseFloat(lat), parseFloat(lon));
+      onEncontrado(utmE, utmN, fuso);
+      setEstado('ok'); setMsg(`UTM ${fuso}S: E=${utmE.toLocaleString()} N=${utmN.toLocaleString()}`);
+      setTimeout(() => setEstado('idle'), 4000);
+    } catch { setEstado('erro'); setMsg('Sem conexão ou erro na busca'); }
+  }
+
+  return (
+    <div style={{ gridColumn:'1/-1', display:'flex', alignItems:'center', gap:10, padding:'8px 0' }}>
+      <button onClick={buscar} disabled={estado==='buscando'}
+        style={{ padding:'6px 16px', borderRadius:8, border:`1px solid #2a2d3e`,
+          background: estado==='ok' ? '#166534' : '#1a1c28',
+          color: estado==='ok' ? '#86efac' : estado==='erro' ? '#fca5a5' : '#8a8d9e',
+          fontSize:12, fontWeight:600, cursor:'pointer', whiteSpace:'nowrap' }}>
+        {estado==='buscando' ? '🔍 Buscando...' : '🗺️ Buscar coordenadas UTM'}
+      </button>
+      {msg && <span style={{ fontSize:12, color: estado==='erro' ? '#fca5a5' : '#86efac' }}>{msg}</span>}
+      <span style={{ fontSize:11, color:'#4a4d6a' }}>Via OpenStreetMap — gratuito, sem API key</span>
+    </div>
+  );
+}
+
 // ─── Tab Kit ──────────────────────────────────────────────────────────────────
 function TabKit({ onPrev, onNext }: { onPrev:()=>void; onNext:()=>void }) {
   const s = useProjetoStore();
@@ -1676,6 +1733,43 @@ function TabResultado({ onPrev }: { onPrev:()=>void }) {
     } finally { setGerando(false); }
   }
 
+  function abrirWhatsApp() {
+    const st = useProjetoStore.getState();
+    const tel = (st.cliente.telefone || '').replace(/\D/g, '');
+    const nome = st.cliente.nome || 'cliente';
+    const kwp  = st.dimensionamento?.potenciaInstaladaRealKWp?.toFixed(2) ?? '';
+    const preco = st.precificacao?.precoVenda
+      ? `R$ ${st.precificacao.precoVenda.toLocaleString('pt-BR',{minimumFractionDigits:2})}` : '';
+    const msg = encodeURIComponent(
+      `Olá ${nome}! Segue a proposta do sistema fotovoltaico de ${kwp} kWp` +
+      `${preco ? ` no valor de ${preco}` : ''}.\n\nGerado pelo LumenSolar — Lumen Soluções Engenharia.`
+    );
+    const url = tel ? `https://wa.me/55${tel}?text=${msg}` : `https://wa.me/?text=${msg}`;
+    window.open(url, '_blank');
+  }
+
+  function abrirEmail() {
+    const st = useProjetoStore.getState();
+    const email = st.cliente.email || '';
+    const nome  = st.cliente.nome  || 'cliente';
+    const kwp   = st.dimensionamento?.potenciaInstaladaRealKWp?.toFixed(2) ?? '';
+    const eco   = st.custosRecorrentes?.economiaMensalRS
+      ? `R$ ${st.custosRecorrentes.economiaMensalRS.toFixed(2).replace('.',',')}` : '';
+    const assunto = encodeURIComponent(`Proposta Energia Solar ${kwp} kWp — Lumen Soluções`);
+    const corpo   = encodeURIComponent(
+      `Prezado(a) ${nome},\n\n` +
+      `Segue em anexo a proposta comercial para instalação do sistema fotovoltaico de ${kwp} kWp.\n` +
+      (eco ? `Economia estimada: ${eco}/mês.\n\n` : '\n') +
+      `Ficamos à disposição para esclarecimentos.\n\n` +
+      `Atenciosamente,\n${st.empresa.responsavelTecnico || 'Equipe Lumen Soluções'}\n${st.empresa.razaoSocial || 'Lumen Soluções Ltda'}\n${st.empresa.telefone || ''}`
+    );
+    window.location.href = `mailto:${email}?subject=${assunto}&body=${corpo}`;
+  }
+
+  function abrirBelenus() {
+    window.open('https://belenus.com.br/energy', '_blank');
+  }
+
   async function gerarExcel() {
     setGerando(true);
     try {
@@ -1749,6 +1843,9 @@ function TabResultado({ onPrev }: { onPrev:()=>void }) {
               <Btn onClick={gerarProcuracao}  disabled={gerando} variant="ghost">{gerando ? '⏳...' : '✍ Procuração'}</Btn>
               <Btn onClick={gerarPDFTecnico}  disabled={gerando} variant="ghost">{gerando ? '⏳...' : '🔧 Técnica'}</Btn>
               <Btn onClick={gerarExcel}       disabled={gerando} variant="ghost">{gerando ? '⏳...' : '📊 Excel'}</Btn>
+              <Btn onClick={abrirWhatsApp} variant="ghost">💬 WhatsApp</Btn>
+              <Btn onClick={abrirEmail}   variant="ghost">📧 E-mail</Btn>
+              <Btn onClick={abrirBelenus} variant="ghost">🛒 Belenus</Btn>
             </div>
       </div>
 
