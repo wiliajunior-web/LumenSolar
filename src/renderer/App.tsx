@@ -1771,6 +1771,19 @@ function TabResultado({ onPrev }: { onPrev:()=>void }) {
     window.open('https://belenus.com.br/energy', '_blank');
   }
 
+  function abrirAldoSolar() {
+    window.open('https://www.aldosolar.com.br/equipamentos', '_blank');
+  }
+
+  function abrirINMETRO() {
+    const st = useProjetoStore.getState();
+    const modelo = st.kit.modeloModulo || st.kit.marcaModulo || '';
+    const url = modelo
+      ? `https://www.inmetro.gov.br/crc/index.php?submit=Buscar&modelo=${encodeURIComponent(modelo)}`
+      : 'https://www.inmetro.gov.br/crc/index.php';
+    window.open(url, '_blank');
+  }
+
   function abrirSolfacil() {
     // Abre Solfácil com valores pré-preenchidos na URL quando possível
     const st = useProjetoStore.getState();
@@ -1878,8 +1891,10 @@ function TabResultado({ onPrev }: { onPrev:()=>void }) {
               <Btn onClick={abrirWhatsApp} variant="ghost">💬 WhatsApp</Btn>
               <Btn onClick={abrirEmail}   variant="ghost">📧 E-mail</Btn>
               <Btn onClick={abrirBelenus}  variant="ghost">🛒 Belenus</Btn>
-              <Btn onClick={abrirSolfacil} variant="ghost">💳 Solfácil</Btn>
+              <Btn onClick={abrirSolfacil}  variant="ghost">💳 Solfácil</Btn>
               <Btn onClick={abrirGoogleMaps} variant="ghost">🗺️ Maps</Btn>
+              <Btn onClick={abrirAldoSolar}  variant="ghost">☀️ Aldo Solar</Btn>
+              <Btn onClick={abrirINMETRO}    variant="ghost">🏷️ INMETRO</Btn>
             </div>
       </div>
 
