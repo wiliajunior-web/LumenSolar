@@ -489,11 +489,38 @@ function TabHome({ onNovaProposta, onAbrirProposta }: { onNovaProposta: ()=>void
 
   React.useEffect(() => {
     try {
-      const p = listarRecentes();
+      const p = listarRecentes().map((meta:any) => ({
+        ...meta,
+        status: (localStorage.getItem('lumen:status:' + meta.id) || 'rascunho') as StatusProposta,
+      }));
       setPropostas(p);
     } catch { /* ignora */ }
     setCarregando(false);
   }, []);
+
+  function handleDuplicar(id: string) {
+    const raw = localStorage.getItem('lumen:proposal:' + id);
+    if (!raw) { alert('Proposta não encontrada no localStorage'); return; }
+    try {
+      const original = JSON.parse(raw);
+      const novoId = gerarId();
+      const copia = {
+        ...original,
+        id: novoId,
+        nomeCliente: (original.nomeCliente || 'Proposta') + ' (cópia)',
+        criadoEm: new Date().toISOString(),
+        atualizadoEm: new Date().toISOString(),
+        cliente: { ...original.cliente, nome: (original.cliente?.nome || '') + ' (cópia)' },
+      };
+      localStorage.setItem('lumen:proposal:' + novoId, JSON.stringify(copia));
+      // Atualizar lista
+      setPropostas(prev => [{
+        id: novoId, nomeCliente: copia.nomeCliente, cidade: copia.cidade,
+        uf: copia.uf, criadoEm: copia.criadoEm, atualizadoEm: copia.atualizadoEm,
+        potenciaKWp: copia.potenciaKWp, precoVenda: copia.precoVenda, status:'rascunho'
+      }, ...prev]);
+    } catch(e) { alert('Erro ao duplicar: ' + e); }
+  }
 
   async function handleExcluir(id: string, e: React.MouseEvent) {
     e.stopPropagation();
@@ -1289,6 +1316,23 @@ function ComponentesRecomendados({ kit }: { kit: any }) {
                 sub="Recomendado quando cabo CC > 10m (NBR 16690)"
               />
             )}
+            {/* Compatibilidade MPPT */}
+            {kit.vmppV > 0 && kit.faixaMpptMinV > 0 && (() => {
+              const vmppSist = kit.vmppV * (kit.modulosPorString || 1);
+              const dentroMin = vmppSist >= kit.faixaMpptMinV;
+              const dentroMax = vmppSist <= kit.faixaMpptMaxV;
+              const ok = dentroMin && dentroMax;
+              return (
+                <Linha
+                  label="Vmpp do sistema"
+                  valor={`${vmppSist.toFixed(0)} V`}
+                  sub={ok
+                    ? `Dentro da faixa MPPT: [${kit.faixaMpptMinV}V – ${kit.faixaMpptMaxV}V] ✓`
+                    : `FORA da faixa MPPT! [${kit.faixaMpptMinV}V – ${kit.faixaMpptMaxV}V] ← REVISAR STRING`}
+                  destaque={ok ? undefined : "⚠️ FORA MPPT"}
+                />
+              );
+            })()}
             <Linha
               label="String box / Fusíveis"
               valor={nStrings >= 2 ? "Necessária" : "Não necessária"}
@@ -1504,6 +1548,42 @@ function BuscadorCoordenadas({ endereco, cidade, uf, onEncontrado }: {
   );
 }
 
+// ─── Status de Proposta ─────────────────────────────────────────────────────
+type StatusProposta = 'rascunho' | 'enviada' | 'negociacao' | 'aprovada' | 'perdida';
+const STATUS_LABELS: Record<StatusProposta,{label:string;cor:string}> = {
+  rascunho:   { label:'Rascunho',      cor:'#6b7280' },
+  enviada:    { label:'Enviada',        cor:'#2563eb' },
+  negociacao: { label:'Em negociação',  cor:'#d97706' },
+  aprovada:   { label:'Aprovada ✓',    cor:'#16a34a' },
+  perdida:    { label:'Perdida',        cor:'#dc2626' },
+};
+
+function BadgeStatus({ status, onChange }: { status: StatusProposta; onChange: (s: StatusProposta) => void }) {
+  const [open, setOpen] = React.useState(false);
+  const { label, cor } = STATUS_LABELS[status];
+  return (
+    <div style={{ position:'relative' }}>
+      <button onClick={e => { e.stopPropagation(); setOpen(!open); }}
+        style={{ padding:'2px 10px', borderRadius:20, fontSize:11, fontWeight:700,
+          background: cor+'22', color: cor, border:`1px solid ${cor}55`, cursor:'pointer' }}>
+        {label} ▾
+      </button>
+      {open && (
+        <div style={{ position:'absolute', top:'100%', left:0, zIndex:100, background:'#1a1c28',
+          border:`1px solid #2a2d3e`, borderRadius:8, padding:6, minWidth:160, marginTop:4 }}>
+          {(Object.entries(STATUS_LABELS) as [StatusProposta,{label:string;cor:string}][]).map(([k,v]) => (
+            <div key={k} onClick={e => { e.stopPropagation(); onChange(k); setOpen(false); }}
+              style={{ padding:'5px 10px', borderRadius:6, cursor:'pointer', fontSize:12,
+                fontWeight:700, color:v.cor, background: k===status ? v.cor+'22' : 'transparent' }}>
+              {v.label}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Tab Kit ──────────────────────────────────────────────────────────────────
 function TabKit({ onPrev, onNext }: { onPrev:()=>void; onNext:()=>void }) {
   const s = useProjetoStore();
@@ -1568,6 +1648,42 @@ function TabKit({ onPrev, onNext }: { onPrev:()=>void; onNext:()=>void }) {
         </div>
       </div>
       <ComponentesRecomendados kit={s.kit} />
+
+      {/* ── Dimensionamento de Bateria (opcional) ── */}
+      {mediaKWh > 0 && (() => {
+        const autonomiaHoras = 4; // horas padrão de autonomia noturna
+        const potMediaDiaria = mediaKWh / 30; // kWh/dia
+        const capacidadeBruta = potMediaDiaria * autonomiaHoras / 24; // kWh necessários por 4h
+        const dod = 0.80; // Depth of Discharge típico (80%)
+        const capacidadeNominal = capacidadeBruta / dod;
+        // Tensão do sistema (geralmente 48V para sistemas com bateria)
+        const tensaoBat = 48;
+        const capacidadeAh = Math.ceil(capacidadeNominal * 1000 / tensaoBat);
+        return (
+          <div style={{ background:D.header, border:`1px solid #1e2135`, borderRadius:12, padding:'14px 20px', marginBottom:16 }}>
+            <div style={{ fontSize:12, fontWeight:800, color:'#94a3b8', marginBottom:10 }}>
+              🔋 Dimensionamento de Bateria (opcional — para autonomia de {autonomiaHoras}h sem sol)
+            </div>
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:10 }}>
+              {[
+                { label:'Capacidade mínima', valor:`${capacidadeNominal.toFixed(1)} kWh`, sub:'com DOD 80%' },
+                { label:'Em Ampere-hora', valor:`${capacidadeAh} Ah`, sub:`sistema 48V` },
+                { label:'Autonomia', valor:`${autonomiaHoras}h`, sub:'sem geração solar' },
+              ].map(({ label, valor, sub }) => (
+                <div key={label} style={{ background:'#12141e', borderRadius:8, padding:'10px 14px' }}>
+                  <div style={{ fontSize:10, color:D.textMuted, marginBottom:4 }}>{label}</div>
+                  <div style={{ fontSize:16, fontWeight:800, color:'#94a3b8' }}>{valor}</div>
+                  <div style={{ fontSize:10, color:D.textMuted }}>{sub}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{ fontSize:10, color:'#4a4d6a', marginTop:8 }}>
+              Referência para 4h de autonomia noturna. Ajuste conforme necessidade do cliente.
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Specs técnicas — para Memorial Descritivo */}
       <div className="card" style={{ marginBottom: 14 }}>
         <div className="card-head">Especificações técnicas do módulo — do datasheet</div>
@@ -1749,23 +1865,97 @@ function TabResultado({ onPrev }: { onPrev:()=>void }) {
     window.open(url, '_blank');
   }
 
-  function abrirEmail() {
+  async function enviarEmailComPDF() {
     const st = useProjetoStore.getState();
-    const email = st.cliente.email || '';
-    const nome  = st.cliente.nome  || 'cliente';
-    const kwp   = st.dimensionamento?.potenciaInstaladaRealKWp?.toFixed(2) ?? '';
-    const eco   = st.custosRecorrentes?.economiaMensalRS
-      ? `R$ ${st.custosRecorrentes.economiaMensalRS.toFixed(2).replace('.',',')}` : '';
-    const assunto = encodeURIComponent(`Proposta Energia Solar ${kwp} kWp — Lumen Soluções`);
-    const corpo   = encodeURIComponent(
-      `Prezado(a) ${nome},\n\n` +
-      `Segue em anexo a proposta comercial para instalação do sistema fotovoltaico de ${kwp} kWp.\n` +
-      (eco ? `Economia estimada: ${eco}/mês.\n\n` : '\n') +
-      `Ficamos à disposição para esclarecimentos.\n\n` +
-      `Atenciosamente,\n${st.empresa.responsavelTecnico || 'Equipe Lumen Soluções'}\n${st.empresa.razaoSocial || 'Lumen Soluções Ltda'}\n${st.empresa.telefone || ''}`
-    );
-    window.location.href = `mailto:${email}?subject=${assunto}&body=${corpo}`;
+    if (!st.dimensionamento) { alert('Calcule o projeto antes de enviar o email.'); return; }
+    setGerando(true);
+    try {
+      // Gerar PDF como base64
+      const { PropostaComercialPDF } = await import('@domain/proposta/PropostaComercialPDF');
+      const blob = await pdf(<PropostaComercialPDF data={buildData()} />).toBlob();
+      const base64 = await new Promise<string>((res, rej) => {
+        const r = new FileReader();
+        r.onload = () => res((r.result as string).split(',')[1]);
+        r.onerror = rej;
+        r.readAsDataURL(blob);
+      });
+      const email = st.cliente.email || '';
+      const nome  = st.cliente.nome  || 'cliente';
+      const kwp   = st.dimensionamento?.potenciaInstaladaRealKWp?.toFixed(2) ?? '';
+      const eco   = st.custosRecorrentes?.economiaMensalRS
+        ? `R$ ${st.custosRecorrentes.economiaMensalRS.toFixed(2).replace('.',',')}` : '';
+      const assunto = 'Proposta Energia Solar ' + kwp + ' kWp - Lumen Solucoes';
+      const nl = '\n';
+      const corpo = [
+        'Prezado(a) ' + nome + ',',
+        '',
+        'Segue em anexo a proposta comercial para instalacao do sistema fotovoltaico de ' + kwp + ' kWp.',
+        eco ? 'Economia estimada: ' + eco + '/mes.' : '',
+        '',
+        'Ficamos a disposicao para esclarecimentos.',
+        '',
+        'Atenciosamente,',
+        st.empresa.responsavelTecnico || 'Equipe Lumen Solucoes',
+        st.empresa.razaoSocial || 'Lumen Solucoes Ltda',
+        st.empresa.telefone || '',
+      ].join(nl);
+      const nomeArq = `Proposta_${(nome).replace(/\s+/g,'_')}.pdf`;
+
+      // Tentar Gmail API via fetch
+      const apiKey = (st.empresa as any).anthropicApiKey; // reusar campo por ora
+      if (!email) {
+        alert('Cadastre o email do cliente na aba Cliente.');
+        return;
+      }
+      // Montar mensagem MIME
+      const mime = [
+        `To: ${email}`,
+        `Subject: =?UTF-8?B?${btoa(unescape(encodeURIComponent(assunto)))}?=`,
+        'MIME-Version: 1.0',
+        'Content-Type: multipart/mixed; boundary="LUMEN_BOUNDARY"',
+        '',
+        '--LUMEN_BOUNDARY',
+        'Content-Type: text/plain; charset=UTF-8',
+        '',
+        corpo,
+        '',
+        '--LUMEN_BOUNDARY',
+        `Content-Type: application/pdf`,
+        `Content-Disposition: attachment; filename="${nomeArq}"`,
+        'Content-Transfer-Encoding: base64',
+        '',
+        base64,
+        '--LUMEN_BOUNDARY--',
+      ].join('\r\n');
+      const encodedMsg = btoa(unescape(encodeURIComponent(mime)))
+        .replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');
+
+      // Tentar enviar via Gmail API (requer token OAuth — abre mailto como fallback)
+      try {
+        const resp = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ raw: encodedMsg }),
+        });
+        if (resp.ok) {
+          alert(`Email enviado com PDF anexado para ${email} ✓`);
+        } else {
+          throw new Error('Gmail API não autorizado');
+        }
+      } catch {
+        // Fallback: baixar PDF + abrir mailto
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a'); a.href = url;
+        a.download = nomeArq; a.click(); URL.revokeObjectURL(url);
+        const assuntoEnc = encodeURIComponent(assunto);
+        const corpoEnc = encodeURIComponent(corpo + nl + nl + '[PDF em anexo - baixado automaticamente]');
+        setTimeout(() => { window.location.href = `mailto:${email}?subject=${assuntoEnc}&body=${corpoEnc}`; }, 500);
+      }
+    } catch(e) { alert('Erro: ' + (e instanceof Error ? e.message : String(e)));
+    } finally { setGerando(false); }
   }
+
+  function abrirEmail() { enviarEmailComPDF(); }
 
   function abrirBelenus() {
     window.open('https://belenus.com.br/energy', '_blank');
