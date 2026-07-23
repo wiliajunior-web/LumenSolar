@@ -322,11 +322,12 @@ export default function App() {
   const [nomeArquivoAtual, setNomeArquivoAtual] = useState<string>('');
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
 
-  // Carregar empresa do disco ao iniciar
+  // Carregar empresa ao iniciar (carregarEmpresa é síncrona)
   React.useEffect(() => {
-    carregarEmpresa().then(emp => {
+    try {
+      const emp = carregarEmpresa();
       if (emp) useProjetoStore.getState().atualizarEmpresa(emp);
-    }).catch(() => {});
+    } catch { /* ignora */ }
   }, []);
 
   // Status de validação por passo (granular — não assina o store inteiro)
