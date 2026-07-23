@@ -1460,7 +1460,8 @@ function latLonToUTM(lat: number, lon: number): { utmE: number; utmN: number; fu
   const e4=e2**2, e6=e2**3;
   const M = a*((1-e2/4-3*e4/64-5*e6/256)*phi-(3*e2/8+3*e4/32+45*e6/1024)*Math.sin(2*phi)+(15*e4/256+45*e6/1024)*Math.sin(4*phi)-(35*e6/3072)*Math.sin(6*phi));
   const utmE = Math.round(k0*N*(A+(1-T+C)*A**3/6+(5-18*T+T**2+72*C-58*(e2/(1-e2)))*A**5/120)+E0);
-  const utmN = Math.round(k0*(M+N*Math.tan(phi)*(A**2/2+(5-T+9*C+4*C**2)*A**4/24+(61-58*T+T**2+600*C-330*(e2/(1-e2)))*A**6/720)));
+  const utmNraw = Math.round(k0*(M+N*Math.tan(phi)*(A**2/2+(5-T+9*C+4*C**2)*A**4/24+(61-58*T+T**2+600*C-330*(e2/(1-e2)))*A**6/720)));
+  const utmN = utmNraw + (lat < 0 ? 10_000_000 : 0); // Hemisfério Sul: falsa origem
   return { utmE, utmN, fuso };
 }
 
@@ -1770,6 +1771,37 @@ function TabResultado({ onPrev }: { onPrev:()=>void }) {
     window.open('https://belenus.com.br/energy', '_blank');
   }
 
+  function abrirSolfacil() {
+    // Abre Solfácil com valores pré-preenchidos na URL quando possível
+    const st = useProjetoStore.getState();
+    const valor = Math.round(st.precificacao?.precoVenda ?? 0);
+    const url = valor > 0
+      ? `https://app.solfacil.com.br/simular?valor=${valor}`
+      : 'https://app.solfacil.com.br';
+    window.open(url, '_blank');
+  }
+
+  function abrirGoogleMaps() {
+    const st = useProjetoStore.getState();
+    const end = [
+      st.localizacao?.enderecoInstalacao || st.cliente?.endereco,
+      st.cliente?.cidade,
+      st.cliente?.uf,
+      'Brasil'
+    ].filter(Boolean).join(', ');
+    const url = `https://www.google.com/maps/search/${encodeURIComponent(end)}`;
+    window.open(url, '_blank');
+  }
+
+  function abrirCEMIG() {
+    const st = useProjetoStore.getState();
+    const uc = st.localizacao?.numeroUC?.replace(/\D/g,'') ?? '';
+    const url = uc
+      ? `https://www.cemig.com.br/servicos/segunda-via-da-conta/?uc=${uc}`
+      : 'https://atende.cemig.com.br';
+    window.open(url, '_blank');
+  }
+
   async function gerarExcel() {
     setGerando(true);
     try {
@@ -1845,7 +1877,9 @@ function TabResultado({ onPrev }: { onPrev:()=>void }) {
               <Btn onClick={gerarExcel}       disabled={gerando} variant="ghost">{gerando ? '⏳...' : '📊 Excel'}</Btn>
               <Btn onClick={abrirWhatsApp} variant="ghost">💬 WhatsApp</Btn>
               <Btn onClick={abrirEmail}   variant="ghost">📧 E-mail</Btn>
-              <Btn onClick={abrirBelenus} variant="ghost">🛒 Belenus</Btn>
+              <Btn onClick={abrirBelenus}  variant="ghost">🛒 Belenus</Btn>
+              <Btn onClick={abrirSolfacil} variant="ghost">💳 Solfácil</Btn>
+              <Btn onClick={abrirGoogleMaps} variant="ghost">🗺️ Maps</Btn>
             </div>
       </div>
 
