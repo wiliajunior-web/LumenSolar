@@ -1901,56 +1901,21 @@ function TabResultado({ onPrev }: { onPrev:()=>void }) {
       ].join(nl);
       const nomeArq = `Proposta_${(nome).replace(/\s+/g,'_')}.pdf`;
 
-      // Tentar Gmail API via fetch
-      const apiKey = (st.empresa as any).anthropicApiKey; // reusar campo por ora
       if (!email) {
         alert('Cadastre o email do cliente na aba Cliente.');
         return;
       }
-      // Montar mensagem MIME
-      const mime = [
-        `To: ${email}`,
-        `Subject: =?UTF-8?B?${btoa(unescape(encodeURIComponent(assunto)))}?=`,
-        'MIME-Version: 1.0',
-        'Content-Type: multipart/mixed; boundary="LUMEN_BOUNDARY"',
-        '',
-        '--LUMEN_BOUNDARY',
-        'Content-Type: text/plain; charset=UTF-8',
-        '',
-        corpo,
-        '',
-        '--LUMEN_BOUNDARY',
-        `Content-Type: application/pdf`,
-        `Content-Disposition: attachment; filename="${nomeArq}"`,
-        'Content-Transfer-Encoding: base64',
-        '',
-        base64,
-        '--LUMEN_BOUNDARY--',
-      ].join('\r\n');
-      const encodedMsg = btoa(unescape(encodeURIComponent(mime)))
-        .replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');
+      // Preparar email
 
-      // Tentar enviar via Gmail API (requer token OAuth — abre mailto como fallback)
-      try {
-        const resp = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ raw: encodedMsg }),
-        });
-        if (resp.ok) {
-          alert(`Email enviado com PDF anexado para ${email} ✓`);
-        } else {
-          throw new Error('Gmail API não autorizado');
-        }
-      } catch {
-        // Fallback: baixar PDF + abrir mailto
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a'); a.href = url;
-        a.download = nomeArq; a.click(); URL.revokeObjectURL(url);
-        const assuntoEnc = encodeURIComponent(assunto);
-        const corpoEnc = encodeURIComponent(corpo + nl + nl + '[PDF em anexo - baixado automaticamente]');
-        setTimeout(() => { window.location.href = `mailto:${email}?subject=${assuntoEnc}&body=${corpoEnc}`; }, 500);
-      }
+      // Baixar PDF automaticamente + abrir cliente de email
+      const urlPdf = URL.createObjectURL(blob);
+      const aPdf = document.createElement('a');
+      aPdf.href = urlPdf; aPdf.download = nomeArq; aPdf.click();
+      URL.revokeObjectURL(urlPdf);
+      const assuntoEnc = encodeURIComponent(assunto);
+      const corpoEnc = encodeURIComponent(corpo + nl + nl + '[Anexe o PDF que foi baixado automaticamente]');
+      setTimeout(() => { window.location.href = `mailto:${email}?subject=${assuntoEnc}&body=${corpoEnc}`; }, 800);
+      alert(`PDF baixado! Seu cliente de email foi aberto para ${email}. Apenas anexe o arquivo.`);
     } catch(e) { alert('Erro: ' + (e instanceof Error ? e.message : String(e)));
     } finally { setGerando(false); }
   }
