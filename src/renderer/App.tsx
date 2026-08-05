@@ -1397,24 +1397,51 @@ Retorne SOMENTE este JSON:
 }
 Use valores numéricos reais. coefTempPmax deve ser negativo (ex: -0.35). Se não encontrar um valor, use 0.`;
 
-  const PROMPT_INVERSOR = `Analise este datasheet de inversor solar e extraia APENAS as especificações técnicas em JSON puro (sem markdown, sem backticks, sem explicações).
-Retorne SOMENTE este JSON:
-{
-  "marcaInversor": "fabricante",
-  "modeloInversor": "modelo",
-  "potenciaInversorKW": 0,
-  "faixaMpptMinV": 0,
-  "faixaMpptMaxV": 0,
-  "tensaoMaxEntradaV": 0,
-  "tensaoSaidaV": 220,
-  "corrMaxSaidaA": 0,
-  "eficienciaInversorPercent": 0,
-  "numMppt": 1,
-  "ipGabinete": "IP65",
-  "fatorPotencia": ">0.99",
-  "thd": "<3%"
-}
-Use valores numéricos reais. Se não encontrar um valor, use 0.`;
+  const PROMPT_INVERSOR = [
+    'Analise este datasheet de inversor solar fotovoltaico e extraia APENAS as especificacoes tecnicas em JSON puro (sem markdown, sem backticks, sem explicacoes).',
+    '',
+    'PASSO 1: Identifique o tipo de inversor:',
+    '  - microinversor: um inversor por modulo ou par de modulos (ex: Enphase IQ7, APsystems, Hoymiles)',
+    '  - string: um inversor central para uma ou mais strings (ex: Growatt, SMA, Fronius)',
+    '  - hibrido: inversor string com entrada para bateria',
+    '',
+    'Retorne SOMENTE este JSON (sem texto antes ou depois):',
+    '{',
+    '  "tipoInversor": "string | microinversor | hibrido",',
+    '  "marcaInversor": "fabricante",',
+    '  "modeloInversor": "modelo",',
+    '  "potenciaInversorKW": 0,',
+    '  "faixaMpptMinV": 0,',
+    '  "faixaMpptMaxV": 0,',
+    '  "tensaoMaxEntradaV": 0,',
+    '  "tensaoSaidaV": 220,',
+    '  "corrMaxSaidaA": 0,',
+    '  "eficienciaInversorPercent": 0,',
+    '  "numMppt": 1,',
+    '  "ipGabinete": "IP65",',
+    '  "fatorPotencia": ">0.99",',
+    '  "thd": "<3%",',
+    '',
+    '  "_configuracao": {',
+    '    "modulosPorUnidade": 0,',
+    '    "maxModulosParalelo": 0,',
+    '    "minModulosSerie": 0,',
+    '    "maxModulosSerie": 0,',
+    '    "stringsRecomendadas": 0,',
+    '    "observacoesFabricante": ""',
+    '  }',
+    '}',
+    '',
+    'Para "_configuracao":',
+    '  - microinversor: "modulosPorUnidade" = quantos modulos por microinversor (geralmente 1 ou 2)',
+    '    "maxModulosParalelo" = maximo de microinversores em paralelo no mesmo ramo CA',
+    '    "observacoesFabricante" = copiar a recomendacao de configuracao do datasheet se existir',
+    '  - string: "minModulosSerie" e "maxModulosSerie" = faixa recomendada de modulos por string',
+    '    "stringsRecomendadas" = numero de strings sugerido (se o datasheet indicar)',
+    '    "observacoesFabricante" = copiar a recomendacao de configuracao do datasheet se existir',
+    '  - Se nao encontrar um valor numerico, use 0. Se nao encontrar texto, use string vazia.',
+    '  - Valores numericos devem ser numeros, nao strings.',
+  ].join('\n');
 
   async function processar(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -1720,6 +1747,34 @@ function TabKit({ onPrev, onNext }: { onPrev:()=>void; onNext:()=>void }) {
             <Campo label="Número de MPPTs" hint="Rastreadores de ponto de máxima potência"><input className="inp inp-num" type="number" min="1" value={s.kit.numMppt} onChange={e => s.atualizarKit({ numMppt: Number(e.target.value) })} /></Campo>
             <Campo label="IP do gabinete" hint="Ex: IP65, IP67"><input className="inp" value={s.kit.ipGabinete} onChange={e => s.atualizarKit({ ipGabinete: e.target.value })} /></Campo>
           </div>
+
+          {/* Tipo do inversor (extraído do datasheet) */}
+          {(s.kit as any).tipoInversor && (
+            <div style={{ marginTop:10, display:'flex', alignItems:'center', gap:8 }}>
+              <span style={{ fontSize:11, fontWeight:700, padding:'3px 12px', borderRadius:20,
+                background:(s.kit as any).tipoInversor === 'microinversor' ? '#7c3aed22' : (s.kit as any).tipoInversor === 'hibrido' ? '#d9770622' : '#2563eb22',
+                color:      (s.kit as any).tipoInversor === 'microinversor' ? '#a78bfa'   : (s.kit as any).tipoInversor === 'hibrido' ? '#fb923c'   : '#60a5fa',
+                border:     '1px solid currentColor',
+              }}>
+                {(s.kit as any).tipoInversor === 'microinversor' ? '⚡ Microinversor' :
+                 (s.kit as any).tipoInversor === 'hibrido' ? '🔋 Híbrido' : '🔌 Inversor String'}
+              </span>
+            </div>
+          )}
+
+          {/* Recomendação do fabricante (extraída do datasheet) */}
+          {(s.kit as any).recomendacaoFabricante && (
+            <div style={{ marginTop:10, padding:'10px 14px', background:'#0d1117',
+              border:'1px solid #c9a22755', borderRadius:8 }}>
+              <div style={{ fontSize:10, fontWeight:700, color:'#c9a227', marginBottom:5,
+                textTransform:'uppercase', letterSpacing:'.06em' }}>
+                📋 Recomendação do fabricante (datasheet)
+              </div>
+              <div style={{ fontSize:12, color:'#a0a4c0', lineHeight:1.6 }}>
+                {(s.kit as any).recomendacaoFabricante}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
