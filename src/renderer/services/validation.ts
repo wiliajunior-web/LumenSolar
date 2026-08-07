@@ -31,6 +31,7 @@ export function validarConsumo(consumo: any): ResultadoValidacao {
   const mesesValidos = (consumo.contas ?? []).filter((c: any) => c.kWh > 0).length;
   if ((consumo.cipMensalRS ?? 0) < 0) erros.push({ campo: 'cip', mensagem: 'CIP/COSIP não pode ser negativo' });
   if (mesesValidos < 3) erros.push({ campo: 'contas', mensagem: `Preencha pelo menos 3 meses de consumo (${mesesValidos}/3 preenchidos)` });
+  if (!consumo.tarifaRealKWhComICMS || consumo.tarifaRealKWhComICMS <= 0) erros.push({ campo: 'tarifa', mensagem: 'Tarifa (R$/kWh) obrigatória — veja a coluna Preço Unit. da conta' });
   if (consumo.cipMensalRS < 0) erros.push({ campo: 'cip', mensagem: 'CIP/COSIP não pode ser negativo' });
 
   const status: StatusPasso = erros.length === 0 ? 'completo'

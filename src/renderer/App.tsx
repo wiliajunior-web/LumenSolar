@@ -161,12 +161,48 @@ const LR = ({ label, val, color }: { label: string; val: string; color?: string 
   </div>
 );
 
-// ─── Tooltip ─────────────────────────────────────────────────────────────────
+// ─── Tooltip com detecção de borda ─────────────────────────────────────────
 const Tip = ({ text }: { text: string }) => {
-  const [vis, setVis] = React.useState(false);
+  const [vis, setVis]   = React.useState(false);
+  const [dir, setDir]   = React.useState<'above'|'below'|'right'>('above');
+  const wrapRef = React.useRef<HTMLSpanElement>(null);
+
+  function detectarDirecao() {
+    if (!wrapRef.current) { setVis(true); return; }
+    const r = wrapRef.current.getBoundingClientRect();
+    const TIP_H = 120; // altura estimada do tooltip
+    const TIP_W = 270;
+    // Se não tem espaço acima → mostrar abaixo
+    if (r.top < TIP_H + 16) { setDir('below'); }
+    // Se tooltip sairia pela direita → alinhar à direita do ícone
+    else if (r.left + TIP_W / 2 > window.innerWidth - 20) { setDir('right'); }
+    else { setDir('above'); }
+    setVis(true);
+  }
+
+  const tipStyle: React.CSSProperties = {
+    position: 'absolute',
+    background: D.header, color: '#e0e0e0', borderRadius: 8, padding: '9px 13px',
+    fontSize: 12, lineHeight: 1.55, width: 260, zIndex: 9999,
+    boxShadow: '0 4px 24px rgba(0,0,0,.5)', whiteSpace: 'normal', pointerEvents: 'none',
+    border: '1px solid #2a2d3e',
+    ...(dir === 'above' ? { bottom: 'calc(100% + 8px)', left: '50%', transform: 'translateX(-50%)' } :
+        dir === 'below' ? { top:    'calc(100% + 8px)', left: '50%', transform: 'translateX(-50%)' } :
+                          { bottom: 'calc(100% + 8px)', right: 0,    transform: 'none' }),
+  };
+
+  const arrowStyle: React.CSSProperties = {
+    position: 'absolute', left: '50%', transform: 'translateX(-50%)',
+    border: '6px solid transparent',
+    ...(dir === 'above' ? { top: '100%', borderTopColor: D.header } :
+        dir === 'below' ? { bottom: '100%', borderBottomColor: D.header } :
+                          { top: '100%', borderTopColor: D.header, left: '85%' }),
+  };
+
   return (
-    <span style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', marginLeft: 5 }}
-      onMouseEnter={() => setVis(true)} onMouseLeave={() => setVis(false)}>
+    <span ref={wrapRef}
+      style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', marginLeft: 5 }}
+      onMouseEnter={detectarDirecao} onMouseLeave={() => setVis(false)}>
       <span style={{
         cursor: 'help', color: D.textMuted, fontSize: 10, fontWeight: 800,
         border: `1.5px solid ${D.border}`, borderRadius: '50%',
@@ -174,19 +210,9 @@ const Tip = ({ text }: { text: string }) => {
         flexShrink: 0, lineHeight: 1, userSelect: 'none',
       }}>?</span>
       {vis && (
-        <div style={{
-          position: 'absolute', bottom: 'calc(100% + 8px)', left: '50%', transform: 'translateX(-50%)',
-          background: D.header, color: '#e0e0e0', borderRadius: 8, padding: '9px 13px',
-          fontSize: 12, lineHeight: 1.55, width: 260, zIndex: 9999,
-          boxShadow: '0 4px 24px rgba(0,0,0,.4)',
-          whiteSpace: 'normal', pointerEvents: 'none',
-          border: `1px solid #2a2d3e`,
-        }}>
+        <div style={tipStyle}>
           {text}
-          <div style={{
-            position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)',
-            border: '6px solid transparent', borderTopColor: D.header,
-          }} />
+          <div style={arrowStyle} />
         </div>
       )}
     </span>
@@ -426,7 +452,10 @@ export default function App() {
     const { podeCalcular, erros } = validarProjetoCompleto(useProjetoStore.getState());
     if (!podeCalcular) {
       setValidationErrors(erros.map(e => e.mensagem));
-      setTimeout(() => setValidationErrors([]), 5000);
+      // Mostrar modal de erros em vez de barra que some
+      const msgs = erros.map((e, i) => `${i+1}. ${e.mensagem}`).join('\n');
+      alert('Preencha os campos obrigatorios antes de calcular:\n\n' + msgs);
+      setTimeout(() => setValidationErrors([]), 8000);
       return;
     }
     setValidationErrors([]);
