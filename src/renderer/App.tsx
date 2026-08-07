@@ -873,7 +873,10 @@ function TabConsumo({ onPrev, onNext }: { onPrev:()=>void; onNext:()=>void }) {
               hint="Coluna 'Preço Unit.' linha Energia Elétrica — ex: 1,18272801"
               tip="⭐ CAMPO MAIS IMPORTANTE para precisão. Copie o valor exato da coluna 'Preço Unit.' na linha 'Energia Elétrica'. É mais preciso que qualquer banco de dados, pois reflete a tarifa atual após revisão da ANEEL. Se deixar 0, usa a referência do banco de dados (menos preciso)."
             >
-              <input className="inp inp-num" type="number" step="0.00001" value={s.consumo.tarifaRealKWhComICMS || ''} onChange={e => s.atualizarConsumo({ tarifaRealKWhComICMS: Number(e.target.value) })} placeholder="Ex: 1.18272801" />
+              <div style={{ display:'flex', gap:8 }}>
+                <input className="inp inp-num" type="number" step="0.00001" value={s.consumo.tarifaRealKWhComICMS || ''} onChange={e => s.atualizarConsumo({ tarifaRealKWhComICMS: Number(e.target.value) })} placeholder="Ex: 1.18272801" style={{ flex:1 }} />
+                <button onClick={() => window.open('https://www.aneel.gov.br/tarifas', '_blank')} style={{ padding:'6px 12px', borderRadius:8, border:'1px solid #2a2d3e', background:'#1a1c28', color:'#8a8d9e', fontSize:12, fontWeight:600, cursor:'pointer', whiteSpace:'nowrap' }} title="Consultar tarifas vigentes no portal ANEEL">⚡ ANEEL</button>
+              </div>
             </Campo>
             <Campo label="CIP / Iluminação pública (R$/mês)" hint="Linha 'Contrib. Ilum. Publica Municipal'" tip="Contribuição municipal de iluminação pública. Na conta CEMIG aparece como 'Contrib. Ilum. Publica Municipal'. Persiste após instalação solar.">
               <input className="inp inp-num" type="number" step="0.01" value={s.consumo.cipMensalRS} onChange={e => s.atualizarConsumo({ cipMensalRS: Number(e.target.value) })} />
@@ -1888,22 +1891,26 @@ function TabResultado({ onPrev }: { onPrev:()=>void }) {
     const { empresa, cliente, consumo, kit, dimensionamento, custosRecorrentes,
       precificacao, enquadramento, percentuaisFioBPorAno, consumoMedioMensalKWh,
       valorMedioMensalRS, preco, indicadores } = s;
+    const distribuidoraObj = DISTRIBUIDORAS.find(d => d.codigo === consumo.codigoDistribuidora) ?? DISTRIBUIDORAS[0];
     return {
-      empresa, cliente, codigoDistribuidora: consumo.codigoDistribuidora,
-      kit: {
-        marcaModulo: kit.marcaModulo, modeloModulo: kit.modeloModulo,
-        potenciaModuloWp: kit.potenciaModuloWp, quantidade: kit.quantidade,
-        tipoModulo: (PRESETS_MODULO[kit.tipoModulo].bifacial ? 'bifacial' :
-          kit.tipoModulo === 'policristalino' ? 'policristalino' : 'monocristalino') as 'monocristalino'|'policristalino'|'bifacial',
-        marcaInversor: kit.marcaInversor, modeloInversor: kit.modeloInversor,
-        potenciaInversorKW: kit.potenciaInversorKW, custoKitRS: kit.custoKitRS,
-      },
+      empresa, cliente,
+      // Consumo completo + distribuidora (usados por Memorial e Procuracao)
+      consumo,
+      codigoDistribuidora: consumo.codigoDistribuidora,
+      distribuidora: distribuidoraObj,
+      // Localizacao (Memorial Descritivo)
+      localizacao: s.localizacao,
+      // Kit completo (Memorial usa vocV, iscA, garantias, etc.)
+      kit,
+      // Dimensionamento e financeiro
       dimensionamento: dimensionamento!, custosRecorrentes: custosRecorrentes!,
       precificacao: precificacao!, enquadramento: enquadramento!,
       percentuaisFioBPorAno, consumoMedioMensalKWh: consumoMedioMensalKWh ?? 0,
       valorMedioMensalRS: valorMedioMensalRS ?? 0,
       aliquotaImpostos: preco.aliquotaImpostos, margemDesejada: preco.margemDesejada,
       indicadores: indicadores!, contas: consumo.contas,
+      // Perdas detalhadas (Memorial)
+      detalhamentoPerdas: s.detalhamentoPerdas,
     };
   }
 
@@ -2074,7 +2081,7 @@ function TabResultado({ onPrev }: { onPrev:()=>void }) {
     try {
       const { MemorialDescritivo } = await import('@domain/proposta/MemorialDescritivo');
       const d = buildData();
-      const blob = await pdf(<MemorialDescritivo data={{...d, consumo: s.consumo, localizacao: s.localizacao, kit: s.kit}} />).toBlob();
+      const blob = await pdf(<MemorialDescritivo data={d} />).toBlob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -2090,7 +2097,7 @@ function TabResultado({ onPrev }: { onPrev:()=>void }) {
     try {
       const { Procuracao } = await import('@domain/proposta/Procuracao');
       const d = buildData();
-      const blob = await pdf(<Procuracao data={{...d, consumo: s.consumo, localizacao: s.localizacao}} />).toBlob();
+      const blob = await pdf(<Procuracao data={d} />).toBlob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
