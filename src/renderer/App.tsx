@@ -11,25 +11,32 @@ import { PropostaPDF } from '@domain/proposta/PropostaPDF';
 
 // ─── Sistema de Design ───────────────────────────────────────────────────────
 const D = {
-  // Cores
-  sidebar:  '#0a0b0f',
-  header:   '#0d1117',
-  gold:     '#c9a227',
-  goldLight:'#e8c547',
-  goldMuted:'#c9a22730',
-  bg:       '#f5f4f0',
-  card:     '#ffffff',
-  border:   '#e8e3d8',
-  borderLight: '#f0ece4',
-  text:     '#1a1a28',
-  textSub:  '#5a5670',
-  textMuted:'#9590a8',
-  success:  '#16803d',
-  danger:   '#c0392b',
-  blue:     '#2563eb',
-  // Shadows
-  shadow: '0 1px 4px rgba(0,0,0,.07), 0 4px 16px rgba(0,0,0,.04)',
-  shadowMd: '0 2px 8px rgba(0,0,0,.10)',
+  // 60-30-10: #0f1117 (60%) → #1a1d2b (30%) → #c9a227 (10%)
+  //
+  // 60% — fundo dominante (base da tela, onde os olhos descansam)
+  bg:         '#0f1117',
+  // 30% — secundária (cards, sidebar, painéis — contraste suave)
+  card:       '#1a1d2b',
+  sidebar:    '#13151f',
+  header:     '#13151f',
+  // 10% — acento (ouro: CTAs, destaques, elementos ativos)
+  gold:       '#c9a227',
+  goldLight:  '#e8c547',
+  goldMuted:  '#c9a22722',
+  // Texto
+  text:       '#e8eaf8',   // quase branco — alta legibilidade no dark
+  textSub:    '#9095b0',   // secundário
+  textMuted:  '#5a5d70',   // placeholders, hints
+  // Bordas
+  border:     '#252836',   // sutil, não distrai
+  borderLight:'#1e2135',
+  // Semânticas
+  success:    '#22c55e',
+  danger:     '#ef4444',
+  blue:       '#3b82f6',
+  // Shadows — mais pronunciadas no dark
+  shadow: '0 2px 8px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.2)',
+  shadowMd: '0 4px 16px rgba(0,0,0,.4)',
 };
 
 const GLOBAL_CSS = `
