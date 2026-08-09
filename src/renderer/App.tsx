@@ -2197,6 +2197,11 @@ function TabResultado({ onPrev }: { onPrev:()=>void }) {
             <LR label="Geração anual" val={`${fmtNum(dim.geracaoAnualEstimadaKWh, 0)} kWh/ano`} />
             <LR label="Área necessária" val={`${fmtNum(ind.areaNecessariaM2)} m²`} />
             <LR label="Peso distribuído" val={`${fmtNum(ind.pesoDistribuidoKgM2)} kg/m²`} />
+            {(ind.pesoDistribuidoKgM2 ?? 0) > 12 && (
+              <div style={{ fontSize:11, color:'#f59e0b', padding:'4px 0', lineHeight:1.5 }}>
+                ⚠️ Carga estrutural acima de 12 kg/m² — confirme com laudo de engenharia civil antes de instalar.
+              </div>
+            )}
             <LR label="Perdas do sistema" val={s.detalhamentoPerdas[s.detalhamentoPerdas.length - 1]?.split(': ')[1] ?? '-'} />
           </div>
         </div>
