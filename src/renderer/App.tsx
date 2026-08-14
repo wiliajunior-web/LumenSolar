@@ -2068,6 +2068,31 @@ function TabResultado({ onPrev }: { onPrev:()=>void }) {
     window.open(url, '_blank');
   }
 
+  async function gerarFormularioCemig() {
+    setGerando(true);
+    try {
+      const { gerarFormularioCemigMicroGD, checklistDocumentosCEMIG } = await import('@domain/excel/gerarFormularioCemig');
+      const st = useProjetoStore.getState();
+      const d = buildData();
+      gerarFormularioCemigMicroGD(d);
+      // Mostrar checklist após gerar
+      const lista = checklistDocumentosCEMIG(d);
+      const pendentes = lista.filter(i => i.obrigatorio && i.status === 'pendente');
+      const geradosApp = lista.filter(i => i.geradoPeloApp && i.obrigatorio);
+      setTimeout(() => {
+        alert(
+          'Formulário CEMIG MicroGD gerado!\n\n' +
+          '✅ Gerados pelo LumenSolar:\n' +
+          geradosApp.map(i => '  • ' + i.doc).join('\n') +
+          '\n\n📋 Ainda pendentes:\n' +
+          pendentes.filter(i => !i.geradoPeloApp).map(i => '  • ' + i.doc).join('\n') +
+          '\n\nContato CEMIG: geracaodistribuida@cemig.com.br | 0800 721 0167'
+        );
+      }, 500);
+    } catch(e) { alert('Erro ao gerar formulário CEMIG: ' + (e instanceof Error ? e.message : String(e)));
+    } finally { setGerando(false); }
+  }
+
   async function gerarExcel() {
     setGerando(true);
     try {
@@ -2144,6 +2169,7 @@ function TabResultado({ onPrev }: { onPrev:()=>void }) {
               <Btn onClick={abrirWhatsApp} variant="ghost">💬 WhatsApp</Btn>
               <Btn onClick={abrirEmail}   variant="ghost">📧 E-mail</Btn>
               <Btn onClick={abrirBelenus}  variant="ghost">🛒 Belenus</Btn>
+              <Btn onClick={gerarFormularioCemig} disabled={gerando} variant="ghost">📋 Form. CEMIG</Btn>
               <Btn onClick={abrirSolfacil}  variant="ghost">💳 Solfácil</Btn>
               <Btn onClick={abrirGoogleMaps} variant="ghost">🗺️ Maps</Btn>
               <Btn onClick={abrirAldoSolar}  variant="ghost">☀️ Aldo Solar</Btn>
