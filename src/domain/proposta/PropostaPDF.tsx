@@ -1,7 +1,7 @@
 import {
   Document, Page, Text, View, StyleSheet, Font, Image,
 } from '@react-pdf/renderer';
-import { DadosCliente } from '../../renderer/store/useProjetoStore';
+import { DadosCliente } from '../../data/presetsModulo';
 import { DadosEmpresa } from '@data/empresa';
 import { ResultadoDimensionamento } from '@domain/dimensionamento/types';
 import { ResultadoCustosRecorrentes } from '@domain/custosRecorrentes/calcularCustos';

@@ -15,13 +15,7 @@ import { calcularTIR, calcularROI, formatarPayback, areaTotalNecessariaM2, pesoD
 import { geracaoMensalPorMes } from '@data/hspMensal';
 import { LOCALIZACAO_PADRAO, type DadosLocalizacao } from '@data/localizacao';
 
-export const PRESETS_MODULO = {
-  monocristalino:  { label: 'Monocristalino', coef: -0.34, noct: 45, bifacial: false, ganho: 0 },
-  policristalino:  { label: 'Policristalino',  coef: -0.40, noct: 46, bifacial: false, ganho: 0 },
-  bifacial_ntype:  { label: 'Bifacial N-TYPE (TOPCon)', coef: -0.29, noct: 45, bifacial: true, ganho: 5 },
-  bifacial_ptype:  { label: 'Bifacial P-TYPE (PERC)', coef: -0.35, noct: 45, bifacial: true, ganho: 4 },
-} as const;
-export type TipoModuloPreset = keyof typeof PRESETS_MODULO;
+export { PRESETS_MODULO, type TipoModuloPreset } from '../../data/presetsModulo';
 
 export interface DadosCliente {
   nome: string;

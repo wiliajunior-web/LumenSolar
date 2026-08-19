@@ -5,7 +5,7 @@
  */
 import { Document, Page, Text, View, StyleSheet, Image } from '@react-pdf/renderer';
 import { DISTRIBUIDORAS } from '../../data/distribuidoras';
-import { PRESETS_MODULO } from '../../renderer/store/useProjetoStore';
+import { PRESETS_MODULO } from '../../data/presetsModulo';
 import { TIPO_TELHADO_LABELS } from '../../data/localizacao';
 
 const DARK = '#0a0a1e';
