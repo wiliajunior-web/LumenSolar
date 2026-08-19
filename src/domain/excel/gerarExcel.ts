@@ -186,7 +186,136 @@ export function gerarExcelAuditoria(dados: any): void {
   const ROW_SOLF60= r; setStr(ws1, r, 1, 'Taxa Solfácil 60× (%/mês)');      setNum(ws1, r, 2, taxaSolf60, F_PCT); r++;
 
   updateRef(ws1, r, 3);
-  XLSX.utils.book_append_sheet(wb, ws1, 'Entradas');
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // ABA 0 — RESUMO VISUAL (primeira aba — para o cliente)
+  // Design 60-30-10: #0F1117 (fundo) / #1A1D2B (cards) / #C9A227 (ouro)
+  // ═══════════════════════════════════════════════════════════════════════════
+  const ws0: WS = {};
+  setCols(ws0, [1, 2, 32, 18, 18, 18, 2]);
+
+  // Helpers de estilo inline (SheetJS usa propriedade 's' para estilos — mas no
+  // SheetJS CE os estilos são ignorados. Usamos cabeçalhos texto bem estruturados.)
+  // A aba funciona como "executive summary" — dados reais do projeto.
+
+  const ecoMes   = custosRecorrentes?.economiaMensalRS    ?? 0;
+  const ecoAno   = ecoMes * 12;
+  const precoVnd  = precificacao?.precoVenda               ?? 0;
+  const pbAnos    = indicadores?.paybackSimplesAnos        ?? 0;
+  const tirVal    = (indicadores?.tir ?? 0) * 100;
+  const kwpReal   = dimensionamento?.potenciaInstaladaRealKWp ?? 0;
+  const gerMens   = dimensionamento?.geracaoMensalEstimadaKWh ?? 0;
+  const contaAntes = custosRecorrentes?.contaAntesRS       ?? 0;
+  const contaApos  = custosRecorrentes?.contaAposRS        ?? 0;
+  const areaNec    = ((dimensionamento as any)?.areaNecessariaM2 ?? (kwpReal * 4.4));
+  const hoje = new Date();
+  const dataFmt = `${String(hoje.getDate()).padStart(2,'0')}/${String(hoje.getMonth()+1).padStart(2,'0')}/${hoje.getFullYear()}`;
+  const pctFioB26 = 0.60;
+  const pctFioB29 = 1.00;
+
+  let r0 = 1;
+
+  // ── Cabeçalho ─────────────────────────────────────────────────────────────
+  setStr(ws0, r0, 2, 'LUMEN SOLUÇÕES — PROPOSTA FOTOVOLTAICA'); r0++;
+  setStr(ws0, r0, 2, dados.cliente?.nome ?? ''); r0++;
+  setStr(ws0, r0, 2, `${dados.cliente?.cidade ?? ''} / ${dados.cliente?.uf ?? 'MG'}`);
+  setStr(ws0, r0, 5, `Data: ${dataFmt}`); r0+=2;
+
+  // ── KPIs ──────────────────────────────────────────────────────────────────
+  setStr(ws0, r0, 2, '▌ RESUMO DO PROJETO'); r0++;
+  setStr(ws0, r0, 2, 'Sistema instalado (kWp)');  setNum(ws0, r0, 3, kwpReal,   F_KWP); r0++;
+  setStr(ws0, r0, 2, 'Geração mensal estimada');   setNum(ws0, r0, 3, gerMens,   F_KWH);
+  setStr(ws0, r0, 4, 'kWh/mês'); r0++;
+  setStr(ws0, r0, 2, 'Área necessária (m²)');      setNum(ws0, r0, 3, areaNec,   '#,##0.0'); r0++;
+  setStr(ws0, r0, 2, 'Módulos');  setNum(ws0, r0, 3, kit?.quantidade ?? 0, F_INT);
+  setStr(ws0, r0, 4, (kit?.potenciaModuloWp ?? 0) + ' Wp cada'); r0++;
+  setStr(ws0, r0, 2, 'Modelo módulo');  setStr(ws0, r0, 3, `${kit?.marcaModulo ?? ''} ${kit?.modeloModulo ?? ''}`); r0++;
+  setStr(ws0, r0, 2, 'Inversor');       setStr(ws0, r0, 3, `${kit?.marcaInversor ?? ''} ${kit?.modeloInversor ?? ''}`); r0+=2;
+
+  // ── Conta de energia ──────────────────────────────────────────────────────
+  setStr(ws0, r0, 2, '▌ IMPACTO NA CONTA DE ENERGIA'); r0++;
+  setStr(ws0, r0, 2, 'Consumo médio mensal');   setNum(ws0, r0, 3, mediaConsumo, F_KWH);
+  setStr(ws0, r0, 4, 'kWh/mês'); r0++;
+  setStr(ws0, r0, 2, 'Conta ANTES do solar');   setNum(ws0, r0, 3, contaAntes,  F_BRL);
+  setStr(ws0, r0, 4, 'R$/mês'); r0++;
+  setStr(ws0, r0, 2, 'Conta APÓS o solar (2026)'); setNum(ws0, r0, 3, contaApos, F_BRL);
+  setStr(ws0, r0, 4, 'R$/mês'); r0++;
+  setStr(ws0, r0, 2, '★ Economia mensal 2026');  setNum(ws0, r0, 3, ecoMes,     F_BRL);
+  setStr(ws0, r0, 4, 'R$/mês'); r0++;
+  setStr(ws0, r0, 2, 'Economia anual 2026');      setNum(ws0, r0, 3, ecoAno,     F_BRL);
+  setStr(ws0, r0, 4, 'R$/ano'); r0+=2;
+
+  // ── FioB projeção ─────────────────────────────────────────────────────────
+  setStr(ws0, r0, 2, '▌ PROJEÇÃO FIO-B — LEI 14.300/2022 (Art. 27)'); r0++;
+  setStr(ws0, r0, 2, 'Ano'); setStr(ws0, r0, 3, 'FioB (%)');
+  setStr(ws0, r0, 4, 'Economia/mês'); setStr(ws0, r0, 5, 'Obs.'); r0++;
+
+  const fiobRows: Array<[number,number,number]> = [
+    [2026, 0.60, custosRecorrentes?.economiaMensalRS ?? 0],
+    [2027, 0.75, 0],
+    [2028, 0.90, 0],
+    [2029, 1.00, 0],
+  ];
+  // Calcular economia por ano com cada % de FioB
+  const tarifaLocal = tarifa;
+  const kwhDispLocal = kwhMin;
+  const fracTUSD = 0.35;
+  const compLocal = Math.min(gerMens, mediaConsumo);
+  const contaBaseSemEco = mediaConsumo * tarifaLocal + cip;
+
+  for (const [ano, pctFioB, _ecoDefault] of fiobRows) {
+    const fiob = compLocal * tarifaLocal * fracTUSD * pctFioB;
+    const contaAposAno = kwhDispLocal * tarifaLocal + cip + fiob;
+    const ecoAno2 = contaBaseSemEco - contaAposAno;
+    setNum(ws0, r0, 2, ano,     F_INT);
+    setNum(ws0, r0, 3, pctFioB, F_PCT);
+    setNum(ws0, r0, 4, ecoAno2, F_BRL);
+    setStr(ws0, r0, 5, pctFioB === 1.00 ? 'Regra plena (Art.27)' : '');
+    r0++;
+  }
+  r0++;
+
+  // ── Análise Financeira ────────────────────────────────────────────────────
+  setStr(ws0, r0, 2, '▌ ANÁLISE FINANCEIRA'); r0++;
+  setStr(ws0, r0, 2, 'Investimento total');         setNum(ws0, r0, 3, precoVnd,  F_BRL); r0++;
+  setStr(ws0, r0, 2, '★ Payback simples');           setNum(ws0, r0, 3, pbAnos,   '#,##0.00');
+  setStr(ws0, r0, 4, 'anos'); r0++;
+  setStr(ws0, r0, 2, 'TIR (Taxa Interna de Retorno)'); setNum(ws0, r0, 3, tirVal/100, F_PCT); r0++;
+  setStr(ws0, r0, 2, 'VPL (TMA 8%)');
+  setFrm(ws0, r0, 3, `=NPV(0.08,Fluxo_Caixa!E${FC_T0+1}:Fluxo_Caixa!E${FC_T0+25})+Fluxo_Caixa!E${FC_T0}`, F_BRL); r0++;
+  setStr(ws0, r0, 2, 'Economia total em 25 anos');
+  setFrm(ws0, r0, 3, `=SUM(Fluxo_Caixa!E${FC_T0+1}:Fluxo_Caixa!E${FC_T0+25})`, F_BRL); r0+=2;
+
+  // ── Checklist CEMIG ───────────────────────────────────────────────────────
+  setStr(ws0, r0, 2, '▌ DOCUMENTOS CEMIG (REN 1.000/2021 + ND 5.30)'); r0++;
+  const docsCemig = [
+    ['✅', 'Formulário MicroGD CEMIG Rev. N4',      '(gerado pelo LumenSolar)'],
+    ['✅', 'Procuração — Art. 9 REN 1.000/2021',    '(gerado pelo LumenSolar)'],
+    ['✅', 'Memorial Descritivo — ND 5.30',         '(gerado pelo LumenSolar)'],
+    ['⬜', 'DUB — Diagrama Unifilar Básico',        '(elaborar manualmente)'],
+    ['⬜', 'Planta de Situação (satélite + UTM)',    '(elaborar manualmente)'],
+    ['⬜', 'ART do Responsável Técnico',             '(emitir no CREA)'],
+    ['⬜', 'RG + CPF titular + Comprovante imóvel', '(documentos do cliente)'],
+    ['⬜', 'Certificados INMETRO módulos/inversores','(solicitar ao fornecedor)'],
+  ];
+  for (const [icone, doc, instrucao] of docsCemig) {
+    setStr(ws0, r0, 2, `${icone}  ${doc}`);
+    setStr(ws0, r0, 5, instrucao);
+    r0++;
+  }
+  r0++;
+
+  // ── Rodapé ────────────────────────────────────────────────────────────────
+  setStr(ws0, r0, 2, `${dados.empresa?.razaoSocial ?? 'Lumen Soluções Ltda'}  |  ${dados.empresa?.responsavelTecnico ?? ''}  |  CREA-MG ${dados.empresa?.crea ?? ''}  |  Gerado pelo LumenSolar`);
+  r0++;
+  setStr(ws0, r0, 2, 'Os valores de VPL e Economia 25 anos são calculados ao vivo pela aba Fluxo_Caixa — altere qualquer premissa em Entradas para ver o impacto.');
+  r0++;
+
+  updateRef(ws0, r0, 6);
+  XLSX.utils.book_append_sheet(wb, ws0, 'Resumo');
+
+
+    XLSX.utils.book_append_sheet(wb, ws1, 'Entradas');
 
   // Aliases para referências
   const E = (row: number) => `Entradas!B${row}`;
