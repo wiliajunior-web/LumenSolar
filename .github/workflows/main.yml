@@ -1,9 +1,8 @@
-name: LumenSolar — Build Windows
+name: Gerar LumenSolar.exe
 
 on:
   push:
-    branches: [main, master]
-  workflow_dispatch:
+    branches: [ main ]
 
 jobs:
   build-windows:
@@ -13,44 +12,22 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '24'
+          node-version: 20
           cache: 'npm'
 
       - name: Instalar dependências
         run: npm ci
 
-      - name: Build Vite
-        run: npm run build
-
-      - name: Build instalador Windows
-        run: npx electron-builder --win --x64
+      - name: Build + Empacotar Windows
+        run: npm run build:win
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Upload LumenSolar.exe
+      - name: Upload instalador
         uses: actions/upload-artifact@v4
         with:
           name: LumenSolar-Windows
           path: |
-            release/*.exe
-            release/*.msi
-          retention-days: 90
-
-      - name: Criar Release automática
-        if: github.ref == 'refs/heads/main'
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: build-${{ github.run_number }}
-          name: LumenSolar — Build ${{ github.run_number }}
-          body: |
-            Build automático gerado pelo GitHub Actions.
-            Commit: ${{ github.sha }}
-            Data: ${{ github.event.head_commit.timestamp }}
-            Mensagem: ${{ github.event.head_commit.message }}
-          files: |
-            release/*.exe
-            release/*.msi
-          draft: false
-          prerelease: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+            release/**/*.exe
+            release/**/*.msi
+          retention-days: 30
