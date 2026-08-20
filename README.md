@@ -1,90 +1,193 @@
-# SolarPropV
+# ⚡ LumenSolar
 
-Aplicação desktop (Electron + React + TypeScript + Vite + Zustand + Vitest)
-para dimensionamento de sistemas fotovoltaicos, geração de proposta econômica
-e documentação técnica, com tratamento correto da **Lei nº 14.300/2022**
-(marco legal da geração distribuída).
+**App desktop para dimensionamento fotovoltaico e documentação técnica CEMIG.**  
+Desenvolvido pela Lumen Soluções Ltda — Araguari/MG.
 
-Projeto irmão do **ProjetEletrico**, mas com escopo próprio: comercial/GD em
-vez de projeto elétrico predial NBR 5410/5444.
+> Stack: Electron 31 · React 18 · TypeScript · Vite 5 · Zustand · Vitest  
+> Projeto irmão: [ProjetEletrico](https://github.com/wiliamjunioreng-dotcom/ProjetEletrico-agora-vai) (NBR 5410/5444)
 
-## Stack
+---
 
-- Electron 31 (processo principal + preload com `contextIsolation`)
-- React 18 + TypeScript
-- Vite 5 (bundler do renderer)
-- Zustand (estado da aplicação)
-- Vitest (testes do domínio — 26 testes passando no estado atual)
+## Status
 
-## Estrutura
+| Item | Estado |
+|------|--------|
+| Testes automatizados | **729 passando** (E2E, cálculos, persistência) |
+| Build Windows | ✅ GitHub Actions → artifact `LumenSolar-Windows` |
+| Normas implementadas | IEC 61724-1, NBR 16690, NBR 5410, Lei 14.300/2022, REN ANEEL 1.000/2021 |
+| Tarifa CEMIG | R$1,1827/kWh (Res. ANEEL 3.589/2026) |
 
-```
-src/
-  domain/
-    dimensionamento/   # consumo -> kWp -> nº módulos -> geração estimada
-    fioB/               # enquadramento e escalonamento da Lei 14.300/2022
-    financeiro/         # Tabela Price, fluxo de caixa, payback, VPL
-    proposta/           # (a implementar) montagem do documento de proposta
-    documentacao/        # (a implementar) memorial descritivo, formulário de acesso
-  data/
-    hspPorUF.ts          # Horas de Sol Pleno médias por UF (referência)
-  renderer/
-    App.tsx, main.tsx, store/   # UI e estado (React + Zustand)
-  main/
-    index.ts             # processo principal do Electron
-  preload/
-    index.ts             # bridge segura main <-> renderer
-```
+---
+
+## Funcionalidades implementadas
+
+### Fluxo de 6 etapas
+
+**1. Home — Mini-CRM**
+- Lista de propostas com status: Rascunho / Enviada / Negociação / Aprovada / Perdida
+- Criar nova proposta, duplicar existente, abrir arquivo `.lumensolar`
+
+**2. Cliente**
+- Dados pessoais: nome, CPF (validação Receita Federal + máscara automática), RG, estado civil
+- CNPJ com validação
+- Endereço completo
+
+**3. Consumo**
+- Seleção de distribuidora (CEMIG e outras)
+- Histórico de 12 meses de consumo (kWh)
+- Tarifa real da conta (R$/kWh) com botão ⚡ ANEEL para consultar tarifas vigentes
+- CIP/COSIP mensal
+- Tipo de ligação: monofásico / bifásico / trifásico
+- Alerta automático quando tarifa inserida diverge do banco de dados (>5%)
+- Enquadramento FioB: Art.26 (protocolo até jan/2023) ou Art.27 (escalonamento 2023–2029+)
+
+**4. Local**
+- Tipo de telhado e inclinação
+- Orientação azimutal
+- Coordenadas UTM automáticas via Nominatim (OpenStreetMap) — hemisfério Sul corrigido (+10.000.000)
+- Número da UC e medidor CEMIG
+- Link direto para o portal CEMIG Atende
+
+**5. Kit Solar**
+- Tipo de módulo: Monocristalino / Policristalino / Bifacial N-TYPE (TOPCon) / P-TYPE (PERC) / Híbrido / CdTe
+- Importar datasheet PDF via IA (Anthropic API):
+  - Extrai specs do módulo e do inversor automaticamente
+  - Detecta tipo de inversor: string / microinversor / híbrido
+  - Extrai configuração de strings recomendada pelo fabricante
+  - Exibe recomendação do fabricante em card dourado
+- Validação MPPT: Vmpp do sistema dentro da faixa do inversor
+- Validação Voc: Voc corrigido por temperatura (NBR 16690 5.3.3) < 1.000V
+- Alerta de carga estrutural > 12 kg/m²
+- Estratégia de dimensionamento: cobrir 100% / percentual customizado / superdimensionar (com justificativa)
+- Componentes recomendados: cabo CC, String box, fusível, DPS 275V, disjuntor CA (NBR 5410)
+
+**6. Precificação**
+- Composição de custo: kit + estrutura + materiais elétricos + mão de obra + projeto/ART + outros
+- Alíquota de impostos (Simples Nacional por faixa de faturamento)
+- Margem desejada
+- Preço de venda = custo / (1 − impostos − margem)
+- Balanço verificado: custo + imposto + lucro = preço (erro < R$0,01)
+- Condições de pagamento: à vista / parcelado (Solfácil, Price 48×)
+
+**7. Resultado**
+- Indicadores financeiros: TIR, VPL, Payback simples, ROI
+- Conta antes × conta depois × economia mensal/anual
+- Projeção FioB 2026–2029 (Lei 14.300/2022 Art.27)
+- Gráfico sazonal Consumo × Geração (12 meses)
+- Tabela Price completa (Solfácil, juros 1,99%m, 48 parcelas)
+
+---
+
+### Documentos gerados
+
+| Documento | Norma base | Formato |
+|-----------|-----------|---------|
+| Proposta Comercial | — | PDF |
+| Proposta Técnica | NBR 16690, IEC 61724-1 | PDF |
+| Memorial Descritivo | ND CEMIG 5.30 | PDF |
+| Procuração | REN ANEEL 1.000/2021 Art.9 | PDF |
+| Formulário CEMIG MicroGD | Rev. N4 (03/12/2024) | Excel |
+| Auditoria técnica | 8 abas com 490+ fórmulas vivas | Excel |
+
+**Excel — 8 abas:**
+- `Resumo` — visual para o cliente (KPIs, FioB, checklist CEMIG)
+- `Entradas` — todos os dados do projeto
+- `Perdas` — composição de perdas (IEC 61724-1)
+- `Dimensionamento` — kWp, módulos, geração
+- `FioB_Economia` — projeção 2026–2029
+- `Precificacao` — custo, imposto, margem, preço
+- `Tabela_Price` — amortização completa
+- `Fluxo_Caixa` — 25 anos com degradação e reajuste tarifário (=IRR, =NPV, =PMT vivos)
+
+---
+
+### Integrações
+
+| Botão | Destino |
+|-------|---------|
+| 💬 WhatsApp | wa.me com mensagem pré-preenchida |
+| 📧 E-mail | Download PDF + cliente de email com assunto/corpo |
+| 🛒 Belenus | belenus.com.br/energy |
+| 🛒 Aldo Solar | aldosolar.com.br |
+| 💳 Solfácil | Simulador com valor da proposta |
+| 🗺️ Google Maps | Endereço do cliente |
+| 🔌 CEMIG Atende | Portal de acesso |
+| ⚡ ANEEL | Tarifas vigentes |
+| 🏛 INMETRO | Certificação do equipamento |
+| 🗺️ Nominatim | UTM automático via OpenStreetMap |
+| 📋 Form. CEMIG | Formulário MicroGD Rev. N4 pré-preenchido |
+| 📊 Excel | Auditoria técnica + resumo visual |
+| 📄 Import Datasheet | Extração via Anthropic API (Claude) |
+
+---
+
+### Cálculos verificados (auditoria 46 pontos, 0 bugs)
+
+| Bloco | Norma | Verificação |
+|-------|-------|-------------|
+| Perdas do sistema | IEC 61724-1 | Tcell, ΔT, composição encadeada, clamp frio, bifacial |
+| Dimensionamento | IEC 61724-1 | kWp = consumo/(HSP×30.4167×efic), DIAS_MES=365/12 |
+| FioB | Lei 14.300/2022 | 8 percentuais Art.27, Art.26 até 2045, min(ger,cons) |
+| Custos CEMIG | Res. ANEEL 3.589/2026 | R$379,34 / R$59,14 / R$203,88 / R$157,27 (conta real) |
+| Precificação | — | Balanço erro = 0,00000000 |
+| Tabela Price | — | Saldo final = 0,000000 após n parcelas |
+| TIR | — | Newton-Raphson, VPL na TIR = -0,0000 |
+| Simples Nacional | LC 123/2006 | Continuidade faixas 1-5: Δ = 0,0000pp |
+| NBR 16690 (CC) | NBR 16690 | Voc frio, fusível Isc≤F≤2,5×Isc, Vmpp MPPT |
+| NBR 5410 (CA) | NBR 5410 | Seção cabo por Iproj=Inom×1,25 |
+| UTM hemisfério Sul | IBGE | +10.000.000 (falsa origem), Araguari: E=796084 N=7935844 |
+| CPF | Receita Federal | Dois dígitos verificadores, 5 casos de borda |
+
+---
+
+### Persistência
+
+- Arquivo `.lumensolar` — formato JSON com envelope de metadados
+- Checksum SHA-256: detecta corrupção de qualquer byte
+- Auto-save automático
+- Backup `.bak` antes de sobrescrever
+
+---
+
+## Design
+
+- Tema escuro **60-30-10**: `#0f1117` fundo · `#1a1d2b` cards · `#c9a227` ouro
+- Sincronizado com ProjetEletrico (mesmas variáveis CSS)
+- Tooltip com detecção de borda (não corta nas extremidades da tela)
+- Modal de erros ao tentar calcular com campos incompletos
+
+---
 
 ## Como rodar
 
 ```bash
 npm install
-npm run test        # roda a suíte de testes do domínio
-npm run dev          # inicia o Vite dev server (renderer)
-npm run build        # type-check + build de produção do renderer
+npm test              # 729 testes (Vitest)
+npm run dev           # Vite dev server
+npm run build         # build de produção
+npm run build:win     # gera .exe (requer wine ou Windows)
 ```
 
-> Observação: no ambiente onde este projeto foi montado, o binário do
-> Electron não pôde ser baixado (rede restrita), por isso a instalação foi
-> feita com `ELECTRON_SKIP_BINARY_DOWNLOAD=1`. Em uma máquina com acesso
-> normal à internet, rode `npm install` sem essa variável para baixar o
-> Electron e poder usar `npm run electron:dev` de fato dentro do app desktop.
+---
 
-## O que já está implementado e testado
+## Checklist de documentos CEMIG (MicroGD)
 
-- **Dimensionamento** (`src/domain/dimensionamento`): converte consumo médio
-  mensal + HSP local + perdas do sistema + potência do módulo em número de
-  módulos e potência instalada, com percentual de compensação configurável.
-- **Fio B / Lei 14.300** (`src/domain/fioB`): classifica micro/minigeração,
-  verifica elegibilidade à regra de transição do art. 26 (até 2045, conforme
-  data de protocolo de acesso) versus o escalonamento do art. 27 (15% em 2023
-  até 90% em 2028, 100% a partir de 2029), e a regra especial do art. 27 §1º
-  para minigeração >500 kW não despachável em autoconsumo remoto/geração
-  compartilhada com titular ≥25% de participação.
-- **Financeiro** (`src/domain/financeiro`): Tabela Price (parcelas, juros,
-  amortização) e fluxo de caixa anual com degradação dos módulos, reajuste
-  tarifário, payback simples/descontado e VPL.
-- **UI mínima** (`src/renderer/App.tsx`): formulário de cliente, consumo e
-  data de protocolo de acesso, com cálculo de dimensionamento e enquadramento
-  exibido em tela. Serve de esqueleto navegável, não é o produto final.
+| Documento | Gerado pelo LumenSolar |
+|-----------|----------------------|
+| Formulário MicroGD Rev. N4 | ✅ |
+| Procuração (Art.9 REN 1.000/2021) | ✅ |
+| Memorial Descritivo (ND 5.30) | ✅ |
+| DUB — Diagrama Unifilar Básico | ❌ manual |
+| Planta de Situação (satélite + UTM) | ❌ manual |
+| ART do Responsável Técnico | ❌ manual |
+| RG + CPF + Comprovante de imóvel | ❌ manual |
+| Certificados INMETRO | ❌ manual |
 
-## Próximos passos sugeridos
+---
 
-1. **Validar a tabela de HSP por UF** com dado de irradiação por cidade
-   (PVGIS/NASA POWER) em vez de média estadual — a planilha original tinha
-   esse nível de granularidade implícito por cliente.
-2. **Extrair as tabelas de custo** da planilha original (`CUSTO PROJETO
-   POLICRISTALINO`/`MONOCRISTALINO`) para um módulo de precificação de kit
-   (módulos, inversor, estrutura, mão de obra, projeto, margem).
-3. **Conectar Fio B ao financeiro**: hoje os módulos são independentes; falta
-   a função que usa `custoAnualFioB` para gerar a economia líquida mês a mês
-   alimentando `calcularFluxoCaixa`.
-4. **Módulo de proposta** (PDF/DOCX): juntar dimensionamento + financeiro +
-   dados do cliente num documento comercial, reaproveitando o layout da
-   planilha `PROPOSTA POLICRISTALINO/MONOCRISTALINO`.
-5. **Módulo de documentação técnica**: memorial descritivo e formulário
-   padrão de acesso à distribuidora (a Lei exige formulário-padrão da Aneel,
-   art. 2º §3º).
-6. **Persistência**: salvar/abrir projetos (json local), como no
-   ProjetEletrico.
+## Pendências conhecidas
+
+- [ ] Teste de fluxo completo no `.exe` (criar proposta → gerar todos os documentos)
+- [ ] Suporte a Grupo A (P/FP/HR, demanda contratada — sistemas >75 kWp)
+- [ ] Expansão de usina existente (campo "potência atual instalada")
+- [ ] Token `wiliamjunioreng-dotcom` configurado para sincronizar design com ProjetEletrico ✅
