@@ -594,3 +594,84 @@ describe('GRUPO A — Fator de compensação e dimensionamento P/FP', () => {
     expect(r.geracaoMensalKWh).toBeGreaterThanOrEqual(r.geracaoNecessariaKWh - 1);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// BLOCO 12 — BANCO DE BATERIAS (slides 1016-1019 do curso)
+// ═══════════════════════════════════════════════════════════════════════════════
+import { calcularBancoBaterias } from './dimensionamento/calcularBateria';
+
+describe('BANCO DE BATERIAS — Fórmulas slides 1016–1019', () => {
+  const BASE = {
+    consumoDiarioKWh: 9.38,  // 281.5 kWh/mês ÷ 30
+    tipoBateria: 'estacionaria_comum' as const,
+    tipoSistema: 'backup_hybrid' as const,
+    autonomia: 4,             // 4 horas de backup
+    tensaoSistemaV: 48,
+    capacidadeBateriaAh: 100,
+    iscArranjoA: 13.8,
+    nStringsParalelo: 1,
+  };
+
+  it('[BAT-1] CBC20 = Energia_autonomia / DOD (Eq. 6.10)', () => {
+    const r = calcularBancoBaterias(BASE);
+    // Energia backup 4h = (4/24) × 9.38 = 1.563 kWh
+    // CBC20 = 1563 Wh / 0.40 = 3909 Wh
+    const energiaAut = (4/24) * 9.38;
+    const esperado = (energiaAut * 1000) / 0.40;
+    expect(r.capacidadeBruta_Wh).toBeCloseTo(esperado, 0);
+  });
+
+  it('[BAT-2] CBIC20 = CBC20 / Vsist (Eq. 6.11)', () => {
+    const r = calcularBancoBaterias(BASE);
+    expect(r.capacidadeBruta_Ah).toBeCloseTo(r.capacidadeBruta_Wh / 48, 0);
+  });
+
+  it('[BAT-3] Controlador: Ic = 1.25 × Isc × N_strings (Eq. 6.18)', () => {
+    const r = calcularBancoBaterias(BASE);
+    expect(r.corrMaxControlador_A).toBeCloseTo(1.25 * 13.8 * 1, 0); // rounded to 1 decimal
+  });
+
+  it('[BAT-4] DOD estacionária comum = 40%', () => {
+    const r = calcularBancoBaterias(BASE);
+    expect(r.dodUsado).toBe(0.40);
+  });
+
+  it('[BAT-5] DOD OPzV/OPzS = 70%', () => {
+    const r = calcularBancoBaterias({ ...BASE, tipoBateria: 'ciclo_profundo_opzv' });
+    expect(r.dodUsado).toBe(0.70);
+  });
+
+  it('[BAT-6] DOD LiFePO4 = 80%', () => {
+    const r = calcularBancoBaterias({ ...BASE, tipoBateria: 'litio_lifepo4' });
+    expect(r.dodUsado).toBe(0.80);
+  });
+
+  it('[BAT-7] Autonomia empírica offgrid: N = 0.48 × HSPmin + 4.58 (Eq. 6.13)', () => {
+    const r = calcularBancoBaterias({
+      ...BASE, tipoSistema: 'offgrid_sfi', autonomia: 3, hspMinimo: 4.5,
+    });
+    // N = 0.48×4.5 + 4.58 = 2.16 + 4.58 = 6.74 dias
+    expect(r.autonomiaEmpirica).toBeCloseTo(0.48 * 4.5 + 4.58, 1);
+  });
+
+  it('[BAT-8] Baterias em série = Vsist / Vtensao_célula (ex: 48V / 12V = 4 monoblocos)', () => {
+    const r = calcularBancoBaterias({ ...BASE, tensaoSistemaV: 48 });
+    expect(r.bateriasSerie).toBe(4); // 48V / 12V = 4 monoblocos em série
+  });
+
+  it('[BAT-9] Capacidade real do banco ≥ capacidade mínima calculada', () => {
+    const r = calcularBancoBaterias(BASE);
+    expect(r.capacidadeRealAh).toBeGreaterThanOrEqual(r.capacidadeBruta_Ah - 1);
+  });
+
+  it('[BAT-10] Alerta quando paralelo > 6 (limite do curso)', () => {
+    // Forçar 7+ paralelos: alta capacidade necessária, bateria pequena
+    const r = calcularBancoBaterias({
+      ...BASE, autonomia: 72, tipoSistema: 'offgrid_sfi', capacidadeBateriaAh: 20,
+    });
+    const hasAlert = r.alertas.some(a => a.includes('paralelo') || a.includes('máximo'));
+    if (r.bateriasParalelo > 6) {
+      expect(hasAlert).toBe(true);
+    }
+  });
+});

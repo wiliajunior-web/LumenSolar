@@ -1799,34 +1799,100 @@ function TabKit({ onPrev, onNext }: { onPrev:()=>void; onNext:()=>void }) {
 
       {/* ── Dimensionamento de Bateria (opcional) ── */}
       {mediaKWh > 0 && (() => {
-        const autonomiaHoras = 4; // horas padrão de autonomia noturna
-        const potMediaDiaria = mediaKWh / 30; // kWh/dia
-        const capacidadeBruta = potMediaDiaria * autonomiaHoras / 24; // kWh necessários por 4h
-        const dod = 0.80; // Depth of Discharge típico (80%)
-        const capacidadeNominal = capacidadeBruta / dod;
-        // Tensão do sistema (geralmente 48V para sistemas com bateria)
-        const tensaoBat = 48;
-        const capacidadeAh = Math.ceil(capacidadeNominal * 1000 / tensaoBat);
+        const consumoDiario = mediaKWh / DIAS_MES;
+        const tipoBat = (s.kit as any).tipoBateria2 || 'estacionaria_comum';
+        const tipoSist = (s.kit as any).tipoSistemaBat || 'backup_hybrid';
+        const autonomia = (s.kit as any).autonomiaBat || (tipoSist === 'backup_hybrid' ? 4 : 2);
+        const tensaoSist = (s.kit as any).tensaoSistemaBat || 48;
+        const capBatAh = (s.kit as any).capacidadeBateriaAh || 100;
+        const dods: Record<string,number> = { estacionaria_comum:0.40, ciclo_profundo_opzs:0.70, ciclo_profundo_opzv:0.70, litio_lifepo4:0.80 };
+        const dod = dods[tipoBat] || 0.60;
+        const energiaAut = tipoSist === 'backup_hybrid' ? (autonomia/24)*consumoDiario : consumoDiario*autonomia;
+        const cap_Wh = (energiaAut*1000)/dod;
+        const cap_Ah = cap_Wh/tensaoSist;
+        const tensaoCelula = tipoBat.includes('opzs')||tipoBat.includes('opzv') ? 2 : (tipoBat==='litio_lifepo4' ? tensaoSist : 12);
+        const nSerie = Math.ceil(tensaoSist/tensaoCelula);
+        const nParalelo = Math.ceil(cap_Ah/capBatAh);
+        const capReal_Ah = nParalelo*capBatAh;
+        const capReal_kWh = (capReal_Ah*tensaoSist)/1000;
+        const iscArranjo = s.kit.iscA * (s.kit.numStrings || 1);
+        const corrCtrl = parseFloat((1.25*iscArranjo).toFixed(1));
+        const nomes: Record<string,string> = {
+          estacionaria_comum:'Pb-ácido estacionária', ciclo_profundo_opzs:'OPzS ciclo profundo',
+          ciclo_profundo_opzv:'OPzV ciclo profundo (gel)', litio_lifepo4:'Lítio LiFePO4'
+        };
         return (
-          <div style={{ background:D.header, border:`1px solid #1e2135`, borderRadius:12, padding:'14px 20px', marginBottom:16 }}>
-            <div style={{ fontSize:12, fontWeight:800, color:'#94a3b8', marginBottom:10 }}>
-              🔋 Dimensionamento de Bateria (opcional — para autonomia de {autonomiaHoras}h sem sol)
+          <div style={{ background:D.card, border:'1px solid #252836', borderRadius:12, padding:'16px 20px', marginBottom:16 }}>
+            <div style={{ fontSize:12, fontWeight:800, color:D.gold, marginBottom:14, textTransform:'uppercase', letterSpacing:'.05em' }}>
+              🔋 Dimensionamento de Banco de Baterias
             </div>
-            <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:10 }}>
+
+            {/* Configuração */}
+            <div className="g2" style={{ rowGap:10, marginBottom:14 }}>
+              <Campo label="Tipo de sistema" tip="Backup/Híbrido: horas de autonomia sem rede. Offgrid/SFI: dias de autonomia completa (sem conexão à rede).">
+                <select className="inp" value={tipoSist}
+                  onChange={e => s.atualizarKit({ tipoSistemaBat: e.target.value } as any)}>
+                  <option value="backup_hybrid">Backup / Híbrido (horas sem rede)</option>
+                  <option value="offgrid_sfi">Offgrid / SFI (dias de autonomia)</option>
+                </select>
+              </Campo>
+              <Campo label="Tipo de bateria" tip="DOD recomendado — Estacionária: 40% | OPzS/OPzV: 70% | LiFePO4: 80%">
+                <select className="inp" value={tipoBat}
+                  onChange={e => s.atualizarKit({ tipoBateria2: e.target.value } as any)}>
+                  <option value="estacionaria_comum">Pb-ácido estacionária — DOD 40%</option>
+                  <option value="ciclo_profundo_opzs">OPzS ciclo profundo — DOD 70%</option>
+                  <option value="ciclo_profundo_opzv">OPzV ciclo profundo (gel) — DOD 70%</option>
+                  <option value="litio_lifepo4">Lítio LiFePO4 — DOD 80%</option>
+                </select>
+              </Campo>
+              <Campo label={tipoSist === 'backup_hybrid' ? 'Autonomia (horas)' : 'Autonomia (dias)'}
+                tip={tipoSist === 'backup_hybrid' ? 'Horas de backup sem energia da rede.' : 'Dias de autonomia sem geração solar. Recomendado: 2–4 dias (Brasil). Fórmula empírica: N = 0.48×HSPmin + 4.58'}>
+                <input className="inp inp-num" type="number" min="1" max={tipoSist==='backup_hybrid'?24:7}
+                  value={(s.kit as any).autonomiaBat || ''}
+                  onChange={e => s.atualizarKit({ autonomiaBat: Number(e.target.value) } as any)}
+                  placeholder={tipoSist==='backup_hybrid'?'4':'2'} />
+              </Campo>
+              <Campo label="Tensão do sistema CC (V)" tip="12V para sistemas pequenos. 24V intermediário. 48V recomendado para > 1 kWh — reduz correntes e perdas.">
+                <select className="inp" value={tensaoSist}
+                  onChange={e => s.atualizarKit({ tensaoSistemaBat: Number(e.target.value) } as any)}>
+                  <option value={12}>12 V</option>
+                  <option value={24}>24 V</option>
+                  <option value={48}>48 V (recomendado)</option>
+                </select>
+              </Campo>
+              <Campo label="Capacidade da bateria (Ah @ C/20)" tip="Capacidade nominal de cada unidade (monobloco ou célula). Verifique o datasheet na taxa C/20 (20 horas de descarga).">
+                <input className="inp inp-num" type="number" min="50" max="5000"
+                  value={(s.kit as any).capacidadeBateriaAh || ''}
+                  onChange={e => s.atualizarKit({ capacidadeBateriaAh: Number(e.target.value) } as any)}
+                  placeholder="100" />
+              </Campo>
+            </div>
+
+            {/* Resultados */}
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:10, marginBottom:12 }}>
               {[
-                { label:'Capacidade mínima', valor:`${capacidadeNominal.toFixed(1)} kWh`, sub:'com DOD 80%' },
-                { label:'Em Ampere-hora', valor:`${capacidadeAh} Ah`, sub:`sistema 48V` },
-                { label:'Autonomia', valor:`${autonomiaHoras}h`, sub:'sem geração solar' },
+                { label:'Capacidade mínima', valor:`${(cap_Wh/1000).toFixed(2)} kWh`, sub:`DOD ${(dod*100).toFixed(0)}% — ${nomes[tipoBat]}` },
+                { label:'Em Ah @ C/20', valor:`${Math.ceil(cap_Ah)} Ah`, sub:`sistema ${tensaoSist}V` },
+                { label:`Banco de baterias`, valor:`${nSerie}S × ${nParalelo}P`, sub:`${nSerie*nParalelo} unidades total` },
+                { label:'Capacidade real', valor:`${capReal_kWh.toFixed(2)} kWh`, sub:`${capReal_Ah} Ah @ ${tensaoSist}V` },
+                { label:'Controlador de carga', valor:`≥ ${corrCtrl} A`, sub:`Ic = 1.25 × Isc × ${s.kit.numStrings||1} strings` },
+                { label:`Autonomia (${tipoSist==='backup_hybrid'?'horas':'dias'})`, valor:`${autonomia}${tipoSist==='backup_hybrid'?'h':'d'}`, sub:`${tipoSist==='backup_hybrid'?'sem rede elétrica':'sem geração solar'}` },
               ].map(({ label, valor, sub }) => (
-                <div key={label} style={{ background:'#12141e', borderRadius:8, padding:'10px 14px' }}>
+                <div key={label} style={{ background:'#0a0c14', borderRadius:8, padding:'10px 12px' }}>
                   <div style={{ fontSize:10, color:D.textMuted, marginBottom:4 }}>{label}</div>
-                  <div style={{ fontSize:16, fontWeight:800, color:'#94a3b8' }}>{valor}</div>
+                  <div style={{ fontSize:15, fontWeight:800, color:D.text }}>{valor}</div>
                   <div style={{ fontSize:10, color:D.textMuted }}>{sub}</div>
                 </div>
               ))}
             </div>
-            <div style={{ fontSize:10, color:'#4a4d6a', marginTop:8 }}>
-              Referência para 4h de autonomia noturna. Ajuste conforme necessidade do cliente.
+
+            {nParalelo > 6 && (
+              <div style={{ padding:'6px 12px', background:'#3b0a0a', border:'1px solid #ef4444', borderRadius:8, fontSize:11, color:'#fca5a5', marginBottom:8 }}>
+                ⚠️ {nParalelo} fileiras em paralelo excede o máximo recomendado (4–6). Use bateria de maior capacidade ou aumente a tensão do sistema para 48V.
+              </div>
+            )}
+            <div style={{ fontSize:10, color:D.textMuted }}>
+              Fórmulas: CBC20 = Energia × Autonomia / DOD (Eq. 6.10) | CBIC20 = CBC20 / Vsist (Eq. 6.11) | Ic = 1.25 × Isc × N_strings (Eq. 6.18) — Manual Fotovoltaico CEPEL/INPE
             </div>
           </div>
         );
