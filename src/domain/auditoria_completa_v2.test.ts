@@ -444,3 +444,153 @@ describe('AUDITORIA 9 — NBR 5410 (componentes elétricos CA)', () => {
     expect(disj).toBe(32); // próximo padrão acima de 25.8A
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// BLOCO 10 — CABO CA + QUEDA DE TENSÃO (NBR 5410 + slide 48-58 do curso)
+// ═══════════════════════════════════════════════════════════════════════════════
+import { calcularCaboCA } from './dimensionamento/calcularCaboCA';
+import { calcularDimensionamentoGrupoA } from './dimensionamento/calcularGrupoA';
+
+describe('CABO CA — NBR 5410 com correção de temperatura (slides 48–58)', () => {
+  // Exemplo exato do curso: Ib=27.2A, FTA=0.71 (50°C), método C
+  it('[CA-1] Exemplo do curso: Ib=27.2A, 50°C → cabo 10mm², disjuntor 32A', () => {
+    const r = calcularCaboCA({
+      corrMaxSaidaA: 27.2,
+      tensaoSaidaV: 220,
+      tipoLigacao: 'bifasica',
+      temperaturaAmbienteC: 50,
+      comprimentoCaboCAm: 20,
+    });
+    // Curso mostra: 6mm²(Iz=41A → Iz'=29.11A) não serve para disjuntor adequado
+    // 10mm²(Iz=57A → Iz'=40.47A) → disjuntor 32A (27.2 ≤ 32 ≤ 40.47) ✓
+    expect(r.fta).toBeCloseTo(0.71, 2);
+    expect(r.izRequeridoA).toBeCloseTo(27.2 / 0.71, 1); // 38.3A
+    expect(r.secaoMm2).toBe(10);
+    expect(r.disjuntorA).toBe(32);
+    // Iz' = 57 × 0.71 = 40.47A
+    expect(r.izCorrigidaA).toBeCloseTo(57 * 0.71, 1);
+  });
+
+  it('[CA-2] Temperatura 40°C → FTA ≈ 0.87', () => {
+    const r = calcularCaboCA({
+      corrMaxSaidaA: 14.0, tensaoSaidaV: 220,
+      tipoLigacao: 'bifasica', temperaturaAmbienteC: 40, comprimentoCaboCAm: 10,
+    });
+    expect(r.fta).toBeCloseTo(0.87, 2);
+  });
+
+  it('[CA-3] Temperatura 30°C → FTA = 1.00 (sem correção)', () => {
+    const r = calcularCaboCA({
+      corrMaxSaidaA: 14.0, tensaoSaidaV: 220,
+      tipoLigacao: 'bifasica', temperaturaAmbienteC: 30, comprimentoCaboCAm: 10,
+    });
+    expect(r.fta).toBeCloseTo(1.0, 2);
+  });
+
+  it('[CA-4] Queda de tensão CA — formula ΔU = α×ρ×I×L/(U×S)', () => {
+    // Ib=14A, L=15m, S=2.5mm², U=220V, α=2 (bifásico), ρ=0.018
+    // ΔU = 2 × 0.018 × 14 × 15 / (220 × 2.5) = 0.0545 / 550 = 0.00136 = 0.136%
+    const r = calcularCaboCA({
+      corrMaxSaidaA: 14, tensaoSaidaV: 220, tipoLigacao: 'bifasica',
+      temperaturaAmbienteC: 30, comprimentoCaboCAm: 15,
+    });
+    const dU_calc = 2 * 0.018 * 14 * 15 / (220 * r.secaoMm2);
+    const dU_pct = (dU_calc / 220) * 100;
+    expect(r.quedaTensaoPct).toBeCloseTo(dU_pct, 2);
+    expect(r.quedaTensaoOk).toBe(true); // < 4%
+  });
+
+  it('[CA-5] Cabo muito curto → queda de tensão OK', () => {
+    const r = calcularCaboCA({
+      corrMaxSaidaA: 14, tensaoSaidaV: 220, tipoLigacao: 'bifasica',
+      temperaturaAmbienteC: 40, comprimentoCaboCAm: 5,
+    });
+    expect(r.quedaTensaoOk).toBe(true);
+    expect(r.quedaTensaoPct).toBeLessThan(4);
+  });
+
+  it('[CA-6] NBR 16690 5.4 — Ib ≤ In ≤ Iz\'', () => {
+    const r = calcularCaboCA({
+      corrMaxSaidaA: 20, tensaoSaidaV: 220, tipoLigacao: 'bifasica',
+      temperaturaAmbienteC: 40, comprimentoCaboCAm: 10,
+    });
+    expect(r.disjuntorA).toBeGreaterThanOrEqual(r.ibA);
+    expect(r.disjuntorA).toBeLessThanOrEqual(r.izCorrigidaA + 0.5); // tolerância 0.5A
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// BLOCO 11 — GRUPO A (P/FP/HR)
+// ═══════════════════════════════════════════════════════════════════════════════
+describe('GRUPO A — Fator de compensação e dimensionamento P/FP', () => {
+  const TARIFA_A = {
+    tePontaKWh: 0.5432,
+    teForaPontaKWh: 0.2345,
+    tusdPontaKWh: 0.3210,
+    tusdForaPontaKWh: 0.1543,
+    demandaKW: 35.00,
+  };
+
+  it('[GA-1] Fc = TE_Ponta / TE_FP (verificado manualmente)', () => {
+    const r = calcularDimensionamentoGrupoA({
+      consumo: { historicoBFP: [1000,1100,900,1050,1000,980,1020,1000,1050,980,1000,1020],
+                 historicoBP: [200,220,180,210,200,190,210,200,210,190,200,210],
+                 demandaContratadaKW: 100 },
+      tarifa: TARIFA_A,
+      hspLocal: 5.4, perdasSistema: 0.134, potenciaModuloWp: 550,
+    });
+    // Fc = 0.5432 / 0.2345 = 2.3164
+    expect(r.fatorCompensacaoFc).toBeCloseTo(0.5432 / 0.2345, 3);
+  });
+
+  it('[GA-2] Geração necessária = Media_FP + Fc × Media_P', () => {
+    const mediaFP = 1000;
+    const mediaP  = 200;
+    const Fc = TARIFA_A.tePontaKWh / TARIFA_A.teForaPontaKWh;
+    const esperado = mediaFP + Fc * mediaP;
+    const r = calcularDimensionamentoGrupoA({
+      consumo: { historicoBFP: new Array(12).fill(mediaFP),
+                 historicoBP:  new Array(12).fill(mediaP),
+                 demandaContratadaKW: 100 },
+      tarifa: TARIFA_A,
+      hspLocal: 5.4, perdasSistema: 0.134, potenciaModuloWp: 550,
+    });
+    expect(r.geracaoNecessariaKWh).toBeCloseTo(esperado, 1);
+  });
+
+  it('[GA-3] Fc > 1 (sempre, pois tarifa ponta > fora ponta)', () => {
+    const r = calcularDimensionamentoGrupoA({
+      consumo: { historicoBFP: new Array(12).fill(500),
+                 historicoBP:  new Array(12).fill(100),
+                 demandaContratadaKW: 50 },
+      tarifa: TARIFA_A,
+      hspLocal: 5.4, perdasSistema: 0.134, potenciaModuloWp: 550,
+    });
+    expect(r.fatorCompensacaoFc).toBeGreaterThan(1);
+  });
+
+  it('[GA-4] Sistema sem consumo ponta → Fc irrelevante, dimensionamento = MediaFP/(HSP×dias×efic)', () => {
+    const mediaFP = 2000; // kWh/mês
+    const r = calcularDimensionamentoGrupoA({
+      consumo: { historicoBFP: new Array(12).fill(mediaFP),
+                 historicoBP:  new Array(12).fill(0),
+                 demandaContratadaKW: 200 },
+      tarifa: TARIFA_A,
+      hspLocal: 5.4, perdasSistema: 0.134, potenciaModuloWp: 550,
+    });
+    const efic = 1 - 0.134;
+    const potMinEsperada = mediaFP / (5.4 * (365/12) * efic);
+    expect(r.potenciaMinKWp).toBeCloseTo(potMinEsperada, 2);
+  });
+
+  it('[GA-5] Geração mensal ≥ geração necessária', () => {
+    const r = calcularDimensionamentoGrupoA({
+      consumo: { historicoBFP: new Array(12).fill(1000),
+                 historicoBP:  new Array(12).fill(200),
+                 demandaContratadaKW: 100 },
+      tarifa: TARIFA_A,
+      hspLocal: 5.4, perdasSistema: 0.134, potenciaModuloWp: 550,
+    });
+    expect(r.geracaoMensalKWh).toBeGreaterThanOrEqual(r.geracaoNecessariaKWh - 1);
+  });
+});

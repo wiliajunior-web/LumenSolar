@@ -860,6 +860,57 @@ function TabConsumo({ onPrev, onNext }: { onPrev:()=>void; onNext:()=>void }) {
               • <strong>Histórico</strong> → tabela "Histórico de Consumo" no canto inferior esquerdo
             </span>
           </div>
+          {/* Toggle Grupo B / A */}
+          <div style={{ marginBottom:12, display:'flex', gap:8, alignItems:'center' }}>
+            <span style={{ fontSize:11, fontWeight:700, color:'#9095b0', textTransform:'uppercase', letterSpacing:'.05em' }}>Grupo de tensão:</span>
+            {(['B','A'] as const).map(g => (
+              <button key={g} onClick={() => s.atualizarConsumo({ grupoTensao: g } as any)}
+                style={{ padding:'4px 16px', borderRadius:20, fontSize:12, fontWeight:700,
+                  cursor:'pointer', border:'1.5px solid',
+                  background:(s.consumo as any).grupoTensao === g ? '#c9a22722' : 'transparent',
+                  borderColor:(s.consumo as any).grupoTensao === g ? '#c9a227' : '#252836',
+                  color:(s.consumo as any).grupoTensao === g ? '#c9a227' : '#9095b0' }}>
+                Grupo {g} — {g==='B' ? 'Baixa Tensão (residencial/comercial)' : 'Média Tensão (industrial)'}
+              </button>
+            ))}
+          </div>
+
+          {/* Grupo A — tarifas específicas P/FP e histórico separado */}
+          {(s.consumo as any).grupoTensao === 'A' && (
+            <div style={{ background:'#13151f', border:'1px solid #f59e0b44', borderRadius:10, padding:16, marginBottom:12 }}>
+              <div style={{ fontSize:12, fontWeight:700, color:'#f59e0b', marginBottom:12, textTransform:'uppercase', letterSpacing:'.05em' }}>
+                ⚡ Grupo A — Tarifas Média Tensão (P/FP)
+              </div>
+              <div className="g2" style={{ rowGap:12, marginBottom:14 }}>
+                <Campo label="TE Ponta (R$/kWh)" tip="Tarifa de Energia no horário de Ponta (18h–21h). Usar SOMENTE a parcela TE, sem TUSD. Fator de compensação Fc = TE_P / TE_FP.">
+                  <input className="inp inp-num" type="number" step="0.0001" value={(s.consumo as any).tePontaKWh || ''} onChange={e => s.atualizarConsumo({ tePontaKWh: Number(e.target.value) } as any)} placeholder="Ex: 0.5432" />
+                </Campo>
+                <Campo label="TE Fora Ponta (R$/kWh)" tip="Tarifa de Energia fora de ponta. Sistema FV gera principalmente neste período (horário solar).">
+                  <input className="inp inp-num" type="number" step="0.0001" value={(s.consumo as any).teForaPontaKWh || ''} onChange={e => s.atualizarConsumo({ teForaPontaKWh: Number(e.target.value) } as any)} placeholder="Ex: 0.2345" />
+                </Campo>
+                <Campo label="TUSD Ponta (R$/kWh)" tip="Tarifa de Uso do Sistema de Distribuição — posto ponta.">
+                  <input className="inp inp-num" type="number" step="0.0001" value={(s.consumo as any).tusdPontaKWh || ''} onChange={e => s.atualizarConsumo({ tusdPontaKWh: Number(e.target.value) } as any)} placeholder="Ex: 0.3210" />
+                </Campo>
+                <Campo label="TUSD Fora Ponta (R$/kWh)" tip="Tarifa de Uso do Sistema de Distribuição — posto fora ponta.">
+                  <input className="inp inp-num" type="number" step="0.0001" value={(s.consumo as any).tusdForaPontaKWh || ''} onChange={e => s.atualizarConsumo({ tusdForaPontaKWh: Number(e.target.value) } as any)} placeholder="Ex: 0.1543" />
+                </Campo>
+                <Campo label="Tarifa Demanda (R$/kW)" tip="Tarifa da demanda contratada. Paga integralmente independente de uso. Solar raramente reduz demanda diretamente.">
+                  <input className="inp inp-num" type="number" step="0.01" value={(s.consumo as any).tarifaDemandaKW || ''} onChange={e => s.atualizarConsumo({ tarifaDemandaKW: Number(e.target.value) } as any)} placeholder="Ex: 35.00" />
+                </Campo>
+                <Campo label="Demanda contratada (kW)" tip="Potência máxima contratada com a distribuidora.">
+                  <input className="inp inp-num" type="number" step="1" value={(s.consumo as any).demandaContratadaKW || ''} onChange={e => s.atualizarConsumo({ demandaContratadaKW: Number(e.target.value) } as any)} placeholder="Ex: 100" />
+                </Campo>
+              </div>
+              {(s.consumo as any).tePontaKWh > 0 && (s.consumo as any).teForaPontaKWh > 0 && (
+                <div style={{ padding:'8px 12px', background:'#1a2510', border:'1px solid #22c55e44', borderRadius:8, fontSize:12, color:'#86efac' }}>
+                  Fc = TE_P/TE_FP = <strong>{((s.consumo as any).tePontaKWh/(s.consumo as any).teForaPontaKWh).toFixed(4)}</strong> — cada kWh gerado equivale a{' '}
+                  <strong>{((s.consumo as any).tePontaKWh/(s.consumo as any).teForaPontaKWh).toFixed(2)} kWh</strong> de energia ponta compensada.
+                  Geração necessária = Média_FP + {((s.consumo as any).tePontaKWh/(s.consumo as any).teForaPontaKWh).toFixed(2)} × Média_P
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="g2" style={{ marginBottom: 12 }}>
             <Campo label="Distribuidora" tip="Distribuidora de energia elétrica da conta do cliente. O logo aparece no cabeçalho da fatura.">
               <select className="inp" value={s.consumo.codigoDistribuidora} onChange={e => s.atualizarConsumo({ codigoDistribuidora: e.target.value })}>
@@ -1200,20 +1251,22 @@ function ComponentesRecomendados({ kit }: { kit: any }) {
 
   // Seções de cabo e capacidades de corrente em eletroduto, cabos 70°C, instalação B2
   // (Tabela 36 da NBR 5410 — condutores em eletroduto embutido em parede)
-  const SECOES_CA = [
-    { secao: 1.5,  imax: 15.5 },
-    { secao: 2.5,  imax: 21.0 },
-    { secao: 4.0,  imax: 28.0 },
-    { secao: 6.0,  imax: 36.0 },
-    { secao: 10.0, imax: 50.0 },
-    { secao: 16.0, imax: 66.0 },
-    { secao: 25.0, imax: 84.0 },
-  ];
-  const cableCA = SECOES_CA.find(s => s.imax >= icaProjeto) || SECOES_CA[SECOES_CA.length - 1];
-
-  // Disjuntor bipolar CA: próximo padrão acima da corrente de projeto
-  const DISJUNTORES = [10, 16, 20, 25, 32, 40, 50, 63, 80, 100];
-  const disjCA = DISJUNTORES.find(d => d >= icaProjeto) || DISJUNTORES[DISJUNTORES.length - 1];
+  // Cabo CA com correção de temperatura (NBR 5410 + curso slide 48-58)
+  const caboCAResult = (() => {
+    try {
+      const { calcularCaboCA } = require('@domain/dimensionamento/calcularCaboCA');
+      return calcularCaboCA({
+        corrMaxSaidaA: kit.corrMaxSaidaA || icaProjeto / 1.25,
+        tensaoSaidaV: kit.tensaoSaidaV || 220,
+        tipoLigacao: 'bifasica',
+        temperaturaAmbienteC: (kit as any).temperaturaInstalacaoC || 40,
+        comprimentoCaboCAm: (kit as any).comprimentoCaboCAm || 10,
+      });
+    } catch { return null; }
+  })();
+  const secaoCA = caboCAResult?.secaoMm2 ?? 2.5;
+  const disjCA  = caboCAResult?.disjuntorA ?? 25;
+  const quedaCA = caboCAResult?.quedaTensaoPct ?? 0;
 
   // DPS CA 275 V — classe por potência/risco
   // NBR IEC 62305-3: Class II 20 kA para residencial/comercial padrão
@@ -1298,9 +1351,9 @@ function ComponentesRecomendados({ kit }: { kit: any }) {
           />
           <Linha
             label="Cabo CA (fase, neutro, PE)"
-            valor={`${cableCA.secao} mm²`}
-            sub={`Suporta até ${cableCA.imax} A (eletroduto embutido)`}
-            destaque="3 condutores"
+            valor={`${secaoCA} mm²`}
+            sub={caboCAResult ? `Iz'=${caboCAResult.izCorrigidaA}A (FTA=${caboCAResult.fta}@${caboCAResult.temperaturaAmbienteC}°C) | ΔU=${caboCAResult.quedaTensaoPct.toFixed(2)}% ${caboCAResult.quedaTensaoOk ? '✓':'⚠️'}` : `Iproj=${icaProjeto.toFixed(1)}A`}
+            destaque="3 condutores (NBR 5410)"
           />
           <Linha
             label="Disjuntor bipolar CA"
@@ -1713,6 +1766,35 @@ function TabKit({ onPrev, onNext }: { onPrev:()=>void; onNext:()=>void }) {
           </div>
         </div>
       </div>
+      {/* ── Expansão de Usina Existente ── */}
+      <div className="card">
+        <div className="card-head">🔄 Expansão de Usina Existente (opcional)</div>
+        <div className="card-body">
+          <div className="g2" style={{ rowGap:14 }}>
+            <Campo label="Potência atual instalada (kWp)" tip="Preencher SOMENTE se o cliente já tem sistema solar e quer aumentar. Deixar 0 para instalação nova. Tipo de solicitação CEMIG: GD Existente COM Alteração de Potência (REN 1.000/2021).">
+              <input className="inp inp-num" type="number" min="0" step="0.1"
+                value={(s.kit as any).potenciaAtualKWp || ''}
+                onChange={e => s.atualizarKit({ potenciaAtualKWp: Number(e.target.value) } as any)}
+                placeholder="0 — instalação nova" />
+            </Campo>
+            <Campo label="Data do protocolo original" tip="Data do protocolo do sistema atual. Define o FioB da potência já instalada. A potência ADICIONAL receberá o FioB da data do protocolo novo — pode ter percentual diferente.">
+              <input className="inp" type="date"
+                value={(s.kit as any).dataProtocoloOriginal || ''}
+                onChange={e => s.atualizarKit({ dataProtocoloOriginal: e.target.value } as any)} />
+            </Campo>
+          </div>
+          {(s.kit as any).potenciaAtualKWp > 0 && (
+            <div style={{ marginTop:10, padding:'8px 12px', background:'#251f0a',
+              border:'1px solid #c9a22766', borderRadius:8, fontSize:12, color:'#fcd34d', lineHeight:1.6 }}>
+              ⚠️ <strong>Expansão detectada</strong> — potência adicional:{' '}
+              <strong>{((s.kit.potenciaModuloWp * s.kit.quantidade / 1000) - (s.kit as any).potenciaAtualKWp).toFixed(2)} kWp</strong>.{' '}
+              O formulário CEMIG usará tipo "GD Existente COM Alteração de Potência".
+              A potência adicional recebe FioB da data do NOVO protocolo.
+            </div>
+          )}
+        </div>
+      </div>
+
       <ComponentesRecomendados kit={s.kit} />
 
       {/* ── Dimensionamento de Bateria (opcional) ── */}
@@ -1785,6 +1867,18 @@ function TabKit({ onPrev, onNext }: { onPrev:()=>void; onNext:()=>void }) {
             <Campo label="Corrente máx. saída CA (A)"><input className="inp inp-num" type="number" step="0.1" value={s.kit.corrMaxSaidaA || ''} onChange={e => s.atualizarKit({ corrMaxSaidaA: Number(e.target.value) })} /></Campo>
             <Campo label="Número de MPPTs" hint="Rastreadores de ponto de máxima potência"><input className="inp inp-num" type="number" min="1" value={s.kit.numMppt} onChange={e => s.atualizarKit({ numMppt: Number(e.target.value) })} /></Campo>
             <Campo label="IP do gabinete" hint="Ex: IP65, IP67"><input className="inp" value={s.kit.ipGabinete} onChange={e => s.atualizarKit({ ipGabinete: e.target.value })} /></Campo>
+            <Campo label="Comprimento cabo CA (m)" tip="Distância do inversor ao quadro de distribuição (QDG) — necessário para calcular queda de tensão (NBR 5410). Considere o trajeto real pelo eletroduto.">
+              <input className="inp inp-num" type="number" min="1" max="500"
+                value={(s.kit as any).comprimentoCaboCAm || ''}
+                onChange={e => s.atualizarKit({ comprimentoCaboCAm: Number(e.target.value) } as any)}
+                placeholder="10" />
+            </Campo>
+            <Campo label="Temperatura máx. instalação (°C)" tip="Temperatura ambiente máxima no local de instalação do cabo CA. Afeta o fator de correção FTA (NBR 5410 Tabela 40). Telhados podem atingir 50–60°C no verão.">
+              <input className="inp inp-num" type="number" min="25" max="60"
+                value={(s.kit as any).temperaturaInstalacaoC || ''}
+                onChange={e => s.atualizarKit({ temperaturaInstalacaoC: Number(e.target.value) } as any)}
+                placeholder="40" />
+            </Campo>
           </div>
 
           {/* Tipo do inversor (extraído do datasheet) */}
