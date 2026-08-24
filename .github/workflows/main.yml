@@ -19,7 +19,7 @@ jobs:
         run: npm ci
 
       - name: Build + Empacotar Windows
-        run: npm run build:win
+        run: npm run dist:win
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
