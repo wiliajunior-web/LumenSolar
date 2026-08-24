@@ -675,3 +675,107 @@ describe('BANCO DE BATERIAS — Fórmulas slides 1016–1019', () => {
     }
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// BLOCO 13 — FDI (3 CRITÉRIOS — Pre_dimensionamento_FDI.xlsx)
+// ═══════════════════════════════════════════════════════════════════════════════
+import { calcularFDI } from './dimensionamento/calcularFDI';
+import { calcularAgrupamento } from './dimensionamento/calcularAgrupamento';
+
+const KIT_FDI = {
+  potenciaModuloWp: 540, quantidade: 14,
+  vocV: 49.4, vmpV: 40.7, iscA: 13.27,
+  potenciaInversorKW: 7.0,
+  faixaMpptMinV: 100, faixaMpptMaxV: 550, tensaoMaxEntradaV: 550,
+  corrMaxMpptA: 13.5, numMppt: 2,
+  numStrings: 2, modulosPorString: 7,
+};
+
+describe('FDI — 3 critérios Pre_dimensionamento_FDI.xlsx', () => {
+  it('[FDI-1] FDI = Pgen / Pinv = (14×0.540) / 7.0 = 1.08', () => {
+    const r = calcularFDI(KIT_FDI);
+    expect(r.fdi).toBeCloseTo((14*0.540)/7.0, 2);
+    expect(r.criterio1Ok).toBe(true);
+    expect(r.statusFDI).toBe('ideal');
+  });
+
+  it('[FDI-2] Pinv_min = Pgen / 1.35 | Pinv_max = Pgen / 0.90', () => {
+    const r = calcularFDI(KIT_FDI);
+    const pgen = 14*0.540;
+    expect(r.pinvMinKW).toBeCloseTo(pgen/1.35, 1);
+    expect(r.pinvMaxKW).toBeCloseTo(pgen/0.90, 1);
+  });
+
+  it('[FDI-3] N_serie_min = ROUNDUP(Vmppt_min×1.1/Vmp) = ROUNDUP(100×1.1/40.7)', () => {
+    const r = calcularFDI(KIT_FDI);
+    expect(r.nSerieMin).toBe(Math.ceil(100*1.1/40.7));
+  });
+
+  it('[FDI-4] N_serie_max = ROUNDDOWN(MIN(Vmppt_max/Vmp, Vmáx/Voc))', () => {
+    const r = calcularFDI(KIT_FDI);
+    expect(r.nSerieMax).toBe(Math.floor(Math.min(550/40.7, 550/49.4)));
+  });
+
+  it('[FDI-5] N_strings_max_MPPT = ROUNDDOWN(Imax_MPPT / Isc) = ROUNDDOWN(13.5/13.27)', () => {
+    const r = calcularFDI(KIT_FDI);
+    expect(r.nStringsMaxMppt).toBe(Math.floor(13.5/13.27));
+  });
+
+  it('[FDI-6] FDI < 0.90 → reprovado', () => {
+    const r = calcularFDI({ ...KIT_FDI, potenciaInversorKW: 20 });
+    expect(r.criterio1Ok).toBe(false);
+    expect(r.statusFDI).toBe('baixo');
+  });
+
+  it('[FDI-7] FDI > 1.35 → reprovado', () => {
+    const r = calcularFDI({ ...KIT_FDI, potenciaInversorKW: 3 });
+    expect(r.criterio1Ok).toBe(false);
+    expect(r.statusFDI).toBe('invalido');
+  });
+
+  it('[FDI-8] Critério de tensão: N_série fora da faixa → reprovado', () => {
+    const r = calcularFDI({ ...KIT_FDI, modulosPorString: 2 }); // muito baixo
+    expect(r.criterio2Ok).toBe(false);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// BLOCO 14 — AGRUPAMENTO DE UCs (Dimen. AB)
+// ═══════════════════════════════════════════════════════════════════════════════
+describe('AGRUPAMENTO — múltiplas UCs (Dimen. AB)', () => {
+  const UC1_HIST = new Array(12).fill(339);
+  const UC2_HIST = new Array(12).fill(561);
+  const UCS = [
+    { id:'UC 1', historico:UC1_HIST, tipoLigacao:'bifasica' as const, percentualCredito:37.7 },
+    { id:'UC 2', historico:UC2_HIST, tipoLigacao:'trifasica' as const, percentualCredito:62.3 },
+  ];
+
+  it('[AGR-1] consumoTotal = soma das médias das UCs', () => {
+    const r = calcularAgrupamento({ unidades:UCS, hspLocal:5.25, perdasSistema:0.23, potenciaModuloWp:540 });
+    expect(r.consumoTotalKWh).toBeCloseTo(339+561, 0);
+  });
+
+  it('[AGR-2] distribuição de créditos soma 100%', () => {
+    const r = calcularAgrupamento({ unidades:UCS, hspLocal:5.25, perdasSistema:0.23, potenciaModuloWp:540 });
+    expect(r.distribuicaoOk).toBe(true);
+    expect(r.totalCreditosDistribuidos).toBeCloseTo(100, 1);
+  });
+
+  it('[AGR-3] alerta quando soma ≠ 100%', () => {
+    const ucsBad = UCS.map((u,i)=>({...u, percentualCredito: i===0?50:40}));
+    const r = calcularAgrupamento({ unidades:ucsBad, hspLocal:5.25, perdasSistema:0.23, potenciaModuloWp:540 });
+    expect(r.distribuicaoOk).toBe(false);
+    expect(r.alertas.some(a=>a.includes('100%'))).toBe(true);
+  });
+
+  it('[AGR-4] sistema ≤75kWp → microgeracao', () => {
+    const r = calcularAgrupamento({ unidades:UCS, hspLocal:5.25, perdasSistema:0.23, potenciaModuloWp:540 });
+    expect(r.classificacao).toBe('microgeracao');
+  });
+
+  it('[AGR-5] créditos UC recebidos = geracao × percentual', () => {
+    const r = calcularAgrupamento({ unidades:UCS, hspLocal:5.25, perdasSistema:0.23, potenciaModuloWp:540 });
+    const uc1 = r.resultadosPorUC.find(u=>u.id==='UC 1')!;
+    expect(uc1.creditosRecebidosKWh).toBeCloseTo(r.geracaoMensalKWh * 0.377, 0);
+  });
+});

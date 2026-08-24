@@ -144,6 +144,9 @@ export const useProjetoStore = create<ProjetoState>((set, get) => ({
     tarifaRealKWhComICMS: 0,
     // Grupo A — Média Tensão
     grupoTensao: 'B' as 'B' | 'A',
+    agrupamentoAtivo: false,
+    unidadesConsumidoras: [] as Array<{id:string;historico:number[];tipoLigacao:string;percentualCredito:number}>,
+
     historicoFP: [] as number[],
     historicoP: [] as number[],
     tePontaKWh: 0,
@@ -172,7 +175,7 @@ export const useProjetoStore = create<ProjetoState>((set, get) => ({
     numStrings:1, modulosPorString:1,
     // Specs inversor
     faixaMpptMinV:0, faixaMpptMaxV:0, tensaoMaxEntradaV:0,
-    tensaoSaidaV:220, corrMaxSaidaA:0, numMppt:1,
+    tensaoSaidaV:220, corrMaxSaidaA:0, numMppt:1, corrMaxMpptA:0,
     ipGabinete:'IP65', fatorPotencia:'>0.99', thd:'<3%',
     percentualCompensacaoDesejado:1.0, motivoSuperdimensionamento:'',
     // Cabo CA e proteção (NBR 5410)

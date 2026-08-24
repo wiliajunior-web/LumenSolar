@@ -1515,11 +1515,92 @@ function ComponentesRecomendados({ kit }: { kit: any }) {
       </div>
 
       <div style={{ marginTop:14, padding:'8px 12px', background:'#0a0a0a', borderRadius:8, fontSize:11, color:'#444444', lineHeight:1.6 }}>
-        <strong style={{ color:'#6b6d82' }}>Notas:</strong> Cabo CA: seção mínima conforme Tabela 36 da NBR 5410 (eletroduto embutido, 70°C).
-        Cabo CC: NBR 16690 / IEC 60364-7-712 (cabo solar unipolar 90°C).
+        <strong style={{ color:'#6b6d82' }}>Notas:</strong> Cabo CA: Tabela 36 NBR 5410 (eletroduto embutido, 70°C) + FTA temperatura.
+        Cabo CC: NBR 16690 / IEC 60364-7-712 (cabo solar XLPE 90°C) + FTA.
         DPS CA: NBR IEC 62305-3 Classe II.
-        Sempre verifique com o memorial de cálculo e o responsável técnico da instalação.
       </div>
+
+      {/* ── FDI — 3 critérios ── */}
+      {kit.vocV > 0 && kit.faixaMpptMinV > 0 && kit.potenciaInversorKW > 0 && (() => {
+        try {
+          const { calcularFDI } = require('@domain/dimensionamento/calcularFDI');
+          const r = calcularFDI({
+            potenciaModuloWp: kit.potenciaModuloWp,
+            quantidade: kit.quantidade,
+            vocV: kit.vocV,
+            vmpV: (kit as any).vmppV || (kit as any).vmpV || kit.vocV * 0.85,
+            iscA: kit.iscA,
+            potenciaInversorKW: kit.potenciaInversorKW,
+            faixaMpptMinV: kit.faixaMpptMinV,
+            faixaMpptMaxV: kit.faixaMpptMaxV,
+            tensaoMaxEntradaV: kit.tensaoMaxEntradaV,
+            corrMaxMpptA: (kit as any).corrMaxMpptA || kit.corrMaxSaidaA || 99,
+            numMppt: kit.numMppt || 1,
+            numStrings: kit.numStrings || 1,
+            modulosPorString: kit.modulosPorString || 1,
+          });
+          const corStatus: Record<string,string> = {
+            ideal:'#22c55e', aceitavel:'#f59e0b', alto:'#f97316', baixo:'#f97316', invalido:'#ef4444',
+          };
+          return (
+            <div style={{ marginTop:16, padding:'14px 16px', background:'#0a0a0a',
+              border:`1px solid ${r.aprovado ? '#22c55e44' : '#ef444444'}`, borderRadius:10 }}>
+              <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:12 }}>
+                <span style={{ fontSize:12, fontWeight:800, color:'#c9a227', textTransform:'uppercase', letterSpacing:'.05em' }}>
+                  FDI — Fator de Dimensionamento do Inversor
+                </span>
+                <span style={{ fontSize:11, fontWeight:700, padding:'2px 10px', borderRadius:20,
+                  background: r.aprovado ? '#14321a' : '#3b0a0a',
+                  color: r.aprovado ? '#22c55e' : '#ef4444' }}>
+                  {r.aprovado ? '✓ APROVADO' : '✗ AJUSTAR'}
+                </span>
+              </div>
+              <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:10, marginBottom:10 }}>
+                {[
+                  {
+                    n:'① Potência', ok:r.criterio1Ok,
+                    val:`FDI = ${r.fdi.toFixed(3)}`,
+                    sub:`Pinv válido: ${r.pinvMinKW}–${r.pinvMaxKW} kW`,
+                    badge:r.statusFDI.toUpperCase(), cor:corStatus[r.statusFDI],
+                  },
+                  {
+                    n:'② Tensão', ok:r.criterio2Ok,
+                    val:`${r.nSerieCfg} mód/string`,
+                    sub:`Faixa: ${r.nSerieMin}–${r.nSerieMax} módulos`,
+                    badge:r.criterio2Ok?'OK':'AJUSTAR', cor:r.criterio2Ok?'#22c55e':'#ef4444',
+                  },
+                  {
+                    n:'③ Corrente', ok:r.criterio3Ok,
+                    val:`${r.stringsPerMppt} str/MPPT`,
+                    sub:`Máx: ${r.nStringsMaxMppt} strings por MPPT`,
+                    badge:r.criterio3Ok?'OK':'AJUSTAR', cor:r.criterio3Ok?'#22c55e':'#ef4444',
+                  },
+                ].map(({ n, ok, val, sub, badge, cor }) => (
+                  <div key={n} style={{ background:'#111', borderRadius:8, padding:'10px 12px',
+                    border:`1px solid ${ok?'#22c55e33':'#ef444433'}` }}>
+                    <div style={{ fontSize:10, color:'#888', marginBottom:4 }}>{n}</div>
+                    <div style={{ fontSize:14, fontWeight:800, color:'#f5f5f5' }}>{val}</div>
+                    <div style={{ fontSize:10, color:'#666', marginBottom:6 }}>{sub}</div>
+                    <span style={{ fontSize:10, fontWeight:700, padding:'1px 8px', borderRadius:10,
+                      background:`${cor}22`, color:cor }}>{badge}</span>
+                  </div>
+                ))}
+              </div>
+              {r.alertas.map((a, i) => (
+                <div key={i} style={{ padding:'5px 10px', background:'#3b0a0a', borderRadius:6,
+                  fontSize:11, color:'#fca5a5', marginBottom:4 }}>⚠️ {a}</div>
+              ))}
+              {r.sugestoes.map((sg, i) => (
+                <div key={i} style={{ padding:'5px 10px', background:'#1a2010', borderRadius:6,
+                  fontSize:11, color:'#86efac', marginBottom:4 }}>💡 {sg}</div>
+              ))}
+              <div style={{ fontSize:10, color:'#444', marginTop:6 }}>
+                Ref: Pre_dimensionamento_FDI.xlsx (Toolbox de Elite 2024) — overload 0,90–1,35 | N_série ROUNDUP(Vmppt_min×1,1/Vmp) | Ic ROUNDDOWN(Imax/Isc)
+              </div>
+            </div>
+          );
+        } catch { return null; }
+      })()}
     </div>
   );
 }
@@ -1997,6 +2078,7 @@ function TabKit({ onPrev, onNext }: { onPrev:()=>void; onNext:()=>void }) {
             <Campo label="Tensão máx. entrada CC (V)" tip="Tensão máxima de entrada do inversor. O sistema deve ser projetado para ficar abaixo desse valor."><input className="inp inp-num" type="number" value={s.kit.tensaoMaxEntradaV || ''} onChange={e => s.atualizarKit({ tensaoMaxEntradaV: Number(e.target.value) })} /></Campo>
             <Campo label="Corrente máx. saída CA (A)"><input className="inp inp-num" type="number" step="0.1" value={s.kit.corrMaxSaidaA || ''} onChange={e => s.atualizarKit({ corrMaxSaidaA: Number(e.target.value) })} /></Campo>
             <Campo label="Número de MPPTs" hint="Rastreadores de ponto de máxima potência"><input className="inp inp-num" type="number" min="1" value={s.kit.numMppt} onChange={e => s.atualizarKit({ numMppt: Number(e.target.value) })} /></Campo>
+            <Campo label="Imax por MPPT (A)" tip="Corrente máxima por entrada MPPT — datasheet do inversor. Critério 3 do FDI: N_strings × Isc ≤ Imax_MPPT. Planilha: Pre_dimensionamento_FDI.xlsx"><input className="inp inp-num" type="number" step="0.1" value={(s.kit as any).corrMaxMpptA || ''} onChange={e => s.atualizarKit({ corrMaxMpptA: Number(e.target.value) } as any)} placeholder="Ex: 13.5" /></Campo>
             <Campo label="IP do gabinete" hint="Ex: IP65, IP67"><input className="inp" value={s.kit.ipGabinete} onChange={e => s.atualizarKit({ ipGabinete: e.target.value })} /></Campo>
             <Campo label="Comprimento cabo CA (m)" tip="Distância do inversor ao quadro de distribuição (QDG) — necessário para calcular queda de tensão (NBR 5410). Considere o trajeto real pelo eletroduto.">
               <input className="inp inp-num" type="number" min="1" max="500"
@@ -2293,6 +2375,25 @@ function TabResultado({ onPrev }: { onPrev:()=>void }) {
     window.open(url, '_blank');
   }
 
+  async function gerarCronograma() {
+    setGerando(true);
+    try {
+      const { gerarCronograma: gc } = await import('@domain/excel/gerarCronograma');
+      const d = buildData();
+      gc({
+        nomeCliente: d.cliente?.nome || 'Cliente',
+        enderecoInstalacao: [d.cliente?.endereco, d.cliente?.cidade, d.cliente?.uf].filter(Boolean).join(', '),
+        dataInicio: new Date().toISOString().split('T')[0],
+        potenciaKWp: d.dimensionamento?.potenciaInstaladaRealKWp || d.kit?.potenciaModuloWp * d.kit?.quantidade / 1000 || 0,
+        numModulos: d.kit?.quantidade || 0,
+        empresa: d.empresa?.razaoSocial || 'Lumen Soluções Ltda',
+        responsavelTecnico: d.empresa?.responsavelTecnico || '',
+        tipoSistema: (d.dimensionamento?.potenciaInstaladaRealKWp || 0) > 75 ? 'mini' : 'micro',
+      });
+    } catch(e) { alert('Erro ao gerar cronograma: ' + (e instanceof Error ? e.message : String(e)));
+    } finally { setGerando(false); }
+  }
+
   async function gerarFormularioCemig() {
     setGerando(true);
     try {
@@ -2395,6 +2496,7 @@ function TabResultado({ onPrev }: { onPrev:()=>void }) {
               <Btn onClick={abrirEmail}   variant="ghost">📧 E-mail</Btn>
               <Btn onClick={abrirBelenus}  variant="ghost">🛒 Belenus</Btn>
               <Btn onClick={gerarFormularioCemig} disabled={gerando} variant="ghost">📋 Form. CEMIG</Btn>
+              <Btn onClick={gerarCronograma} disabled={gerando} variant="ghost">📅 Cronograma</Btn>
               <Btn onClick={abrirSolfacil}  variant="ghost">💳 Solfácil</Btn>
               <Btn onClick={abrirGoogleMaps} variant="ghost">🗺️ Maps</Btn>
               <Btn onClick={abrirAldoSolar}  variant="ghost">☀️ Aldo Solar</Btn>
