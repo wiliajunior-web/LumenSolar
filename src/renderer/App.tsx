@@ -11,25 +11,26 @@ import { PropostaPDF } from '@domain/proposta/PropostaPDF';
 
 // ─── Sistema de Design ───────────────────────────────────────────────────────
 const D = {
-  // 60-30-10: #0f1117 (60%) → #1a1d2b (30%) → #c9a227 (10%)
+  // Paleta Lumen Soluções — preto real + branco limpo + ouro
+  // Ref: logo oficial (ChatGPT_Image_7_de_jul__de_2026__10_57_52.png)
   //
-  // 60% — fundo dominante (base da tela, onde os olhos descansam)
-  bg:         '#0f1117',
-  // 30% — secundária (cards, sidebar, painéis — contraste suave)
-  card:       '#1a1d2b',
-  sidebar:    '#13151f',
-  header:     '#13151f',
-  // 10% — acento (ouro: CTAs, destaques, elementos ativos)
+  // 60% — fundo preto real (sem tinta azul)
+  bg:         '#0d0d0f',
+  // 30% — cards e painéis (cinza quente escuro, sem azul)
+  card:       '#181818',
+  sidebar:    '#111111',
+  header:     '#111111',
+  // 10% — ouro Lumen (igual ao logo)
   gold:       '#c9a227',
   goldLight:  '#e8c547',
-  goldMuted:  '#c9a22722',
-  // Texto
-  text:       '#e8eaf8',   // quase branco — alta legibilidade no dark
-  textSub:    '#9095b0',   // secundário
-  textMuted:  '#5a5d70',   // placeholders, hints
+  goldMuted:  '#c9a22720',
+  // Texto — branco limpo (sem tinta azul que apaga as letras)
+  text:       '#f5f5f5',   // branco quente — legível, igual ao "LUMEN" do logo
+  textSub:    '#999999',   // cinza médio neutro
+  textMuted:  '#555555',   // placeholders, hints
   // Bordas
-  border:     '#252836',   // sutil, não distrai
-  borderLight:'#1e2135',
+  border:     '#252525',   // sutil, não distrai
+  borderLight:'#1e1e1e',
   // Semânticas
   success:    '#22c55e',
   danger:     '#ef4444',
@@ -50,11 +51,11 @@ input[type=number] { font-variant-numeric: tabular-nums; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: ${D.border}; border-radius: 3px; }
 
-/* Input */
+/* Input — fundo escuro (tema dark), texto branco limpo */
 .inp {
   width: 100%; padding: 8px 10px;
   border: 1.5px solid ${D.border}; border-radius: 7px;
-  font-size: 13px; color: ${D.text}; background: #fff;
+  font-size: 13px; color: ${D.text}; background: #0a0a0a;
   transition: border-color .15s, box-shadow .15s;
   outline: none;
 }
@@ -313,7 +314,7 @@ const Sidebar = ({ aba, setAba, logo, nomeEmpresa, onEmpresa, stepStatus }: {
               </div>
               <span style={{
                 fontSize: 12, fontWeight: current ? 700 : 500,
-                color: current ? '#fff' : done ? D.gold : '#5a5d72',
+                color: current ? '#fff' : done ? D.gold : '#666666',
                 transition: 'color .15s',
               }}>{step.label}</span>
             </div>
@@ -324,7 +325,7 @@ const Sidebar = ({ aba, setAba, logo, nomeEmpresa, onEmpresa, stepStatus }: {
       {/* Empresa button */}
       <div style={{ padding: '16px 20px', borderTop: `1px solid #1e2030` }}>
         <button onClick={onEmpresa} style={{
-          width: '100%', padding: '8px 12px', background: '#1a1c28',
+          width: '100%', padding: '8px 12px', background: '#1a1a1a',
           border: `1px solid #2a2d3e`, borderRadius: 8, color: '#8a8d9e',
           fontSize: 12, fontWeight: 600, cursor: 'pointer', letterSpacing: '.03em',
           display: 'flex', alignItems: 'center', gap: 8,
@@ -705,7 +706,7 @@ function TabEmpresa({ onClose }: { onClose: () => void }) {
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               {empresa.fotoCapa
                 ? <img src={empresa.fotoCapa} style={{ width: 72, height: 52, objectFit: 'cover', borderRadius: 6, border: `1px solid ${D.border}` }} />
-                : <div style={{ width: 72, height: 52, background: '#0d1117', borderRadius: 6, border: `1px solid ${D.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: D.gold }}>CAPA</div>
+                : <div style={{ width: 72, height: 52, background: '#0d0d0f', borderRadius: 6, border: `1px solid ${D.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: D.gold }}>CAPA</div>
               }
               <div>
                 <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', background: D.gold, color: D.header, borderRadius: 6, cursor: 'pointer', fontSize: 11, fontWeight: 700 }}>
@@ -723,7 +724,7 @@ function TabEmpresa({ onClose }: { onClose: () => void }) {
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               {empresa.fotoApoio
                 ? <img src={empresa.fotoApoio} style={{ width: 72, height: 52, objectFit: 'cover', borderRadius: 6, border: `1px solid ${D.border}` }} />
-                : <div style={{ width: 72, height: 52, background: '#0d1117', borderRadius: 6, border: `1px solid ${D.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: D.gold }}>BANNER</div>
+                : <div style={{ width: 72, height: 52, background: '#0d0d0f', borderRadius: 6, border: `1px solid ${D.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: D.gold }}>BANNER</div>
               }
               <div>
                 <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', background: D.gold, color: D.header, borderRadius: 6, cursor: 'pointer', fontSize: 11, fontWeight: 700 }}>
@@ -862,14 +863,14 @@ function TabConsumo({ onPrev, onNext }: { onPrev:()=>void; onNext:()=>void }) {
           </div>
           {/* Toggle Grupo B / A */}
           <div style={{ marginBottom:12, display:'flex', gap:8, alignItems:'center' }}>
-            <span style={{ fontSize:11, fontWeight:700, color:'#9095b0', textTransform:'uppercase', letterSpacing:'.05em' }}>Grupo de tensão:</span>
+            <span style={{ fontSize:11, fontWeight:700, color:'#999999', textTransform:'uppercase', letterSpacing:'.05em' }}>Grupo de tensão:</span>
             {(['B','A'] as const).map(g => (
               <button key={g} onClick={() => s.atualizarConsumo({ grupoTensao: g } as any)}
                 style={{ padding:'4px 16px', borderRadius:20, fontSize:12, fontWeight:700,
                   cursor:'pointer', border:'1.5px solid',
                   background:(s.consumo as any).grupoTensao === g ? '#c9a22722' : 'transparent',
-                  borderColor:(s.consumo as any).grupoTensao === g ? '#c9a227' : '#252836',
-                  color:(s.consumo as any).grupoTensao === g ? '#c9a227' : '#9095b0' }}>
+                  borderColor:(s.consumo as any).grupoTensao === g ? '#c9a227' : '#252525',
+                  color:(s.consumo as any).grupoTensao === g ? '#c9a227' : '#999999' }}>
                 Grupo {g} — {g==='B' ? 'Baixa Tensão (residencial/comercial)' : 'Média Tensão (industrial)'}
               </button>
             ))}
@@ -877,7 +878,7 @@ function TabConsumo({ onPrev, onNext }: { onPrev:()=>void; onNext:()=>void }) {
 
           {/* Grupo A — tarifas específicas P/FP e histórico separado */}
           {(s.consumo as any).grupoTensao === 'A' && (
-            <div style={{ background:'#13151f', border:'1px solid #f59e0b44', borderRadius:10, padding:16, marginBottom:12 }}>
+            <div style={{ background:'#111111', border:'1px solid #f59e0b44', borderRadius:10, padding:16, marginBottom:12 }}>
               <div style={{ fontSize:12, fontWeight:700, color:'#f59e0b', marginBottom:12, textTransform:'uppercase', letterSpacing:'.05em' }}>
                 ⚡ Grupo A — Tarifas Média Tensão (P/FP)
               </div>
@@ -933,7 +934,7 @@ function TabConsumo({ onPrev, onNext }: { onPrev:()=>void; onNext:()=>void }) {
             >
               <div style={{ display:'flex', gap:8 }}>
                 <input className="inp inp-num" type="number" step="0.00001" value={s.consumo.tarifaRealKWhComICMS || ''} onChange={e => s.atualizarConsumo({ tarifaRealKWhComICMS: Number(e.target.value) })} placeholder="Ex: 1.18272801" style={{ flex:1 }} />
-                <button onClick={() => window.open('https://www.aneel.gov.br/tarifas', '_blank')} style={{ padding:'6px 12px', borderRadius:8, border:'1px solid #2a2d3e', background:'#1a1c28', color:'#8a8d9e', fontSize:12, fontWeight:600, cursor:'pointer', whiteSpace:'nowrap' }} title="Consultar tarifas vigentes no portal ANEEL">⚡ ANEEL</button>
+                <button onClick={() => window.open('https://www.aneel.gov.br/tarifas', '_blank')} style={{ padding:'6px 12px', borderRadius:8, border:'1px solid #2a2d3e', background:'#1a1a1a', color:'#8a8d9e', fontSize:12, fontWeight:600, cursor:'pointer', whiteSpace:'nowrap' }} title="Consultar tarifas vigentes no portal ANEEL">⚡ ANEEL</button>
               </div>
             </Campo>
             <Campo label="CIP / Iluminação pública (R$/mês)" hint="Linha 'Contrib. Ilum. Publica Municipal'" tip="Contribuição municipal de iluminação pública. Na conta CEMIG aparece como 'Contrib. Ilum. Publica Municipal'. Persiste após instalação solar.">
@@ -1126,13 +1127,13 @@ function StrategiaKwp({ mediaKWh, uf, s }: { mediaKWh: number; uf: string; s: an
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 16 }}>
         <span style={{ fontSize: 11, color: '#8a8d9e', fontWeight: 700, letterSpacing: '.05em', textTransform: 'uppercase' }}>Dimensionamento mínimo</span>
         <span style={{ color: D.gold, fontWeight: 900, fontSize: 22, fontVariantNumeric: 'tabular-nums' }}>{fmtNum(kWpMinimo, 2)} kWp</span>
-        <span style={{ color: '#5a5d72', fontSize: 12 }}>para {fmtNum(mediaKWh,0)} kWh/mês em {uf}</span>
+        <span style={{ color: '#666666', fontSize: 12 }}>para {fmtNum(mediaKWh,0)} kWh/mês em {uf}</span>
         <Tip text={`Fórmula IEC 61724-1: ${fmtNum(mediaKWh,0)} kWh ÷ (${fmtNum(hsp,1)} h/dia × 30,42 dias × 80% eficiência) = ${fmtNum(kWpMinimo,2)} kWp`} />
       </div>
 
       {/* Seletor de estratégia */}
       <div style={{ marginBottom: 12 }}>
-        <div style={{ fontSize: 10, color: '#5a5d72', fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', marginBottom: 8 }}>
+        <div style={{ fontSize: 10, color: '#666666', fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', marginBottom: 8 }}>
           Estratégia — quanto gerar acima do consumo?
         </div>
         <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', marginBottom: 10 }}>
@@ -1145,8 +1146,8 @@ function StrategiaKwp({ mediaKWh, uf, s }: { mediaKWh: number; uf: string; s: an
                 style={{
                   padding: '7px 14px', borderRadius: 8, border: 'none', cursor: 'pointer', fontWeight: 700,
                   fontSize: 13, lineHeight: 1, transition: 'all .15s',
-                  background: ativa ? e.cor : '#1a1c28',
-                  color: ativa ? '#fff' : '#5a5d72',
+                  background: ativa ? e.cor : '#1a1a1a',
+                  color: ativa ? '#fff' : '#666666',
                   outline: ativa ? `2px solid ${e.cor}66` : 'none',
                 }}
               >
@@ -1160,7 +1161,7 @@ function StrategiaKwp({ mediaKWh, uf, s }: { mediaKWh: number; uf: string; s: an
             style={{
               padding: '7px 14px', borderRadius: 8, border: 'none', cursor: 'pointer', fontWeight: 700,
               fontSize: 13, lineHeight: 1, transition: 'all .15s',
-              background: isLivre ? '#475569' : '#1a1c28', color: isLivre ? '#fff' : '#5a5d72',
+              background: isLivre ? '#444444' : '#1a1a1a', color: isLivre ? '#fff' : '#666666',
             }}
           >
             Livre
@@ -1181,14 +1182,14 @@ function StrategiaKwp({ mediaKWh, uf, s }: { mediaKWh: number; uf: string; s: an
         )}
 
         {/* Indicador do alvo */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', background: '#12141e', borderRadius: 8, marginTop: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', background: '#141414', borderRadius: 8, marginTop: 10 }}>
           <div>
-            <span style={{ fontSize: 10, color: '#5a5d72', display: 'block', marginBottom: 2 }}>Alvo com essa estratégia</span>
+            <span style={{ fontSize: 10, color: '#666666', display: 'block', marginBottom: 2 }}>Alvo com essa estratégia</span>
             <span style={{ fontSize: 18, fontWeight: 900, color: estratAtiva?.cor ?? '#94a3b8', fontVariantNumeric: 'tabular-nums' }}>{fmtNum(kWpAlvo, 2)} kWp</span>
           </div>
           {perc > 1.005 && (
             <div style={{ borderLeft: `1px solid #2a2d3e`, paddingLeft: 12 }}>
-              <span style={{ fontSize: 10, color: '#5a5d72', display: 'block', marginBottom: 2 }}>Reserva de energia</span>
+              <span style={{ fontSize: 10, color: '#666666', display: 'block', marginBottom: 2 }}>Reserva de energia</span>
               <span style={{ fontSize: 14, fontWeight: 700, color: '#94a3b8' }}>+{fmtNum((perc-1)*100,0)}% → {fmtNum(mediaKWh*(perc-1),0)} kWh/mês extras</span>
             </div>
           )}
@@ -1197,11 +1198,11 @@ function StrategiaKwp({ mediaKWh, uf, s }: { mediaKWh: number; uf: string; s: an
 
       {/* Motivo */}
       <div style={{ marginBottom: 14 }}>
-        <div style={{ fontSize: 10, color: '#5a5d72', fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', marginBottom: 6 }}>
+        <div style={{ fontSize: 10, color: '#666666', fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', marginBottom: 6 }}>
           Motivo (aparece na proposta)
         </div>
         <select
-          style={{ width: '100%', padding: '7px 10px', background: '#1a1c28', border: `1px solid #2a2d3e`, borderRadius: 7, color: '#d0d0d8', fontSize: 12 }}
+          style={{ width: '100%', padding: '7px 10px', background: '#1a1a1a', border: `1px solid #2a2d3e`, borderRadius: 7, color: '#d0d0d8', fontSize: 12 }}
           value={s.kit.motivoSuperdimensionamento}
           onChange={e => s.atualizarKit({ motivoSuperdimensionamento: e.target.value })}
         >
@@ -1210,16 +1211,16 @@ function StrategiaKwp({ mediaKWh, uf, s }: { mediaKWh: number; uf: string; s: an
       </div>
 
       {/* Sugestões de kit */}
-      <div style={{ fontSize: 10, color: '#5a5d72', fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', marginBottom: 7 }}>
+      <div style={{ fontSize: 10, color: '#666666', fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', marginBottom: 7 }}>
         Sugestões de kit — clique para preencher
       </div>
       <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
         {sugestoes.map(sg => (
           <div key={sg.wp}
             onClick={() => s.atualizarKit({ potenciaModuloWp: sg.wp, quantidade: sg.mod })}
-            style={{ background: '#12141e', border: `1px solid ${sg.pct >= Math.round(perc*100)-5 && sg.pct <= Math.round(perc*100)+10 ? D.gold+'44' : '#1e2030'}`, borderRadius: 9, padding: '9px 13px', cursor: 'pointer', minWidth: 95, transition: 'border-color .15s' }}
+            style={{ background: '#141414', border: `1px solid ${sg.pct >= Math.round(perc*100)-5 && sg.pct <= Math.round(perc*100)+10 ? D.gold+'44' : '#1e2030'}`, borderRadius: 9, padding: '9px 13px', cursor: 'pointer', minWidth: 95, transition: 'border-color .15s' }}
           >
-            <div style={{ fontSize: 10, color: '#5a5d72', marginBottom: 2 }}>{sg.wp} Wp/módulo</div>
+            <div style={{ fontSize: 10, color: '#666666', marginBottom: 2 }}>{sg.wp} Wp/módulo</div>
             <div style={{ fontSize: 14, fontWeight: 800, color: '#e0e0e8', fontVariantNumeric: 'tabular-nums' }}>{sg.mod} mod.</div>
             <div style={{ fontSize: 11, fontWeight: 700, color: D.gold }}>{fmtNum(sg.pot, 2)} kWp</div>
             <div style={{ fontSize: 10, color: sg.pct >= 100 ? '#16a34a' : '#ef4444' }}>
@@ -1329,26 +1330,26 @@ function ComponentesRecomendados({ kit }: { kit: any }) {
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'9px 0' }}>
           <div style={{ flex:1, minWidth:0 }}>
             <div style={{ display:'flex', alignItems:'center', gap:6 }}>
-              <div style={{ fontSize:13, color:'#c0c4e0', fontWeight:600 }}>{label}</div>
+              <div style={{ fontSize:13, color:'#d0d0d0', fontWeight:600 }}>{label}</div>
               {temRastreio && (
                 <button onClick={() => setLinhaHover(linhaHover===id?null:id)}
-                  style={{ background:'none', border:'none', cursor:'pointer', color: linhaHover===id ? '#c9a227' : '#4a4d6a',
+                  style={{ background:'none', border:'none', cursor:'pointer', color: linhaHover===id ? '#c9a227' : '#444444',
                     fontSize:11, padding:'0 2px', lineHeight:1, transition:'color .15s' }}
                   title="Ver norma e fórmula">📐</button>
               )}
             </div>
-            {sub && <div style={{ fontSize:11, color:'#5a5d7a', marginTop:2 }}>{sub}</div>}
+            {sub && <div style={{ fontSize:11, color:'#555555', marginTop:2 }}>{sub}</div>}
           </div>
           <div style={{ textAlign:'right', flexShrink:0, marginLeft:12 }}>
-            <div style={{ fontSize:15, fontWeight:800, color:'#e8eaf8', fontVariantNumeric:'tabular-nums' }}>{valor}</div>
+            <div style={{ fontSize:15, fontWeight:800, color:'#f5f5f5', fontVariantNumeric:'tabular-nums' }}>{valor}</div>
             {destaque && <Tag cor="#c9a227">{destaque}</Tag>}
           </div>
         </div>
         {linhaHover===id && temRastreio && (
-          <div style={{ background:'#0a0c14', border:'1px solid #c9a22744', borderRadius:8, padding:'10px 14px', marginBottom:8, fontSize:11 }}>
+          <div style={{ background:'#0a0a0a', border:'1px solid #c9a22744', borderRadius:8, padding:'10px 14px', marginBottom:8, fontSize:11 }}>
             {norma  && <div style={{ color:'#86efac', marginBottom:4 }}>📋 <strong>Norma:</strong> {norma}</div>}
             {slide  && <div style={{ color:'#93c5fd', marginBottom:4 }}>📖 <strong>Referência:</strong> {slide}</div>}
-            {formula && <div style={{ color:'#fcd34d', fontFamily:'monospace', background:'#1a1d2b', padding:'4px 8px', borderRadius:4 }}>∑ {formula}</div>}
+            {formula && <div style={{ color:'#fcd34d', fontFamily:'monospace', background:'#181818', padding:'4px 8px', borderRadius:4 }}>∑ {formula}</div>}
           </div>
         )}
       </div>
@@ -1358,7 +1359,7 @@ function ComponentesRecomendados({ kit }: { kit: any }) {
   if (naoPreenchido) {
     return (
       <div style={{ background:'#0d0f1a', border:`1px dashed #2a2d3e`, borderRadius:12, padding:'20px 24px', marginBottom:18, textAlign:'center' }}>
-        <div style={{ fontSize:14, color:'#4a4d6a' }}>⚡ Preencha a potência do inversor para ver os componentes recomendados</div>
+        <div style={{ fontSize:14, color:'#444444' }}>⚡ Preencha a potência do inversor para ver os componentes recomendados</div>
       </div>
     );
   }
@@ -1368,8 +1369,8 @@ function ComponentesRecomendados({ kit }: { kit: any }) {
       <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:16 }}>
         <span style={{ fontSize:16 }}>⚡</span>
         <div>
-          <div style={{ fontSize:13, fontWeight:800, color:'#e8eaf8' }}>Componentes Recomendados — NBR 5410 / NBR 16690</div>
-          <div style={{ fontSize:11, color:'#5a5d7a' }}>Calculado automaticamente para {potCA_kW} kW CA / {tensaoCA} V</div>
+          <div style={{ fontSize:13, fontWeight:800, color:'#f5f5f5' }}>Componentes Recomendados — NBR 5410 / NBR 16690</div>
+          <div style={{ fontSize:11, color:'#555555' }}>Calculado automaticamente para {potCA_kW} kW CA / {tensaoCA} V</div>
         </div>
       </div>
 
@@ -1506,14 +1507,14 @@ function ComponentesRecomendados({ kit }: { kit: any }) {
               />
             )}
           </>) : (
-            <div style={{ fontSize:13, color:'#4a4d6a', paddingTop:12 }}>
+            <div style={{ fontSize:13, color:'#444444', paddingTop:12 }}>
               Preencha Isc e nº de strings para ver o dimensionamento CC
             </div>
           )}
         </div>
       </div>
 
-      <div style={{ marginTop:14, padding:'8px 12px', background:'#0a0c14', borderRadius:8, fontSize:11, color:'#4a4d6a', lineHeight:1.6 }}>
+      <div style={{ marginTop:14, padding:'8px 12px', background:'#0a0a0a', borderRadius:8, fontSize:11, color:'#444444', lineHeight:1.6 }}>
         <strong style={{ color:'#6b6d82' }}>Notas:</strong> Cabo CA: seção mínima conforme Tabela 36 da NBR 5410 (eletroduto embutido, 70°C).
         Cabo CC: NBR 16690 / IEC 60364-7-712 (cabo solar unipolar 90°C).
         DPS CA: NBR IEC 62305-3 Classe II.
@@ -1720,13 +1721,13 @@ function BuscadorCoordenadas({ endereco, cidade, uf, onEncontrado }: {
     <div style={{ gridColumn:'1/-1', display:'flex', alignItems:'center', gap:10, padding:'8px 0' }}>
       <button onClick={buscar} disabled={estado==='buscando'}
         style={{ padding:'6px 16px', borderRadius:8, border:`1px solid #2a2d3e`,
-          background: estado==='ok' ? '#166534' : '#1a1c28',
+          background: estado==='ok' ? '#166534' : '#1a1a1a',
           color: estado==='ok' ? '#86efac' : estado==='erro' ? '#fca5a5' : '#8a8d9e',
           fontSize:12, fontWeight:600, cursor:'pointer', whiteSpace:'nowrap' }}>
         {estado==='buscando' ? '🔍 Buscando...' : '🗺️ Buscar coordenadas UTM'}
       </button>
       {msg && <span style={{ fontSize:12, color: estado==='erro' ? '#fca5a5' : '#86efac' }}>{msg}</span>}
-      <span style={{ fontSize:11, color:'#4a4d6a' }}>Via OpenStreetMap — gratuito, sem API key</span>
+      <span style={{ fontSize:11, color:'#444444' }}>Via OpenStreetMap — gratuito, sem API key</span>
     </div>
   );
 }
@@ -1752,7 +1753,7 @@ function BadgeStatus({ status, onChange }: { status: StatusProposta; onChange: (
         {label} ▾
       </button>
       {open && (
-        <div style={{ position:'absolute', top:'100%', left:0, zIndex:100, background:'#1a1c28',
+        <div style={{ position:'absolute', top:'100%', left:0, zIndex:100, background:'#1a1a1a',
           border:`1px solid #2a2d3e`, borderRadius:8, padding:6, minWidth:160, marginTop:4 }}>
           {(Object.entries(STATUS_LABELS) as [StatusProposta,{label:string;cor:string}][]).map(([k,v]) => (
             <div key={k} onClick={e => { e.stopPropagation(); onChange(k); setOpen(false); }}
@@ -1942,7 +1943,7 @@ function TabKit({ onPrev, onNext }: { onPrev:()=>void; onNext:()=>void }) {
                 { label:'Controlador de carga', valor:`≥ ${corrCtrl} A`, sub:`Ic = 1.25 × Isc × ${s.kit.numStrings||1} strings` },
                 { label:`Autonomia (${tipoSist==='backup_hybrid'?'horas':'dias'})`, valor:`${autonomia}${tipoSist==='backup_hybrid'?'h':'d'}`, sub:`${tipoSist==='backup_hybrid'?'sem rede elétrica':'sem geração solar'}` },
               ].map(({ label, valor, sub }) => (
-                <div key={label} style={{ background:'#0a0c14', borderRadius:8, padding:'10px 12px' }}>
+                <div key={label} style={{ background:'#0a0a0a', borderRadius:8, padding:'10px 12px' }}>
                   <div style={{ fontSize:10, color:D.textMuted, marginBottom:4 }}>{label}</div>
                   <div style={{ fontSize:15, fontWeight:800, color:D.text }}>{valor}</div>
                   <div style={{ fontSize:10, color:D.textMuted }}>{sub}</div>
@@ -2027,7 +2028,7 @@ function TabKit({ onPrev, onNext }: { onPrev:()=>void; onNext:()=>void }) {
 
           {/* Recomendação do fabricante (extraída do datasheet) */}
           {(s.kit as any).recomendacaoFabricante && (
-            <div style={{ marginTop:10, padding:'10px 14px', background:'#0d1117',
+            <div style={{ marginTop:10, padding:'10px 14px', background:'#0d0d0f',
               border:'1px solid #c9a22755', borderRadius:8 }}>
               <div style={{ fontSize:10, fontWeight:700, color:'#c9a227', marginBottom:5,
                 textTransform:'uppercase', letterSpacing:'.06em' }}>
@@ -2099,8 +2100,8 @@ function TabPreco({ onPrev, onCalc }: { onPrev:()=>void; onCalc:()=>void }) {
             <div style={{ fontSize: 26, fontWeight: 900, color: D.gold, fontVariantNumeric: 'tabular-nums' }}>{fmtBRL(precoVenda)}</div>
           </div>
           <div style={{ textAlign: 'right' }}>
-            <div style={{ fontSize: 12, color: '#5a5d72' }}>Impostos: <span style={{ color: '#8a8d9e' }}>{fmtBRL(imposto)}</span></div>
-            <div style={{ fontSize: 12, color: '#5a5d72' }}>Lucro: <span style={{ color: '#4ade80' }}>{fmtBRL(lucro)}</span></div>
+            <div style={{ fontSize: 12, color: '#666666' }}>Impostos: <span style={{ color: '#8a8d9e' }}>{fmtBRL(imposto)}</span></div>
+            <div style={{ fontSize: 12, color: '#666666' }}>Lucro: <span style={{ color: '#4ade80' }}>{fmtBRL(lucro)}</span></div>
           </div>
         </div>
       )}
