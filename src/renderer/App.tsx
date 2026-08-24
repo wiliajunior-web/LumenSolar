@@ -1281,14 +1281,31 @@ function ComponentesRecomendados({ kit }: { kit: any }) {
   // Fator de correção CC: 1.25 (NBR 16690 / IEC 60364-7-712)
   const iccProjeto = iccTotal * 1.25;
 
-  // Seções para cabo CC solar (ABNT NBR 16690, cabo unipolar 90°C, ex: cabo solar PV1-F)
+  // Seções para cabo CC solar (NBR 16690 Tab. 5 — cabo solar XLPE 90°C, unipolar, PV1-F)
+  // FTA XLPE 90°C (NBR 16612 Tab. C.2 / IEC 60364-5-52):
+  //   30°C=1.00 | 40°C=0.91 | 50°C=0.82 | 60°C=0.71 | 70°C=0.58 | 80°C=0.41
+  const TABELA_FTA_XLPE90 = [[30,1.00],[40,0.91],[50,0.82],[60,0.71],[70,0.58],[80,0.41]] as const;
+  const tempTelhado = (kit as any).temperaturaInstalacaoC || 40; // reutiliza campo do cabo CA
+  const ftaCC = (() => {
+    const t = Math.min(80, Math.max(30, tempTelhado));
+    for (let i = 0; i < TABELA_FTA_XLPE90.length - 1; i++) {
+      if (t >= TABELA_FTA_XLPE90[i][0] && t <= TABELA_FTA_XLPE90[i+1][0]) {
+        const r = (t - TABELA_FTA_XLPE90[i][0]) / (TABELA_FTA_XLPE90[i+1][0] - TABELA_FTA_XLPE90[i][0]);
+        return parseFloat((TABELA_FTA_XLPE90[i][1] + r * (TABELA_FTA_XLPE90[i+1][1] - TABELA_FTA_XLPE90[i][1])).toFixed(3));
+      }
+    }
+    return TABELA_FTA_XLPE90[TABELA_FTA_XLPE90.length-1][1];
+  })();
+  // Iz_req_CC = iccProjeto / ftaCC (corrente mínima sem correção para o cabo CC)
+  const iccProjetoComFTA = iccProjeto / ftaCC;
   const SECOES_CC = [
     { secao: 4.0,  imax: 32.0 },
     { secao: 6.0,  imax: 41.0 },
     { secao: 10.0, imax: 57.0 },
     { secao: 16.0, imax: 76.0 },
   ];
-  const cableCC = SECOES_CC.find(s => s.imax >= iccProjeto) || SECOES_CC[SECOES_CC.length - 1];
+  const cableCC = SECOES_CC.find(s => s.imax >= iccProjetoComFTA) || SECOES_CC[SECOES_CC.length - 1];
+  const izCorrCC = parseFloat((cableCC.imax * ftaCC).toFixed(1));
 
   // DPS CC (entre strings e inversor)
   const dpsCC_kA = isc > 0 ? (isc <= 12 ? 5 : 10) : 0;
@@ -1302,18 +1319,41 @@ function ComponentesRecomendados({ kit }: { kit: any }) {
     </span>
   );
 
-  const Linha = ({ label, valor, sub, destaque }: { label: string; valor: string; sub?: string; destaque?: string }) => (
-    <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'9px 0', borderBottom:`1px solid #1a1d2e` }}>
-      <div>
-        <div style={{ fontSize:13, color:'#c0c4e0', fontWeight:600 }}>{label}</div>
-        {sub && <div style={{ fontSize:11, color:'#5a5d7a', marginTop:2 }}>{sub}</div>}
+  const [linhaHover, setLinhaHover] = React.useState<string|null>(null);
+  const Linha = ({ label, valor, sub, destaque, norma, slide, formula }:
+    { label:string; valor:string; sub?:string; destaque?:string; norma?:string; slide?:string; formula?:string }) => {
+    const id = label;
+    const temRastreio = !!(norma || slide || formula);
+    return (
+      <div style={{ borderBottom:`1px solid #1a1d2e` }}>
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'9px 0' }}>
+          <div style={{ flex:1, minWidth:0 }}>
+            <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+              <div style={{ fontSize:13, color:'#c0c4e0', fontWeight:600 }}>{label}</div>
+              {temRastreio && (
+                <button onClick={() => setLinhaHover(linhaHover===id?null:id)}
+                  style={{ background:'none', border:'none', cursor:'pointer', color: linhaHover===id ? '#c9a227' : '#4a4d6a',
+                    fontSize:11, padding:'0 2px', lineHeight:1, transition:'color .15s' }}
+                  title="Ver norma e fórmula">📐</button>
+              )}
+            </div>
+            {sub && <div style={{ fontSize:11, color:'#5a5d7a', marginTop:2 }}>{sub}</div>}
+          </div>
+          <div style={{ textAlign:'right', flexShrink:0, marginLeft:12 }}>
+            <div style={{ fontSize:15, fontWeight:800, color:'#e8eaf8', fontVariantNumeric:'tabular-nums' }}>{valor}</div>
+            {destaque && <Tag cor="#c9a227">{destaque}</Tag>}
+          </div>
+        </div>
+        {linhaHover===id && temRastreio && (
+          <div style={{ background:'#0a0c14', border:'1px solid #c9a22744', borderRadius:8, padding:'10px 14px', marginBottom:8, fontSize:11 }}>
+            {norma  && <div style={{ color:'#86efac', marginBottom:4 }}>📋 <strong>Norma:</strong> {norma}</div>}
+            {slide  && <div style={{ color:'#93c5fd', marginBottom:4 }}>📖 <strong>Referência:</strong> {slide}</div>}
+            {formula && <div style={{ color:'#fcd34d', fontFamily:'monospace', background:'#1a1d2b', padding:'4px 8px', borderRadius:4 }}>∑ {formula}</div>}
+          </div>
+        )}
       </div>
-      <div style={{ textAlign:'right' }}>
-        <div style={{ fontSize:15, fontWeight:800, color:'#e8eaf8', fontVariantNumeric:'tabular-nums' }}>{valor}</div>
-        {destaque && <Tag cor="#c9a227">{destaque}</Tag>}
-      </div>
-    </div>
-  );
+    );
+  };
 
   if (naoPreenchido) {
     return (
@@ -1343,28 +1383,43 @@ function ComponentesRecomendados({ kit }: { kit: any }) {
             label="Corrente nominal CA"
             valor={`${icaNominal.toFixed(1)} A`}
             sub={`P/(V×FP) = ${potCA_kW}kW / (${tensaoCA}V × ${fp})`}
+            norma="NBR 5410:2004 — item 6.3.1 (circuitos terminais)"
+            slide="Curso slide 48 — Caixa de proteção CA"
+            formula={`In = P / (V × FP) = ${(potCA_kW*1000).toFixed(0)}W / (${tensaoCA}V × ${fp}) = ${icaNominal.toFixed(1)}A`}
           />
           <Linha
             label="Corrente de projeto (×1,25)"
             valor={`${icaProjeto.toFixed(1)} A`}
             sub="NBR 5410 — carga contínua"
+            norma="NBR 5410:2004 — Tabela 1 (fator 1.25 para carga contínua > 3h)"
+            slide="Curso slide 50 — Ib = corrente de projeto"
+            formula={`Ib = In × 1.25 = ${icaNominal.toFixed(1)}A × 1.25 = ${icaProjeto.toFixed(1)}A`}
           />
           <Linha
             label="Cabo CA (fase, neutro, PE)"
             valor={`${secaoCA} mm²`}
-            sub={caboCAResult ? `Iz'=${caboCAResult.izCorrigidaA}A (FTA=${caboCAResult.fta}@${caboCAResult.temperaturaAmbienteC}°C) | ΔU=${caboCAResult.quedaTensaoPct.toFixed(2)}% ${caboCAResult.quedaTensaoOk ? '✓':'⚠️'}` : `Iproj=${icaProjeto.toFixed(1)}A`}
+            sub={caboCAResult ? `Iz'=${caboCAResult.izCorrigidaA}A (FTA=${caboCAResult.fta}@${caboCAResult.temperaturaAmbienteC}°C) | ΔU=${caboCAResult.quedaTensaoPct.toFixed(2)}% ${caboCAResult.quedaTensaoOk?'✓':'⚠️'}` : `Ib=${icaProjeto.toFixed(1)}A`}
             destaque="3 condutores (NBR 5410)"
+            norma="NBR 5410:2004 — Tabela 36, Método C (cobre, PVC 70°C) + Tabela 40 (FTA temperatura)"
+            slide="Curso slides 48–58 — algoritmo: 1) Iz_req=Ib/FTA 2) cabo onde Iz≥Iz_req 3) Ib≤In≤Iz'"
+            formula={caboCAResult ? `Iz'=${caboCAResult.izCaboA}A × FTA(${caboCAResult.temperaturaAmbienteC}°C)=${caboCAResult.fta} = ${caboCAResult.izCorrigidaA}A | ΔU=α×ρ×Ib×L/(U×S)=${caboCAResult.quedaTensaoPct.toFixed(2)}%` : `Iz_req = ${icaProjeto.toFixed(1)}A / FTA`}
           />
           <Linha
             label="Disjuntor bipolar CA"
             valor={`${disjCA} A`}
-            sub="Próximo padrão acima da corrente de projeto"
-            destaque="Bipolar"
+            sub={caboCAResult ? `Faixa válida: ${caboCAResult.ibA.toFixed(1)}A ≤ In ≤ ${caboCAResult.izCorrigidaA}A` : `In ≥ ${icaProjeto.toFixed(1)}A`}
+            destaque="Bipolar curva C"
+            norma="NBR 5410:2004 — condição 1: In≥Ib, condição 2: In≤Iz'"
+            slide="Curso slide 53–54 — seleção do disjuntor após verificar Ib ≤ In ≤ Iz'"
+            formula={`Ib(${caboCAResult?.ibA.toFixed(1)||icaProjeto.toFixed(1)}A) ≤ In(${disjCA}A) ≤ Iz'(${caboCAResult?.izCorrigidaA||'?'}A) — padrões IEC: 6,10,16,20,25,32,40,50,63,80,100A`}
           />
           <Linha
             label="DPS CA — 275 V"
             valor={`${dpskA} kA — Classe II`}
             sub={dpsDesc}
+            norma="NBR 5410 + NBR IEC 62305-3 — Classe II para proteção surtos atmosféricos induzidos"
+            slide="Curso slide 55 — DPS CA: Uc ≥ 1.1 × V_max_saída_inversor"
+            formula={`Uc_min = 1.1 × ${tensaoCA}V = ${(tensaoCA*1.1).toFixed(0)}V → usar DPS 275V. Imax=${dpskA}kA classe II`}
           />
         </div>
 
@@ -1377,18 +1432,27 @@ function ComponentesRecomendados({ kit }: { kit: any }) {
             <Linha
               label="Isc por string"
               valor={`${isc} A`}
-              sub="Do datasheet do módulo"
+              sub="Do datasheet do módulo (STC: 1000 W/m², 25°C)"
+              norma="NBR 16690:2019 — item 5.3.1 (corrente de curto-circuito)"
+              slide="Curso slide 39 — Isc_módulo do datasheet"
+              formula={`Isc = ${isc}A por string × ${nStrings} string(s) = ${iccTotal.toFixed(1)}A total`}
             />
             <Linha
-              label="Corrente CC total (×1,25)"
+              label="Corrente de projeto CC (×1,25)"
               valor={`${iccProjeto.toFixed(1)} A`}
-              sub={`${isc} A × ${nStrings} string(s) × 1,25`}
+              sub={`Isc × N_strings × 1.25 = ${isc}A × ${nStrings} × 1.25`}
+              norma="NBR 16690:2019 — item 5.3.1: Ib_cc = Isc × 1.25 (fator irradiância até 1.250 W/m²)"
+              slide="Curso slide 39-40 — IEC 60364-7-712: fator 1.25"
+              formula={`Ib_CC = ${isc}A × ${nStrings} × 1.25 = ${iccProjeto.toFixed(1)}A`}
             />
             <Linha
               label="Cabo CC solar (PV1-F)"
               valor={`${cableCC.secao} mm²`}
-              sub={`Suporta até ${cableCC.imax} A (cabo solar 90°C)`}
-              destaque="Unipolar"
+              sub={`Iz'=${izCorrCC}A (FTA=${ftaCC}@${tempTelhado}°C) | Ib=${iccProjeto.toFixed(1)}A ${izCorrCC >= iccProjeto ? '✓' : '⚠️'}`}
+              destaque="Unipolar XLPE 90°C"
+              norma="NBR 16690:2019 Tab. 5 + NBR 16612 Tab. C.2 (XLPE 90°C, unipolar, ao ar)"
+              slide="Curso slides 39–43 — FTA para cabo CC: telhados atingem 70-80°C no verão"
+              formula={`FTA_XLPE90(${tempTelhado}°C)=${ftaCC} | Iz_req=${iccProjeto.toFixed(1)}A/${ftaCC}=${iccProjetoComFTA.toFixed(1)}A | Iz'=${cableCC.imax}A×${ftaCC}=${izCorrCC}A ≥ Ib ✓`}
             />
             <Linha
               label="Voc STC do sistema"
