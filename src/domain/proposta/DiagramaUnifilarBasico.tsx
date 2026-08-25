@@ -103,9 +103,16 @@ function DiagramaSvg({ dados }: { dados: ReturnType<typeof montarDadosDiagrama> 
     );
   }
 
+  // Fronteira de responsabilidade REDE CEMIG (acessada) / ACESSANTE — no
+  // ponto de conexao, logo apos o padrao de entrada (medidor bidirecional),
+  // seguindo o mesmo local usado no exemplo oficial de DUB da CEMIG (Anexo 1).
+  const fronteiraX = xs[1] + bW + gap / 2;
+
   return (
     <View style={{ position:'relative', width:W, height:H, marginTop:6, marginBottom:6 }}>
       <Svg width={W} height={H}>
+        {/* Fronteira de responsabilidade CEMIG / Acessante (ponto de conexao) */}
+        <Line x1={fronteiraX} y1={4} x2={fronteiraX} y2={H-4} stroke="#7f1d1d" strokeWidth={1} strokeDasharray="5,3" />
         {/* Linha CA: rede -> padrao -> disjuntor -> inversor -> strings */}
         <Line x1={xs[0]+bW} y1={midY} x2={xs[1]} y2={midY} stroke={LINE} strokeWidth={1.5} />
         <Line x1={xs[1]+bW} y1={midY} x2={xs[2]} y2={midY} stroke={LINE} strokeWidth={1.5} />
@@ -127,10 +134,26 @@ function DiagramaSvg({ dados }: { dados: ReturnType<typeof montarDadosDiagrama> 
         <Rect x={xs[2]+bW+gap/2-9} y={midY-4} width={18} height={8} fill="#ffffff" stroke={BLUE} strokeWidth={1} />
       </Svg>
 
+      {/* Zonas de responsabilidade, acima dos blocos, separadas pela linha tracejada da fronteira */}
+      <Text style={{ position:'absolute', left:xs[0], top:0, width:(xs[1]+bW)-xs[0], fontSize:6.3, fontFamily:'Helvetica-Bold', textAlign:'center', color:'#7f1d1d' }}>
+        {'REDE CEMIG (ACESSADA)'}
+      </Text>
+      <Text style={{ position:'absolute', left:xs[2], top:0, width:(xs[3]+bW)-xs[2], fontSize:6.3, fontFamily:'Helvetica-Bold', textAlign:'center', color:'#7f1d1d' }}>
+        {'ACESSANTE'}
+      </Text>
+
       <Bloco x={xs[0]} y={yLine} w={bW} h={bH} label="REDE CEMIG" sub="Concessionaria" />
       <Bloco x={xs[1]} y={yLine} w={bW} h={bH} label="PADRAO DE ENTRADA" sub="Medidor bidirecional" />
       <Bloco x={xs[2]} y={yLine} w={bW} h={bH} label={`INVERSOR${potCA?` ${N(potCA,1)}kW`:''}`} sub={dados.marcaInversor} />
       <Bloco x={xs[3]} y={yLine} w={bW} h={bH} label={`STRING(S) FV (CC)`} sub={`${nStrings}x${modPorString}=${qtdModulos} mod. ${potModulo?`${potModulo}Wp`:''}`} />
+
+      {/* Aviso obrigatorio de retorno de energia junto ao medidor bidirecional
+          (padrao CEMIG para pontos de conexao com geracao distribuida) */}
+      <View style={{ position:'absolute', left:xs[1]-6, top:yLine-13, width:bW+12, borderWidth:0.8, borderColor:'#b91c1c', backgroundColor:'#fee2e2', paddingVertical:1 }}>
+        <Text style={{ fontSize:5.4, fontFamily:'Helvetica-Bold', textAlign:'center', color:'#7f1d1d' }}>
+          {'CUIDADO - RETORNO DE ENERGIA'}
+        </Text>
+      </View>
 
       {/* Rótulos de proteção — sempre centrados sob o segmento a que se referem, nunca sobre um bloco */}
       <RotuloSegmento entreIdx={1} offsetY={-16} texto={`Disjuntor ${disjCA}A`} cor={BLUE} bold />
@@ -206,7 +229,10 @@ export function DiagramaUnifilarBasico({ data }: { data: any }) {
             AVISO: Diagrama unifilar SIMPLIFICADO gerado automaticamente a partir dos dados do projeto (potencias,
             correntes, protecoes calculadas conforme NBR 5410 e NBR 16690). Nao substitui um projeto eletrico
             completo com simbologia normalizada (NBR 5444) e exige revisao e assinatura (ART) de um responsavel
-            tecnico habilitado antes de submissao a distribuidora.
+            tecnico habilitado antes de submissao a distribuidora. Conforme exemplo oficial de DUB da CEMIG (Anexo
+            1), o diagrama deve representar TODOS os modulos fotovoltaicos e inversores da central geradora — para
+            sistemas com mais de um inversor, edite manualmente o PDF (ou o diagrama fonte) para acrescentar as
+            unidades adicionais antes do envio, pois este gerador automatico desenha apenas 1 bloco de inversor.
           </Text>
         </View>
 

@@ -35,7 +35,7 @@ const S = StyleSheet.create({
   titulo: { fontSize:14, fontFamily:'Helvetica-Bold', color:BLUE },
   subtitulo: { fontSize:9, color:MUTED, marginTop:2 },
   imgBox: { borderWidth:1.5, borderColor:'#999', marginTop:6, marginBottom:10, alignItems:'center' },
-  img: { width:420, height:420 },
+  img: { width:340, height:340 },
   legendaImg: { fontSize:7, color:MUTED, textAlign:'center', marginTop:4, marginBottom:12 },
   tbl: { borderWidth:1, borderColor:'#999', marginBottom:10 },
   tblHead: { backgroundColor:BLUE, flexDirection:'row' },
@@ -82,8 +82,14 @@ export function PlantaDeSituacao({ data, mosaico }: { data: any; mosaico: Result
           <Image src={mosaico.dataUri} style={S.img} />
         </View>
         <Text style={S.legendaImg}>
-          {`Imagem de satelite: Esri World Imagery (fonte publica, sem chave de API) — zoom ${mosaico.zoom} — marcador nas coordenadas geocodificadas do endereco`}
+          {`Imagem de satelite: Esri World Imagery (fonte publica, sem chave de API) — zoom ${mosaico.zoom}. Marcador vermelho: local do padrao de entrada / medidor (referencia: endereco geocodificado da UC).`}
         </Text>
+
+        <View style={S.avisoBox}>
+          <Text style={S.avisoTxt}>
+            {'IMPORTANTE (conforme modelos de planta de situacao da CEMIG): o marcador vermelho indica o endereco da UC, usado aqui como referencia para o local do padrao de entrada. A CEMIG tambem exige a demarcacao do local de instalacao das placas solares (e, em caso de mudanca de local do padrao, a distancia entre o local atual e o novo local) — este software nao tem como inferir automaticamente o poligono do telhado/area de instalacao a partir apenas do endereco. Demarque manualmente essas areas sobre esta imagem (ex.: em um editor de PDF/imagem) antes de enviar este documento a distribuidora.'}
+          </Text>
+        </View>
 
         <View style={S.tbl}>
           <View style={S.tblHead}>

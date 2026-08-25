@@ -12,7 +12,7 @@ Desenvolvido pela Lumen Soluções Ltda — Araguari/MG.
 
 | Item | Estado |
 |------|--------|
-| Testes automatizados | **822 passando** (E2E, cálculos, persistência, precificação de serviços, proteção CC, UTM, checklist de documentação) |
+| Testes automatizados | **824 passando** (E2E, cálculos, persistência, precificação de serviços, proteção CC, UTM, checklist de documentação, mapa de células do Formulário CEMIG) |
 | Build Windows | ✅ GitHub Actions → artifact `LumenSolar-Windows` |
 | Normas implementadas | IEC 61724-1, NBR 16690, NBR 5410, Lei 14.300/2022, REN ANEEL 1.000/2021 |
 | Tarifa CEMIG | R$1,1827/kWh (Res. ANEEL 3.589/2026) |
@@ -91,22 +91,33 @@ Desenvolvido pela Lumen Soluções Ltda — Araguari/MG.
 | Formulário CEMIG MicroGD | Rev. N4 (03/12/2024) | Excel |
 | Auditoria técnica | 8 abas com 490+ fórmulas vivas | Excel |
 
-**DUB (ago/2026):** diagrama unifilar simplificado gerado a partir dos dados reais do
-projeto — reaproveita `calcularCaboCA` (lado CA) e o novo `calcularProtecaoCC` (lado CC:
-cabo solar, fusível de string, DPS, Voc corrigido por temperatura mínima — NBR 16690:2019
-5.3.3/5.4.2), a mesma função que já alimentava (sem teste, até esta correção) o painel
-"Componentes Recomendados" do passo Kit Solar. É um diagrama **simplificado**: mostra
-topologia e as grandezas dimensionadas, não substitui um projeto com simbologia NBR 5444
-revisado por responsável técnico — o próprio PDF traz esse aviso.
+**DUB (ago/2026, revisado contra exemplo oficial CEMIG):** diagrama unifilar simplificado
+gerado a partir dos dados reais do projeto — reaproveita `calcularCaboCA` (lado CA) e o novo
+`calcularProtecaoCC` (lado CC: cabo solar, fusível de string, DPS, Voc corrigido por
+temperatura mínima — NBR 16690:2019 5.3.3/5.4.2), a mesma função que já alimentava (sem
+teste, até esta correção) o painel "Componentes Recomendados" do passo Kit Solar. Depois de
+comparar com o exemplo oficial de DUB da CEMIG ("Anexo 1 – Exemplo de D.U.B.", fornecido pelo
+usuário), o diagrama passou a trazer a fronteira de responsabilidade REDE CEMIG (acessada) /
+ACESSANTE (linha tracejada no ponto de conexão) e o aviso obrigatório "CUIDADO — RETORNO DE
+ENERGIA" junto ao medidor bidirecional. Continua um diagrama **simplificado**: mostra
+topologia e as grandezas dimensionadas, mas não com a simbologia NBR 5444/título normalizado
+do exemplo oficial (quadro de revisão, símbolos CAD específicos) nem representa múltiplos
+inversores automaticamente (o aviso no PDF pede edição manual nesse caso) — não substitui um
+projeto revisado por responsável técnico, o próprio PDF traz esse aviso.
 
-**Planta de Situação (ago/2026):** geocodifica o endereço do cliente (Nominatim/
-OpenStreetMap, gratuito) e monta um mosaico de imagem de satélite (Esri World Imagery,
-gratuito, sem chave de API) com marcador nas coordenadas — mais uma tabela conferindo a
-UTM digitada no passo Local contra a UTM do endereço geocodificado, alertando se
-divergirem mais de 300m. Depende de internet no computador do usuário; a busca de tiles
-não pôde ser testada de ponta a ponta no ambiente onde foi desenvolvida (sem acesso de
+**Planta de Situação (ago/2026, revisado contra modelos oficiais CEMIG):** geocodifica o
+endereço do cliente (Nominatim/OpenStreetMap, gratuito) e monta um mosaico de imagem de
+satélite (Esri World Imagery, gratuito, sem chave de API) com marcador nas coordenadas — mais
+uma tabela conferindo a UTM digitada no passo Local contra a UTM do endereço geocodificado,
+alertando se divergirem mais de 300m. Depende de internet no computador do usuário; a busca de
+tiles não pôde ser testada de ponta a ponta no ambiente onde foi desenvolvida (sem acesso de
 rede para arcgisonline.com) — a matemática de qual tile buscar é testada
 (`src/domain/plantaSituacao/tileMercator.test.ts`), a busca/stitch em si roda só no app real.
+Os modelos oficiais da CEMIG ("Modelos de Plantas de Situação", fornecidos pelo usuário)
+mostram a área do telhado/placas solares e o ponto do padrão de entrada demarcados
+manualmente sobre a imagem de satélite — o software não tem como inferir esse polígono a
+partir só do endereço, então o PDF explica isso e orienta a demarcar manualmente antes do
+envio, em vez de fingir automatizar algo que não automatiza.
 
 **Excel — 8 abas:**
 - `Resumo` — visual para o cliente (KPIs, FioB, checklist CEMIG)
@@ -201,7 +212,7 @@ como preço final.
 
 ```bash
 npm install
-npm test              # 822 testes (Vitest)
+npm test              # 824 testes (Vitest)
 npm run dev           # Vite dev server
 npm run build         # build de produção
 npm run build:win     # gera .exe (requer wine ou Windows)
@@ -246,6 +257,15 @@ não é do software; o usuário confirma manualmente que anexou por fora. O bot�
 
 ## Pendências conhecidas
 
+- [x] **Corrigido (ago/2026):** o mapa de células do Formulário CEMIG MicroGD
+  (`src/domain/excel/gerarFormularioCemig.ts`, `MAPA_CELULAS`) tinha 28 das 31 posições
+  erradas — apontava sistematicamente para uma linha abaixo da caixa real de preenchimento no
+  arquivo oficial (confirmado célula a célula com o `Formulario-MicroGD_Rev_N4.xlsx` real,
+  fornecido pelo usuário). O caso mais grave: a célula antiga de "Local e data" (B234) era a
+  própria célula do RÓTULO no arquivo oficial, não uma célula em branco. Corrigido e travado
+  por teste de regressão (`gerarFormularioCemig.test.ts`) — mas o arquivo oficial não faz
+  parte do repositório (documento interno da CEMIG), então o teste só impede regressão
+  acidental do mapa já verificado, não revalida contra o arquivo a cada execução.
 - [ ] Teste de fluxo completo no `.exe` (criar proposta → gerar todos os documentos)
 - [ ] Suporte a Grupo A (P/FP/HR, demanda contratada — sistemas >75 kWp)
 - [ ] Expansão de usina existente (campo "potência atual instalada")

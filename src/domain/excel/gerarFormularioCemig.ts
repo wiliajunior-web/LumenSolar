@@ -16,56 +16,80 @@ const XLSX: typeof import('xlsx') = require('xlsx');
 
 /**
  * Mapa de células do formulário CEMIG MicroGD Rev. N4.
- * Obtido por análise direta do arquivo xlsx oficial.
- * Células com valores default da CEMIG são mantidas; apenas campos
- * editáveis pelo solicitante são preenchidos.
+ *
+ * CORRIGIDO (ago/2026): a versão anterior deste mapa (28 de 31 células)
+ * estava ERRADA — apontava sistematicamente para a linha ABAIXO do rótulo,
+ * na mesma coluna do texto do rótulo, quando na verdade o arquivo oficial
+ * usa "rótulo e caixa de preenchimento na MESMA linha, algumas colunas à
+ * direita" na maior parte do formulário (só a Seção 9 usa um layout
+ * diferente ainda, com a caixa 1-2 linhas abaixo do rótulo). O caso mais
+ * grave: a célula antiga de `sol_data` (B234) não era uma célula em
+ * branco — era a PRÓPRIA célula do rótulo "Local e data*:" no arquivo
+ * oficial, ou seja, o valor gerado teria sobrescrito o rótulo do campo se
+ * colado por posição de célula em vez de por leitura visual.
+ *
+ * Encontrado ao auditar este arquivo (que já tinha um bug conhecido nos
+ * ternários mortos do checklist — ver `checklistDocumentosCEMIG` abaixo) e
+ * ao finalmente ter acesso ao arquivo oficial `Formulario-MicroGD_Rev_N4.xlsx`
+ * fornecido pelo usuário. Cada célula abaixo foi reverificada linha por
+ * linha com `openpyxl`, localizando a caixa de preenchimento real (borda
+ * `left:medium` = caixa de formulário impresso) mais próxima de cada
+ * rótulo de texto — não apenas "célula vazia perto do rótulo".
+ *
+ * Apenas 3 células já estavam certas: uc_numero (J12), tipo_solicitacao
+ * (I41) e tipo_edificacao (I43) — coincidentemente os únicos 3 campos cujo
+ * padrão real (mesma linha do rótulo) bateu com o padrão assumido no
+ * mapa antigo.
  */
-const MAPA_CELULAS = {
+export const MAPA_CELULAS = {
   // ── Seção 1 — Identificação da UC ──────────────────────────────────────
-  uc_numero:        'J12',   // Número da Instalação (UC)
-  uc_titular:       'B17',   // Nome do Titular da UC
-  uc_cpf:           'Z18',   // CPF/CNPJ do Titular
-  uc_logradouro:    'B21',   // Logradouro
-  uc_num_ender:     'AF21',  // Número do imóvel
-  uc_complemento:   'AM21',  // Complemento
-  uc_bairro:        'B23',   // Bairro
-  uc_municipio:     'Q23',   // Município
-  uc_cep:           'AR23',  // CEP
-  uc_celular:       'M25',   // Celular do titular
-  uc_email:         'W25',   // E-mail do titular
+  uc_numero:        'J12',   // Número da Instalação (UC) — rótulo B12, mesma linha
+  uc_titular:       'N16',   // Nome do Titular da UC — rótulo B16, mesma linha
+  uc_cpf:           'AC18',  // CPF/CNPJ do Titular — rótulo Y18, mesma linha
+  uc_logradouro:    'G20',   // Logradouro — rótulo B20, mesma linha
+  uc_num_ender:     'AI20',  // Número do imóvel — rótulo AE20, mesma linha
+  uc_complemento:   'AR20',  // Complemento — rótulo AL20, mesma linha
+  uc_bairro:        'E22',   // Bairro — rótulo B22, mesma linha
+  uc_municipio:     'T22',   // Município — rótulo P22, mesma linha
+  uc_cep:           'AS22',  // CEP — rótulo AQ22, mesma linha
+  uc_celular:       'O24',   // Celular do titular — rótulo L24, mesma linha
+  uc_email:         'Y24',   // E-mail do titular — rótulo V24, mesma linha
 
   // ── Seção 2 — Dados da UC ───────────────────────────────────────────────
-  utm_fuso:         'V30',   // Fuso UTM
-  utm_e:            'AB30',  // E Abscissa (UTM)
-  utm_n:            'AH30',  // N Ordenada (UTM)
-  tipo_solicitacao: 'I41',   // Tipo de solicitação (dropdown CEMIG)
-  tipo_edificacao:  'I43',   // Tipo de edificação (dropdown CEMIG)
-  tensao_atend:     'X55',   // Tensão de atendimento (127/220 ou 220/380)
+  utm_fuso:         'V29',   // Fuso UTM — rótulo T29, mesma linha
+  utm_e:            'AC29',  // E Abscissa (UTM) — rótulo X29, mesma linha
+  utm_n:            'AL29',  // N Ordenada (UTM) — rótulo AG29, mesma linha
+  tipo_solicitacao: 'I41',   // Tipo de solicitação (dropdown CEMIG) — rótulo B41, mesma linha
+  tipo_edificacao:  'I43',   // Tipo de edificação (dropdown CEMIG) — rótulo B43, mesma linha
+  tensao_atend:     'L55',   // Tensão de atendimento (127/220 ou 220/380) — rótulo B55, mesma linha
 
   // ── Seção 4 — Dados da Geração (Fotovoltaica) ──────────────────────────
-  // Módulos (coluna B/C)
-  mod_modelo:       'C109',  // Modelo dos Módulos
-  mod_fabricante:   'C111',  // Fabricante dos Módulos
-  mod_pot_w:        'C113',  // Potência Nominal do Módulo (W)
-  mod_qtde:         'C115',  // Quantidade de Módulos
-  mod_pot_total_kw: 'C117',  // Potência Total Módulos (kW)
-  mod_area:         'C119',  // Área dos Arranjos (m²)
+  // Módulos — cada rótulo e sua caixa ficam na MESMA linha (108,110,...118),
+  // não na linha seguinte como o mapa antigo assumia.
+  mod_modelo:       'L108',  // Modelo dos Módulos
+  mod_fabricante:   'L110',  // Fabricante dos Módulos
+  mod_pot_w:        'L112',  // Potência Nominal do Módulo (W)
+  mod_qtde:         'L114',  // Quantidade de Módulos
+  mod_pot_total_kw: 'L116',  // Potência Total Módulos (kW)
+  mod_area:         'L118',  // Área dos Arranjos (m²)
 
-  // Inversores (coluna Y)
-  inv_modelo:       'Y109',  // Modelo dos Inversores
-  inv_fabricante:   'Y111',  // Fabricante dos Inversores
-  inv_pot_kw:       'Y113',  // Potência Nominal Inversor (kW)
-  inv_qtde:         'Y115',  // Quantidade de Inversores
-  inv_pot_total_kw: 'Y117',  // Potência Total Inversores (kW)
-  inv_tensao:       'Y119',  // Tensão de Conexão do Inversor (V)
+  // Inversores — mesmo padrão, coluna AI em vez de L
+  inv_modelo:       'AI108', // Modelo dos Inversores
+  inv_fabricante:   'AI110', // Fabricante dos Inversores
+  inv_pot_kw:       'AI112', // Potência Nominal Inversor (kW)
+  inv_qtde:         'AI114', // Quantidade de Inversores
+  inv_pot_total_kw: 'AI116', // Potência Total Inversores (kW)
+  inv_tensao:       'AI118', // Tensão de Conexão do Inversor (V)
 
   // ── Seção 9 — Solicitante (Engenheiro/Procurador) ──────────────────────
-  // Conforme REN 1.000/2021 Art. 9: procurador deve ser identificado
-  sol_nome:         'B219',  // Nome do Consumidor ou Procurador Legal
-  sol_endereco:     'B221',  // Endereço de Correspondência
-  sol_celular:      'M225',  // Celular do solicitante
-  sol_email:        'W225',  // E-mail do solicitante
-  sol_data:         'B234',  // Local e data de assinatura
+  // Conforme REN 1.000/2021 Art. 9: procurador deve ser identificado.
+  // Único trecho do formulário com caixa 1-2 linhas ABAIXO do rótulo (em
+  // vez de na mesma linha) — confirmado célula a célula.
+  sol_nome:         'Q220',  // Nome do Consumidor ou Procurador Legal — rótulo B220, mesma linha
+  sol_endereco:     'O222',  // Endereço de Correspondência — rótulo B222:N224, mesma linha
+  sol_celular:      'O226',  // Celular do solicitante — rótulo L226, mesma linha
+  sol_email:        'Y226',  // E-mail do solicitante — rótulo V226:X226, mesma linha
+  sol_data:         'C236',  // Local e data — rótulo B234; caixa fica 2 linhas abaixo (B234 é só o rótulo)
 };
 
 /** Valores padrão para campos CEMIG que raramente mudam */
