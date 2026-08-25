@@ -14,8 +14,14 @@ import { calcularFluxoCaixa } from '@domain/financeiro/fluxoCaixa';
 import { calcularTIR, calcularROI, formatarPayback, areaTotalNecessariaM2, pesoDistribuidoKgM2, simularFinanciamento, type SimulacaoFinanciamento } from '@domain/financeiro/indicadores';
 import { geracaoMensalPorMes } from '@data/hspMensal';
 import { LOCALIZACAO_PADRAO, type DadosLocalizacao } from '@data/localizacao';
+import { PRESETS_MODULO, type TipoModuloPreset } from '@data/presetsModulo';
 
-export { PRESETS_MODULO, type TipoModuloPreset } from '../../data/presetsModulo';
+// BUG CORRIGIDO: `export { X } from 'Y'` é um re-export transparente — não
+// cria um binding local. calcularTudo() (abaixo) usava PRESETS_MODULO como
+// se estivesse importado, o que lançaria ReferenceError em tempo de
+// execução. Precisa do import acima E do export abaixo (consumido por
+// App.tsx) simultaneamente.
+export { PRESETS_MODULO, type TipoModuloPreset };
 
 export interface DadosCliente {
   nome: string;

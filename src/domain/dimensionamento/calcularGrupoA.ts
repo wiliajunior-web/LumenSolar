@@ -36,10 +36,15 @@ export interface ConsumoGrupoA {
   historicoBFP: number[];
   /** Histórico: consumo ponta por mês (kWh) */
   historicoBP: number[];
-  /** Demanda medida fora ponta (kW) — para análise de demanda */
+  /**
+   * Demanda medida no ciclo de faturamento atual (kW) — usada tanto para o
+   * alerta de possível redução futura da demanda contratada quanto, quando
+   * informada, para o cálculo da cobrança por ultrapassagem de demanda
+   * (ver calcularCustoDemanda).
+   */
   demandaMedidaFPkW?: number;
   /** Demanda contratada (kW) */
-  demandaContratadakW: number;
+  demandaContratadaKW: number;
   /** Subgrupo: A2, A3, A3a, A4, AS */
   subgrupo?: string;
 }
@@ -68,6 +73,11 @@ export interface ResultadoGrupoA {
   economiaAnualRS: number;
   reducaoDemandaPossivel: boolean; // se geração reduz pico de demanda
 
+  // Demanda — detalhamento (ver calcularCustoDemanda)
+  custoDemandaBaseRS: number;         // demanda contratada × tarifa (sempre cobrado)
+  custoUltrapassagemDemandaRS: number; // 0 quando não há ultrapassagem ou demanda medida não informada
+  houveUltrapassagemDemanda: boolean;
+
   // Alertas e observações
   alertas: string[];
   observacoes: string[];
@@ -80,6 +90,61 @@ export interface ParamsGrupoA {
   perdasSistema: number;     // decimal — ex: 0.134
   potenciaModuloWp: number;
   percentualCompensacao?: number; // 1.0 = 100%
+}
+
+export interface ResultadoCustoDemanda {
+  demandaContratadaKW: number;
+  demandaMedidaKW: number;
+  custoBaseRS: number;          // demanda medida (ou contratada, se maior) × tarifa
+  custoUltrapassagemRS: number; // adicional de 2× a tarifa sobre o kW excedente
+  custoTotalRS: number;
+  ultrapassagemKW: number;      // max(0, medida - contratada)
+  houveUltrapassagem: boolean;
+}
+
+/**
+ * Custo de demanda, incluindo ultrapassagem sobre a demanda contratada.
+ *
+ * Fórmula reproduzida da planilha de referência (CÁLCULOS AQUI! / Dimen. A,
+ * Toolbox de Elite): custo = (demanda_medida × tarifa) + (demanda_medida −
+ * demanda_contratada) × 2 × tarifa, aplicado somente quando a demanda
+ * medida excede a contratada. Isso equivale a cobrar a parcela dentro do
+ * contrato a 1× a tarifa e a parcela excedente a 3× a tarifa.
+ *
+ * ATENÇÃO — verificar antes de uso comercial: a regra de faturamento de
+ * ultrapassagem de demanda no Brasil está na REN ANEEL nº 1.000/2021,
+ * Capítulo X, Seção VII (art. 301 e seguintes). Não foi possível confirmar
+ * nesta implementação, a partir de fonte primária, se a distribuidora
+ * aplicável (CEMIG) adota margem de tolerância isenta de cobrança antes de
+ * multiplicar a tarifa — a planilha de referência não aplica tolerância
+ * alguma. Confirme o percentual de tolerância (se houver) e o multiplicador
+ * vigente diretamente na ND da CEMIG ou na REN 1.000/2021 antes de usar
+ * este cálculo para gerar cobrança/proposta real a cliente.
+ */
+export function calcularCustoDemanda(
+  demandaContratadaKW: number,
+  tarifaDemandaKW: number,
+  demandaMedidaKW?: number
+): ResultadoCustoDemanda {
+  if (demandaContratadaKW < 0) throw new Error('Demanda contratada não pode ser negativa.');
+  if (tarifaDemandaKW < 0) throw new Error('Tarifa de demanda não pode ser negativa.');
+
+  const medida = demandaMedidaKW ?? demandaContratadaKW;
+  const ultrapassagem = Math.max(0, medida - demandaContratadaKW);
+  const houveUltrapassagem = ultrapassagem > 0;
+
+  const custoBase = (houveUltrapassagem ? medida : demandaContratadaKW) * tarifaDemandaKW;
+  const custoUltrapassagem = houveUltrapassagem ? ultrapassagem * 2 * tarifaDemandaKW : 0;
+
+  return {
+    demandaContratadaKW,
+    demandaMedidaKW: medida,
+    custoBaseRS: parseFloat(custoBase.toFixed(2)),
+    custoUltrapassagemRS: parseFloat(custoUltrapassagem.toFixed(2)),
+    custoTotalRS: parseFloat((custoBase + custoUltrapassagem).toFixed(2)),
+    ultrapassagemKW: parseFloat(ultrapassagem.toFixed(3)),
+    houveUltrapassagem,
+  };
 }
 
 export function calcularDimensionamentoGrupoA(params: ParamsGrupoA): ResultadoGrupoA {
@@ -124,7 +189,12 @@ export function calcularDimensionamentoGrupoA(params: ParamsGrupoA): ResultadoGr
   // Conta antes: energia FP + energia P + demanda
   const energiaFP = mediaFP * (tarifa.teForaPontaKWh + tarifa.tusdForaPontaKWh);
   const energiaP  = mediaP  * (tarifa.tePontaKWh + tarifa.tusdPontaKWh);
-  const demanda   = consumo.demandaContratadakW * tarifa.demandaKW;
+  const custoDemanda = calcularCustoDemanda(
+    consumo.demandaContratadaKW,
+    tarifa.demandaKW,
+    consumo.demandaMedidaFPkW
+  );
+  const demanda   = custoDemanda.custoTotalRS;
   const contaAntes = energiaFP + energiaP + demanda;
 
   // Conta após: a geração compensa energia em TE
@@ -167,6 +237,14 @@ export function calcularDimensionamentoGrupoA(params: ParamsGrupoA): ResultadoGr
     );
   }
 
+  if (custoDemanda.houveUltrapassagem) {
+    alertas.push(
+      `Ultrapassagem de demanda: ${custoDemanda.ultrapassagemKW.toFixed(1)}kW acima do contratado ` +
+      `(custo adicional estimado R$${custoDemanda.custoUltrapassagemRS.toFixed(2)}/mês). ` +
+      'Verifique o percentual de tolerância e o multiplicador vigentes na ND da distribuidora antes de repassar ao cliente.'
+    );
+  }
+
   return {
     mediaConsumoFPkWh: parseFloat(mediaFP.toFixed(1)),
     mediaConsumoPkWh:  parseFloat(mediaP.toFixed(1)),
@@ -183,6 +261,9 @@ export function calcularDimensionamentoGrupoA(params: ParamsGrupoA): ResultadoGr
     economiaMensalRS: parseFloat(economiaMensal.toFixed(2)),
     economiaAnualRS:  parseFloat((economiaMensal * 12).toFixed(2)),
     reducaoDemandaPossivel: reducaoDemanda,
+    custoDemandaBaseRS: custoDemanda.custoBaseRS,
+    custoUltrapassagemDemandaRS: custoDemanda.custoUltrapassagemRS,
+    houveUltrapassagemDemanda: custoDemanda.houveUltrapassagem,
     alertas,
     observacoes,
   };

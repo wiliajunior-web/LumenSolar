@@ -449,7 +449,7 @@ describe('AUDITORIA 9 — NBR 5410 (componentes elétricos CA)', () => {
 // BLOCO 10 — CABO CA + QUEDA DE TENSÃO (NBR 5410 + slide 48-58 do curso)
 // ═══════════════════════════════════════════════════════════════════════════════
 import { calcularCaboCA } from './dimensionamento/calcularCaboCA';
-import { calcularDimensionamentoGrupoA } from './dimensionamento/calcularGrupoA';
+import { calcularDimensionamentoGrupoA, calcularCustoDemanda } from './dimensionamento/calcularGrupoA';
 
 describe('CABO CA — NBR 5410 com correção de temperatura (slides 48–58)', () => {
   // Exemplo exato do curso: Ib=27.2A, FTA=0.71 (50°C), método C
@@ -592,6 +592,80 @@ describe('GRUPO A — Fator de compensação e dimensionamento P/FP', () => {
       hspLocal: 5.4, perdasSistema: 0.134, potenciaModuloWp: 550,
     });
     expect(r.geracaoMensalKWh).toBeGreaterThanOrEqual(r.geracaoNecessariaKWh - 1);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// BLOCO 11b — DEMANDA E ULTRAPASSAGEM (Toolbox de Elite — planilha DETERMINACAO/
+// Dimen. A: fórmula (medida×tarifa) + (medida−contratada)×2×tarifa)
+// ═══════════════════════════════════════════════════════════════════════════════
+describe('GRUPO A — Custo de demanda e ultrapassagem', () => {
+  const TARIFA_A = {
+    tePontaKWh: 0.5432,
+    teForaPontaKWh: 0.2345,
+    tusdPontaKWh: 0.3210,
+    tusdForaPontaKWh: 0.1543,
+    demandaKW: 35.00,
+  };
+
+  it('[GD-1] Sem demanda medida informada → cobra só a contratada (comportamento anterior preservado)', () => {
+    const r = calcularCustoDemanda(80, 27.37844);
+    expect(r.houveUltrapassagem).toBe(false);
+    expect(r.custoBaseRS).toBeCloseTo(80 * 27.37844, 2);
+    expect(r.custoUltrapassagemRS).toBe(0);
+    expect(r.custoTotalRS).toBeCloseTo(2190.2752, 2);
+  });
+
+  it('[GD-2] Demanda medida abaixo da contratada → sem ultrapassagem, cobra a contratada', () => {
+    const r = calcularCustoDemanda(80, 27.37844, 70);
+    expect(r.houveUltrapassagem).toBe(false);
+    expect(r.custoTotalRS).toBeCloseTo(80 * 27.37844, 2);
+  });
+
+  it('[GD-3] Demanda medida 95kW sobre contratada 80kW — verificado manualmente (Python, independente do TS)', () => {
+    const r = calcularCustoDemanda(80, 27.37844, 95);
+    expect(r.ultrapassagemKW).toBeCloseTo(15, 3);
+    expect(r.houveUltrapassagem).toBe(true);
+    // base = 95 × 27.37844 = 2600.9518
+    expect(r.custoBaseRS).toBeCloseTo(2600.9518, 2);
+    // ultrapassagem = 15 × 2 × 27.37844 = 821.3532
+    expect(r.custoUltrapassagemRS).toBeCloseTo(821.3532, 2);
+    // precisão 1 (tolerância 0.05): 3422.305 cai exatamente na borda de
+    // arredondamento de ponto flutuante entre 3422.30 e 3422.31 no toFixed(2)
+    expect(r.custoTotalRS).toBeCloseTo(3422.305, 1);
+  });
+
+  it('[GD-4] Demanda medida igual à contratada → sem ultrapassagem', () => {
+    const r = calcularCustoDemanda(100, 30, 100);
+    expect(r.houveUltrapassagem).toBe(false);
+    expect(r.ultrapassagemKW).toBe(0);
+  });
+
+  it('[GD-5] calcularDimensionamentoGrupoA propaga a ultrapassagem para contaAntesRS e para o alerta', () => {
+    const semUltrapassagem = calcularDimensionamentoGrupoA({
+      consumo: { historicoBFP: new Array(12).fill(1000), historicoBP: new Array(12).fill(200), demandaContratadaKW: 80 },
+      tarifa: TARIFA_A, hspLocal: 5.4, perdasSistema: 0.134, potenciaModuloWp: 550,
+    });
+    const comUltrapassagem = calcularDimensionamentoGrupoA({
+      consumo: { historicoBFP: new Array(12).fill(1000), historicoBP: new Array(12).fill(200), demandaContratadaKW: 80, demandaMedidaFPkW: 95 },
+      tarifa: TARIFA_A, hspLocal: 5.4, perdasSistema: 0.134, potenciaModuloWp: 550,
+    });
+    expect(comUltrapassagem.houveUltrapassagemDemanda).toBe(true);
+    expect(semUltrapassagem.houveUltrapassagemDemanda).toBe(false);
+    // Consumo (energiaFP+energiaP) é idêntico nos dois casos — isolando a
+    // parcela de demanda de contaAntesRS, o restante (energia) deve bater:
+    const energiaCom = comUltrapassagem.contaAntesRS - comUltrapassagem.custoDemandaBaseRS - comUltrapassagem.custoUltrapassagemDemandaRS;
+    const energiaSem = semUltrapassagem.contaAntesRS - semUltrapassagem.custoDemandaBaseRS - semUltrapassagem.custoUltrapassagemDemandaRS;
+    expect(energiaCom).toBeCloseTo(energiaSem, 2);
+    // E a conta com ultrapassagem deve ser estritamente maior
+    expect(comUltrapassagem.contaAntesRS).toBeGreaterThan(semUltrapassagem.contaAntesRS);
+    expect(comUltrapassagem.custoUltrapassagemDemandaRS).toBeGreaterThan(0);
+    expect(comUltrapassagem.alertas.some(a => a.includes('Ultrapassagem de demanda'))).toBe(true);
+  });
+
+  it('[GD-6] Rejeita demanda contratada ou tarifa negativas', () => {
+    expect(() => calcularCustoDemanda(-1, 30)).toThrow();
+    expect(() => calcularCustoDemanda(100, -1)).toThrow();
   });
 });
 
