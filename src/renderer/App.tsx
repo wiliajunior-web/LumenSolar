@@ -10,34 +10,39 @@ import { PropostaPDF } from '@domain/proposta/PropostaPDF';
 // Excel gerarExcel importado dinamicamente para não impactar o bundle inicial
 
 // ─── Sistema de Design ───────────────────────────────────────────────────────
+// Tema claro (trocado a pedido do usuário em 25/08/2026 — era dark antes).
+// D.header permanece um tom escuro deliberado: é usado só em "chips" pequenos
+// (texto sobre botão dourado, fundo do tooltip) — nunca como fundo de página —
+// então continuar escuro ali é um padrão de UI comum (ex.: tooltip escuro sobre
+// página clara), não uma sobra do tema antigo.
 const D = {
-  // Paleta Lumen Soluções — preto real + branco limpo + ouro
+  // Paleta Lumen Soluções — fundo claro + texto escuro + ouro
   // Ref: logo oficial (ChatGPT_Image_7_de_jul__de_2026__10_57_52.png)
   //
-  // 60% — fundo preto real (sem tinta azul)
-  bg:         '#0d0d0f',
-  // 30% — cards e painéis (cinza quente escuro, sem azul)
-  card:       '#181818',
-  sidebar:    '#111111',
-  header:     '#111111',
+  // 60% — fundo claro (bege/creme quente, sem branco puro estéril)
+  bg:         '#f2f0e8',
+  // 30% — cards e painéis (branco, "elevado" em relação ao fundo)
+  card:       '#ffffff',
+  sidebar:    '#ffffff',
+  header:     '#1a1a1a',
   // 10% — ouro Lumen (igual ao logo)
   gold:       '#c9a227',
   goldLight:  '#e8c547',
   goldMuted:  '#c9a22720',
-  // Texto — branco limpo (sem tinta azul que apaga as letras)
-  text:       '#f5f5f5',   // branco quente — legível, igual ao "LUMEN" do logo
-  textSub:    '#999999',   // cinza médio neutro
-  textMuted:  '#555555',   // placeholders, hints
+  // Texto — escuro sobre fundo claro
+  text:       '#1a1a1a',   // quase preto — legível, alto contraste no fundo claro
+  textSub:    '#5c5a52',   // cinza médio quente
+  textMuted:  '#8a8776',   // placeholders, hints
   // Bordas
-  border:     '#252525',   // sutil, não distrai
-  borderLight:'#1e1e1e',
+  border:     '#e4e1d6',   // sutil, não distrai
+  borderLight:'#ece9dd',
   // Semânticas
   success:    '#22c55e',
   danger:     '#ef4444',
   blue:       '#3b82f6',
-  // Shadows — mais pronunciadas no dark
-  shadow: '0 2px 8px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.2)',
-  shadowMd: '0 4px 16px rgba(0,0,0,.4)',
+  // Shadows — suaves no tema claro (não precisa do peso do dark)
+  shadow: '0 1px 3px rgba(20,18,10,.05), 0 6px 18px rgba(20,18,10,.06)',
+  shadowMd: '0 3px 12px rgba(20,18,10,.08)',
 };
 
 const GLOBAL_CSS = `
@@ -55,7 +60,7 @@ input[type=number] { font-variant-numeric: tabular-nums; }
 .inp {
   width: 100%; padding: 8px 10px;
   border: 1.5px solid ${D.border}; border-radius: 7px;
-  font-size: 13px; color: ${D.text}; background: #0a0a0a;
+  font-size: 13px; color: ${D.text}; background: #f7f6f1;
   transition: border-color .15s, box-shadow .15s;
   outline: none;
 }
@@ -193,7 +198,7 @@ const Tip = ({ text }: { text: string }) => {
     background: D.header, color: '#e0e0e0', borderRadius: 8, padding: '9px 13px',
     fontSize: 12, lineHeight: 1.55, width: 260, zIndex: 9999,
     boxShadow: '0 4px 24px rgba(0,0,0,.5)', whiteSpace: 'normal', pointerEvents: 'none',
-    border: '1px solid #2a2d3e',
+    border: '1px solid #ddd9cb',
     ...(dir === 'above' ? { bottom: 'calc(100% + 8px)', left: '50%', transform: 'translateX(-50%)' } :
         dir === 'below' ? { top:    'calc(100% + 8px)', left: '50%', transform: 'translateX(-50%)' } :
                           { bottom: 'calc(100% + 8px)', right: 0,    transform: 'none' }),
@@ -258,14 +263,14 @@ const Sidebar = ({ aba, setAba, logo, nomeEmpresa, onEmpresa, stepStatus }: {
       padding: '20px 0', flexShrink: 0, height: '100%',
     }}>
       {/* Logo */}
-      <div style={{ padding: '0 20px 20px', borderBottom: `1px solid #1e2030` }}>
+      <div style={{ padding: '0 20px 20px', borderBottom: `1px solid #e6e3d6` }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           {logo
             ? <img src={logo} style={{ width: 28, height: 28, borderRadius: '50%', objectFit: 'contain' }} />
             : <div style={{ width: 28, height: 28, borderRadius: '50%', background: D.gold, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 900, color: D.header }}>L</div>
           }
           <div style={{ lineHeight: 1.1 }}>
-            <div style={{ color: '#fff', fontWeight: 800, fontSize: 13, letterSpacing: '.06em' }}>LUMEN</div>
+            <div style={{ color: '#1a1a1a', fontWeight: 800, fontSize: 13, letterSpacing: '.06em' }}>LUMEN</div>
             <div style={{ color: D.gold, fontWeight: 600, fontSize: 11, letterSpacing: '.04em' }}>SOLAR</div>
           </div>
         </div>
@@ -276,7 +281,7 @@ const Sidebar = ({ aba, setAba, logo, nomeEmpresa, onEmpresa, stepStatus }: {
         {/* Linha de progresso vertical */}
         <div style={{
           position: 'absolute', left: 36, top: 28, width: 2,
-          height: `calc(100% - 56px)`, background: '#1e2030',
+          height: `calc(100% - 56px)`, background: '#e6e3d6',
         }} />
         <div style={{
           position: 'absolute', left: 36, top: 28, width: 2,
@@ -303,9 +308,9 @@ const Sidebar = ({ aba, setAba, logo, nomeEmpresa, onEmpresa, stepStatus }: {
                 width: 18, height: 18, borderRadius: '50%', flexShrink: 0,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontSize: 9, fontWeight: 900, zIndex: 1,
-                background: done ? D.gold : current ? D.gold : '#1e2030',
-                border: current ? `none` : done ? 'none' : `2px solid #2a2d3e`,
-                color: done || current ? D.header : '#3a3d54',
+                background: done ? D.gold : current ? D.gold : '#e6e3d6',
+                border: current ? `none` : done ? 'none' : `2px solid #ddd9cb`,
+                color: done || current ? D.header : '#c7c3b3',
                 boxShadow: current ? `0 0 0 4px ${D.goldMuted}` : 'none',
                 transition: 'all .2s',
                 outline: stepStatus[step.id] === 'completo' && !done ? `2px solid #16a34a` : stepStatus[step.id] === 'parcial' ? `2px solid #eab308` : 'none',
@@ -314,7 +319,7 @@ const Sidebar = ({ aba, setAba, logo, nomeEmpresa, onEmpresa, stepStatus }: {
               </div>
               <span style={{
                 fontSize: 12, fontWeight: current ? 700 : 500,
-                color: current ? '#fff' : done ? D.gold : '#666666',
+                color: current ? '#1a1a1a' : done ? D.gold : '#666666',
                 transition: 'color .15s',
               }}>{step.label}</span>
             </div>
@@ -323,10 +328,10 @@ const Sidebar = ({ aba, setAba, logo, nomeEmpresa, onEmpresa, stepStatus }: {
       </nav>
 
       {/* Empresa button */}
-      <div style={{ padding: '16px 20px', borderTop: `1px solid #1e2030` }}>
+      <div style={{ padding: '16px 20px', borderTop: `1px solid #e6e3d6` }}>
         <button onClick={onEmpresa} style={{
-          width: '100%', padding: '8px 12px', background: '#1a1a1a',
-          border: `1px solid #2a2d3e`, borderRadius: 8, color: '#8a8d9e',
+          width: '100%', padding: '8px 12px', background: '#eeece2',
+          border: `1px solid #ddd9cb`, borderRadius: 8, color: '#6f6d63',
           fontSize: 12, fontWeight: 600, cursor: 'pointer', letterSpacing: '.03em',
           display: 'flex', alignItems: 'center', gap: 8,
         }}>
@@ -706,7 +711,7 @@ function TabEmpresa({ onClose }: { onClose: () => void }) {
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               {empresa.fotoCapa
                 ? <img src={empresa.fotoCapa} style={{ width: 72, height: 52, objectFit: 'cover', borderRadius: 6, border: `1px solid ${D.border}` }} />
-                : <div style={{ width: 72, height: 52, background: '#0d0d0f', borderRadius: 6, border: `1px solid ${D.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: D.gold }}>CAPA</div>
+                : <div style={{ width: 72, height: 52, background: '#f2f0e8', borderRadius: 6, border: `1px solid ${D.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: D.gold }}>CAPA</div>
               }
               <div>
                 <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', background: D.gold, color: D.header, borderRadius: 6, cursor: 'pointer', fontSize: 11, fontWeight: 700 }}>
@@ -724,7 +729,7 @@ function TabEmpresa({ onClose }: { onClose: () => void }) {
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               {empresa.fotoApoio
                 ? <img src={empresa.fotoApoio} style={{ width: 72, height: 52, objectFit: 'cover', borderRadius: 6, border: `1px solid ${D.border}` }} />
-                : <div style={{ width: 72, height: 52, background: '#0d0d0f', borderRadius: 6, border: `1px solid ${D.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: D.gold }}>BANNER</div>
+                : <div style={{ width: 72, height: 52, background: '#f2f0e8', borderRadius: 6, border: `1px solid ${D.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: D.gold }}>BANNER</div>
               }
               <div>
                 <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', background: D.gold, color: D.header, borderRadius: 6, cursor: 'pointer', fontSize: 11, fontWeight: 700 }}>
@@ -863,14 +868,14 @@ function TabConsumo({ onPrev, onNext }: { onPrev:()=>void; onNext:()=>void }) {
           </div>
           {/* Toggle Grupo B / A */}
           <div style={{ marginBottom:12, display:'flex', gap:8, alignItems:'center' }}>
-            <span style={{ fontSize:11, fontWeight:700, color:'#999999', textTransform:'uppercase', letterSpacing:'.05em' }}>Grupo de tensão:</span>
+            <span style={{ fontSize:11, fontWeight:700, color:'#6f6d63', textTransform:'uppercase', letterSpacing:'.05em' }}>Grupo de tensão:</span>
             {(['B','A'] as const).map(g => (
               <button key={g} onClick={() => s.atualizarConsumo({ grupoTensao: g } as any)}
                 style={{ padding:'4px 16px', borderRadius:20, fontSize:12, fontWeight:700,
                   cursor:'pointer', border:'1.5px solid',
                   background:(s.consumo as any).grupoTensao === g ? '#c9a22722' : 'transparent',
-                  borderColor:(s.consumo as any).grupoTensao === g ? '#c9a227' : '#252525',
-                  color:(s.consumo as any).grupoTensao === g ? '#c9a227' : '#999999' }}>
+                  borderColor:(s.consumo as any).grupoTensao === g ? '#c9a227' : '#e4e1d6',
+                  color:(s.consumo as any).grupoTensao === g ? '#c9a227' : '#6f6d63' }}>
                 Grupo {g} — {g==='B' ? 'Baixa Tensão (residencial/comercial)' : 'Média Tensão (industrial)'}
               </button>
             ))}
@@ -878,7 +883,7 @@ function TabConsumo({ onPrev, onNext }: { onPrev:()=>void; onNext:()=>void }) {
 
           {/* Grupo A — tarifas específicas P/FP e histórico separado */}
           {(s.consumo as any).grupoTensao === 'A' && (
-            <div style={{ background:'#111111', border:'1px solid #f59e0b44', borderRadius:10, padding:16, marginBottom:12 }}>
+            <div style={{ background:'#faf9f5', border:'1px solid #f59e0b44', borderRadius:10, padding:16, marginBottom:12 }}>
               <div style={{ fontSize:12, fontWeight:700, color:'#f59e0b', marginBottom:12, textTransform:'uppercase', letterSpacing:'.05em' }}>
                 ⚡ Grupo A — Tarifas Média Tensão (P/FP)
               </div>
@@ -934,7 +939,7 @@ function TabConsumo({ onPrev, onNext }: { onPrev:()=>void; onNext:()=>void }) {
             >
               <div style={{ display:'flex', gap:8 }}>
                 <input className="inp inp-num" type="number" step="0.00001" value={s.consumo.tarifaRealKWhComICMS || ''} onChange={e => s.atualizarConsumo({ tarifaRealKWhComICMS: Number(e.target.value) })} placeholder="Ex: 1.18272801" style={{ flex:1 }} />
-                <button onClick={() => window.open('https://www.aneel.gov.br/tarifas', '_blank')} style={{ padding:'6px 12px', borderRadius:8, border:'1px solid #2a2d3e', background:'#1a1a1a', color:'#8a8d9e', fontSize:12, fontWeight:600, cursor:'pointer', whiteSpace:'nowrap' }} title="Consultar tarifas vigentes no portal ANEEL">⚡ ANEEL</button>
+                <button onClick={() => window.open('https://www.aneel.gov.br/tarifas', '_blank')} style={{ padding:'6px 12px', borderRadius:8, border:'1px solid #ddd9cb', background:'#eeece2', color:'#6f6d63', fontSize:12, fontWeight:600, cursor:'pointer', whiteSpace:'nowrap' }} title="Consultar tarifas vigentes no portal ANEEL">⚡ ANEEL</button>
               </div>
             </Campo>
             <Campo label="CIP / Iluminação pública (R$/mês)" hint="Linha 'Contrib. Ilum. Publica Municipal'" tip="Contribuição municipal de iluminação pública. Na conta CEMIG aparece como 'Contrib. Ilum. Publica Municipal'. Persiste após instalação solar.">
@@ -966,7 +971,7 @@ function TabConsumo({ onPrev, onNext }: { onPrev:()=>void; onNext:()=>void }) {
           {/* Grade compacta de kWh — 3 colunas */}
           <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap: 8, marginBottom: 14 }}>
             {s.consumo.contas.map((conta, i) => (
-              <div key={i} style={{ display:'flex', alignItems:'center', gap: 8, background:'#080a12', borderRadius: 8, padding:'8px 12px', border:`1px solid ${conta.kWh > 0 ? D.gold+'33' : D.border}` }}>
+              <div key={i} style={{ display:'flex', alignItems:'center', gap: 8, background:'#f7f6f0', borderRadius: 8, padding:'8px 12px', border:`1px solid ${conta.kWh > 0 ? D.gold+'33' : D.border}` }}>
                 <span style={{ fontSize: 11, color: D.textMuted, minWidth: 42, fontWeight: 600 }}>Mês {i+1}</span>
                 <input
                   className="inp inp-num"
@@ -975,11 +980,11 @@ function TabConsumo({ onPrev, onNext }: { onPrev:()=>void; onNext:()=>void }) {
                   onChange={e => s.atualizarConta(i, { kWh: Number(e.target.value) })}
                   placeholder="kWh"
                   autoFocus={i===0}
-                  style={{ flex: 1, padding:'4px 8px', fontSize: 14, fontWeight: conta.kWh > 0 ? 700 : 400, textAlign:'right', color:'#d0d4f0', background:'transparent', border:'none', borderBottom:`1px solid ${D.border}`, borderRadius: 0, minWidth: 0, outline:'none' }}
+                  style={{ flex: 1, padding:'4px 8px', fontSize: 14, fontWeight: conta.kWh > 0 ? 700 : 400, textAlign:'right', color:'#2a2a3a', background:'transparent', border:'none', borderBottom:`1px solid ${D.border}`, borderRadius: 0, minWidth: 0, outline:'none' }}
                 />
                 {s.consumo.contas.length > 3 && (
                   <button onClick={() => s.removerConta(i)}
-                    style={{ background:'none', border:'none', color:'#3a3d52', cursor:'pointer', fontSize: 14, lineHeight: 1, padding: '0 2px', flexShrink: 0 }}
+                    style={{ background:'none', border:'none', color:'#c7c3b3', cursor:'pointer', fontSize: 14, lineHeight: 1, padding: '0 2px', flexShrink: 0 }}
                     title="Remover">×</button>
                 )}
               </div>
@@ -1121,11 +1126,11 @@ function StrategiaKwp({ mediaKWh, uf, s }: { mediaKWh: number; uf: string; s: an
   }).filter(sg => sg.mod >= 1 && sg.mod <= 40);
 
   return (
-    <div style={{ background: D.header, border: `1px solid #2a2d3e`, borderRadius: 14, padding: '18px 22px', marginBottom: 18 }}>
+    <div style={{ background: D.header, border: `1px solid #ddd9cb`, borderRadius: 14, padding: '18px 22px', marginBottom: 18 }}>
 
       {/* Linha de potência mínima */}
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 16 }}>
-        <span style={{ fontSize: 11, color: '#8a8d9e', fontWeight: 700, letterSpacing: '.05em', textTransform: 'uppercase' }}>Dimensionamento mínimo</span>
+        <span style={{ fontSize: 11, color: '#6f6d63', fontWeight: 700, letterSpacing: '.05em', textTransform: 'uppercase' }}>Dimensionamento mínimo</span>
         <span style={{ color: D.gold, fontWeight: 900, fontSize: 22, fontVariantNumeric: 'tabular-nums' }}>{fmtNum(kWpMinimo, 2)} kWp</span>
         <span style={{ color: '#666666', fontSize: 12 }}>para {fmtNum(mediaKWh,0)} kWh/mês em {uf}</span>
         <Tip text={`Fórmula IEC 61724-1: ${fmtNum(mediaKWh,0)} kWh ÷ (${fmtNum(hsp,1)} h/dia × 30,42 dias × 80% eficiência) = ${fmtNum(kWpMinimo,2)} kWp`} />
@@ -1146,7 +1151,7 @@ function StrategiaKwp({ mediaKWh, uf, s }: { mediaKWh: number; uf: string; s: an
                 style={{
                   padding: '7px 14px', borderRadius: 8, border: 'none', cursor: 'pointer', fontWeight: 700,
                   fontSize: 13, lineHeight: 1, transition: 'all .15s',
-                  background: ativa ? e.cor : '#1a1a1a',
+                  background: ativa ? e.cor : '#eeece2',
                   color: ativa ? '#fff' : '#666666',
                   outline: ativa ? `2px solid ${e.cor}66` : 'none',
                 }}
@@ -1161,7 +1166,7 @@ function StrategiaKwp({ mediaKWh, uf, s }: { mediaKWh: number; uf: string; s: an
             style={{
               padding: '7px 14px', borderRadius: 8, border: 'none', cursor: 'pointer', fontWeight: 700,
               fontSize: 13, lineHeight: 1, transition: 'all .15s',
-              background: isLivre ? '#444444' : '#1a1a1a', color: isLivre ? '#fff' : '#666666',
+              background: isLivre ? D.gold : '#eeece2', color: isLivre ? D.header : '#666666',
             }}
           >
             Livre
@@ -1171,26 +1176,26 @@ function StrategiaKwp({ mediaKWh, uf, s }: { mediaKWh: number; uf: string; s: an
 
         {isLivre && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span style={{ fontSize: 12, color: '#8a8d9e' }}>Percentual:</span>
+            <span style={{ fontSize: 12, color: '#6f6d63' }}>Percentual:</span>
             <input className="inp inp-num" type="number" step="5" min="100" max="300"
               value={Math.round(perc * 100)}
               onChange={e => s.atualizarKit({ percentualCompensacaoDesejado: Number(e.target.value) / 100 })}
               style={{ width: 80, padding: '4px 8px' }}
             />
-            <span style={{ fontSize: 12, color: '#8a8d9e' }}>% do consumo atual</span>
+            <span style={{ fontSize: 12, color: '#6f6d63' }}>% do consumo atual</span>
           </div>
         )}
 
         {/* Indicador do alvo */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', background: '#141414', borderRadius: 8, marginTop: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', background: '#f2f0e6', borderRadius: 8, marginTop: 10 }}>
           <div>
             <span style={{ fontSize: 10, color: '#666666', display: 'block', marginBottom: 2 }}>Alvo com essa estratégia</span>
-            <span style={{ fontSize: 18, fontWeight: 900, color: estratAtiva?.cor ?? '#94a3b8', fontVariantNumeric: 'tabular-nums' }}>{fmtNum(kWpAlvo, 2)} kWp</span>
+            <span style={{ fontSize: 18, fontWeight: 900, color: estratAtiva?.cor ?? '#5b6478', fontVariantNumeric: 'tabular-nums' }}>{fmtNum(kWpAlvo, 2)} kWp</span>
           </div>
           {perc > 1.005 && (
-            <div style={{ borderLeft: `1px solid #2a2d3e`, paddingLeft: 12 }}>
+            <div style={{ borderLeft: `1px solid #ddd9cb`, paddingLeft: 12 }}>
               <span style={{ fontSize: 10, color: '#666666', display: 'block', marginBottom: 2 }}>Reserva de energia</span>
-              <span style={{ fontSize: 14, fontWeight: 700, color: '#94a3b8' }}>+{fmtNum((perc-1)*100,0)}% → {fmtNum(mediaKWh*(perc-1),0)} kWh/mês extras</span>
+              <span style={{ fontSize: 14, fontWeight: 700, color: '#5b6478' }}>+{fmtNum((perc-1)*100,0)}% → {fmtNum(mediaKWh*(perc-1),0)} kWh/mês extras</span>
             </div>
           )}
         </div>
@@ -1202,7 +1207,7 @@ function StrategiaKwp({ mediaKWh, uf, s }: { mediaKWh: number; uf: string; s: an
           Motivo (aparece na proposta)
         </div>
         <select
-          style={{ width: '100%', padding: '7px 10px', background: '#1a1a1a', border: `1px solid #2a2d3e`, borderRadius: 7, color: '#d0d0d8', fontSize: 12 }}
+          style={{ width: '100%', padding: '7px 10px', background: '#eeece2', border: `1px solid #ddd9cb`, borderRadius: 7, color: '#33323a', fontSize: 12 }}
           value={s.kit.motivoSuperdimensionamento}
           onChange={e => s.atualizarKit({ motivoSuperdimensionamento: e.target.value })}
         >
@@ -1218,10 +1223,10 @@ function StrategiaKwp({ mediaKWh, uf, s }: { mediaKWh: number; uf: string; s: an
         {sugestoes.map(sg => (
           <div key={sg.wp}
             onClick={() => s.atualizarKit({ potenciaModuloWp: sg.wp, quantidade: sg.mod })}
-            style={{ background: '#141414', border: `1px solid ${sg.pct >= Math.round(perc*100)-5 && sg.pct <= Math.round(perc*100)+10 ? D.gold+'44' : '#1e2030'}`, borderRadius: 9, padding: '9px 13px', cursor: 'pointer', minWidth: 95, transition: 'border-color .15s' }}
+            style={{ background: '#f2f0e6', border: `1px solid ${sg.pct >= Math.round(perc*100)-5 && sg.pct <= Math.round(perc*100)+10 ? D.gold+'44' : '#e6e3d6'}`, borderRadius: 9, padding: '9px 13px', cursor: 'pointer', minWidth: 95, transition: 'border-color .15s' }}
           >
             <div style={{ fontSize: 10, color: '#666666', marginBottom: 2 }}>{sg.wp} Wp/módulo</div>
-            <div style={{ fontSize: 14, fontWeight: 800, color: '#e0e0e8', fontVariantNumeric: 'tabular-nums' }}>{sg.mod} mod.</div>
+            <div style={{ fontSize: 14, fontWeight: 800, color: '#2a2a33', fontVariantNumeric: 'tabular-nums' }}>{sg.mod} mod.</div>
             <div style={{ fontSize: 11, fontWeight: 700, color: D.gold }}>{fmtNum(sg.pot, 2)} kWp</div>
             <div style={{ fontSize: 10, color: sg.pct >= 100 ? '#16a34a' : '#ef4444' }}>
               {sg.pct}% do consumo
@@ -1345,11 +1350,11 @@ function ComponentesRecomendados({ kit }: { kit: any }) {
     const id = label;
     const temRastreio = !!(norma || slide || formula);
     return (
-      <div style={{ borderBottom:`1px solid #1a1d2e` }}>
+      <div style={{ borderBottom:`1px solid #e6e3d8` }}>
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'9px 0' }}>
           <div style={{ flex:1, minWidth:0 }}>
             <div style={{ display:'flex', alignItems:'center', gap:6 }}>
-              <div style={{ fontSize:13, color:'#d0d0d0', fontWeight:600 }}>{label}</div>
+              <div style={{ fontSize:13, color:'#3a3a3a', fontWeight:600 }}>{label}</div>
               {temRastreio && (
                 <button onClick={() => setLinhaHover(linhaHover===id?null:id)}
                   style={{ background:'none', border:'none', cursor:'pointer', color: linhaHover===id ? '#c9a227' : '#444444',
@@ -1360,15 +1365,15 @@ function ComponentesRecomendados({ kit }: { kit: any }) {
             {sub && <div style={{ fontSize:11, color:'#555555', marginTop:2 }}>{sub}</div>}
           </div>
           <div style={{ textAlign:'right', flexShrink:0, marginLeft:12 }}>
-            <div style={{ fontSize:15, fontWeight:800, color:'#f5f5f5', fontVariantNumeric:'tabular-nums' }}>{valor}</div>
+            <div style={{ fontSize:15, fontWeight:800, color:'#1a1a1a', fontVariantNumeric:'tabular-nums' }}>{valor}</div>
             {destaque && <Tag cor="#c9a227">{destaque}</Tag>}
           </div>
         </div>
         {linhaHover===id && temRastreio && (
-          <div style={{ background:'#0a0a0a', border:'1px solid #c9a22744', borderRadius:8, padding:'10px 14px', marginBottom:8, fontSize:11 }}>
-            {norma  && <div style={{ color:'#86efac', marginBottom:4 }}>📋 <strong>Norma:</strong> {norma}</div>}
-            {slide  && <div style={{ color:'#93c5fd', marginBottom:4 }}>📖 <strong>Referência:</strong> {slide}</div>}
-            {formula && <div style={{ color:'#fcd34d', fontFamily:'monospace', background:'#181818', padding:'4px 8px', borderRadius:4 }}>∑ {formula}</div>}
+          <div style={{ background:'#f7f6f1', border:'1px solid #c9a22744', borderRadius:8, padding:'10px 14px', marginBottom:8, fontSize:11 }}>
+            {norma  && <div style={{ color:'#15803d', marginBottom:4 }}>📋 <strong>Norma:</strong> {norma}</div>}
+            {slide  && <div style={{ color:'#1e40af', marginBottom:4 }}>📖 <strong>Referência:</strong> {slide}</div>}
+            {formula && <div style={{ color:'#7a5c00', fontFamily:'monospace', background:'#f5f3ea', padding:'4px 8px', borderRadius:4 }}>∑ {formula}</div>}
           </div>
         )}
       </div>
@@ -1377,18 +1382,18 @@ function ComponentesRecomendados({ kit }: { kit: any }) {
 
   if (naoPreenchido) {
     return (
-      <div style={{ background:'#0d0f1a', border:`1px dashed #2a2d3e`, borderRadius:12, padding:'20px 24px', marginBottom:18, textAlign:'center' }}>
+      <div style={{ background:'#f5f4ea', border:`1px dashed #ddd9cb`, borderRadius:12, padding:'20px 24px', marginBottom:18, textAlign:'center' }}>
         <div style={{ fontSize:14, color:'#444444' }}>⚡ Preencha a potência do inversor para ver os componentes recomendados</div>
       </div>
     );
   }
 
   return (
-    <div style={{ background:'#0d0f1a', border:`1px solid #1e2135`, borderRadius:14, padding:'18px 24px', marginBottom:18 }}>
+    <div style={{ background:'#f5f4ea', border:`1px solid #e2dfd0`, borderRadius:14, padding:'18px 24px', marginBottom:18 }}>
       <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:16 }}>
         <span style={{ fontSize:16 }}>⚡</span>
         <div>
-          <div style={{ fontSize:13, fontWeight:800, color:'#f5f5f5' }}>Componentes Recomendados — NBR 5410 / NBR 16690</div>
+          <div style={{ fontSize:13, fontWeight:800, color:'#1a1a1a' }}>Componentes Recomendados — NBR 5410 / NBR 16690</div>
           <div style={{ fontSize:11, color:'#555555' }}>Calculado automaticamente para {potCA_kW} kW CA / {tensaoCA} V</div>
         </div>
       </div>
@@ -1533,8 +1538,8 @@ function ComponentesRecomendados({ kit }: { kit: any }) {
         </div>
       </div>
 
-      <div style={{ marginTop:14, padding:'8px 12px', background:'#0a0a0a', borderRadius:8, fontSize:11, color:'#444444', lineHeight:1.6 }}>
-        <strong style={{ color:'#6b6d82' }}>Notas:</strong> Cabo CA: Tabela 36 NBR 5410 (eletroduto embutido, 70°C) + FTA temperatura.
+      <div style={{ marginTop:14, padding:'8px 12px', background:'#f7f6f1', borderRadius:8, fontSize:11, color:'#444444', lineHeight:1.6 }}>
+        <strong style={{ color:'#57566a' }}>Notas:</strong> Cabo CA: Tabela 36 NBR 5410 (eletroduto embutido, 70°C) + FTA temperatura.
         Cabo CC: NBR 16690 / IEC 60364-7-712 (cabo solar XLPE 90°C) + FTA.
         DPS CA: NBR IEC 62305-3 Classe II.
       </div>
@@ -1562,7 +1567,7 @@ function ComponentesRecomendados({ kit }: { kit: any }) {
             ideal:'#22c55e', aceitavel:'#f59e0b', alto:'#f97316', baixo:'#f97316', invalido:'#ef4444',
           };
           return (
-            <div style={{ marginTop:16, padding:'14px 16px', background:'#0a0a0a',
+            <div style={{ marginTop:16, padding:'14px 16px', background:'#f7f6f1',
               border:`1px solid ${r.aprovado ? '#22c55e44' : '#ef444444'}`, borderRadius:10 }}>
               <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:12 }}>
                 <span style={{ fontSize:12, fontWeight:800, color:'#c9a227', textTransform:'uppercase', letterSpacing:'.05em' }}>
@@ -1595,10 +1600,10 @@ function ComponentesRecomendados({ kit }: { kit: any }) {
                     badge:r.criterio3Ok?'OK':'AJUSTAR', cor:r.criterio3Ok?'#22c55e':'#ef4444',
                   },
                 ].map(({ n, ok, val, sub, badge, cor }) => (
-                  <div key={n} style={{ background:'#111', borderRadius:8, padding:'10px 12px',
+                  <div key={n} style={{ background:'#faf9f5', borderRadius:8, padding:'10px 12px',
                     border:`1px solid ${ok?'#22c55e33':'#ef444433'}` }}>
                     <div style={{ fontSize:10, color:'#888', marginBottom:4 }}>{n}</div>
-                    <div style={{ fontSize:14, fontWeight:800, color:'#f5f5f5' }}>{val}</div>
+                    <div style={{ fontSize:14, fontWeight:800, color:'#1a1a1a' }}>{val}</div>
                     <div style={{ fontSize:10, color:'#666', marginBottom:6 }}>{sub}</div>
                     <span style={{ fontSize:10, fontWeight:700, padding:'1px 8px', borderRadius:10,
                       background:`${cor}22`, color:cor }}>{badge}</span>
@@ -1750,7 +1755,7 @@ Use valores numéricos reais. coefTempPmax deve ser negativo (ex: -0.35). Se nã
   }
 
   const label = tipo === 'modulo' ? '📋 Importar Datasheet do Módulo' : '📋 Importar Datasheet do Inversor';
-  const colors = { idle:'#2a2d3e', lendo:'#1a3a6e', extraindo:'#7c3aed', ok:'#166534', erro:'#7f1d1d' };
+  const colors = { idle:'#ddd9cb', lendo:'#1a3a6e', extraindo:'#7c3aed', ok:'#166534', erro:'#7f1d1d' };
   const texts  = { idle: label, lendo:'📖 Lendo PDF...', extraindo:'🤖 Extraindo dados...', ok:'✅ Dados importados!', erro:`❌ ${erro.slice(0,60)}` };
 
   return (
@@ -1762,7 +1767,7 @@ Use valores numéricos reais. coefTempPmax deve ser negativo (ex: -0.35). Se nã
         style={{
           padding:'7px 16px', borderRadius:8, border:`1px solid ${colors[estado]}`,
           background: estado !== 'idle' ? colors[estado]+'44' : 'transparent',
-          color: estado === 'ok' ? '#86efac' : estado === 'erro' ? '#fca5a5' : estado === 'idle' ? '#8a8d9e' : '#a0aaff',
+          color: estado === 'ok' ? '#15803d' : estado === 'erro' ? '#dc2626' : estado === 'idle' ? '#6f6d63' : '#4c4fb0',
           fontSize:12, fontWeight:600, cursor: estado === 'idle' ? 'pointer' : 'default',
           transition:'all .2s', whiteSpace:'nowrap',
         }}
@@ -1820,13 +1825,13 @@ function BuscadorCoordenadas({ endereco, cidade, uf, onEncontrado }: {
   return (
     <div style={{ gridColumn:'1/-1', display:'flex', alignItems:'center', gap:10, padding:'8px 0' }}>
       <button onClick={buscar} disabled={estado==='buscando'}
-        style={{ padding:'6px 16px', borderRadius:8, border:`1px solid #2a2d3e`,
-          background: estado==='ok' ? '#166534' : '#1a1a1a',
-          color: estado==='ok' ? '#86efac' : estado==='erro' ? '#fca5a5' : '#8a8d9e',
+        style={{ padding:'6px 16px', borderRadius:8, border:`1px solid #ddd9cb`,
+          background: estado==='ok' ? '#166534' : '#eeece2',
+          color: estado==='ok' ? '#15803d' : estado==='erro' ? '#dc2626' : '#6f6d63',
           fontSize:12, fontWeight:600, cursor:'pointer', whiteSpace:'nowrap' }}>
         {estado==='buscando' ? '🔍 Buscando...' : '🗺️ Buscar coordenadas UTM'}
       </button>
-      {msg && <span style={{ fontSize:12, color: estado==='erro' ? '#fca5a5' : '#86efac' }}>{msg}</span>}
+      {msg && <span style={{ fontSize:12, color: estado==='erro' ? '#dc2626' : '#15803d' }}>{msg}</span>}
       <span style={{ fontSize:11, color:'#444444' }}>Via OpenStreetMap — gratuito, sem API key</span>
     </div>
   );
@@ -1853,8 +1858,8 @@ function BadgeStatus({ status, onChange }: { status: StatusProposta; onChange: (
         {label} ▾
       </button>
       {open && (
-        <div style={{ position:'absolute', top:'100%', left:0, zIndex:100, background:'#1a1a1a',
-          border:`1px solid #2a2d3e`, borderRadius:8, padding:6, minWidth:160, marginTop:4 }}>
+        <div style={{ position:'absolute', top:'100%', left:0, zIndex:100, background:'#eeece2',
+          border:`1px solid #ddd9cb`, borderRadius:8, padding:6, minWidth:160, marginTop:4 }}>
           {(Object.entries(STATUS_LABELS) as [StatusProposta,{label:string;cor:string}][]).map(([k,v]) => (
             <div key={k} onClick={e => { e.stopPropagation(); onChange(k); setOpen(false); }}
               style={{ padding:'5px 10px', borderRadius:6, cursor:'pointer', fontSize:12,
@@ -1988,7 +1993,7 @@ function TabKit({ onPrev, onNext }: { onPrev:()=>void; onNext:()=>void }) {
           ciclo_profundo_opzv:'OPzV ciclo profundo (gel)', litio_lifepo4:'Lítio LiFePO4'
         };
         return (
-          <div style={{ background:D.card, border:'1px solid #252836', borderRadius:12, padding:'16px 20px', marginBottom:16 }}>
+          <div style={{ background:D.card, border:'1px solid #e2dfd0', borderRadius:12, padding:'16px 20px', marginBottom:16 }}>
             <div style={{ fontSize:12, fontWeight:800, color:D.gold, marginBottom:14, textTransform:'uppercase', letterSpacing:'.05em' }}>
               🔋 Dimensionamento de Banco de Baterias
             </div>
@@ -2044,7 +2049,7 @@ function TabKit({ onPrev, onNext }: { onPrev:()=>void; onNext:()=>void }) {
                 { label:'Controlador de carga', valor:`≥ ${corrCtrl} A`, sub:`Ic = 1.25 × Isc × ${s.kit.numStrings||1} strings` },
                 { label:`Autonomia (${tipoSist==='backup_hybrid'?'horas':'dias'})`, valor:`${autonomia}${tipoSist==='backup_hybrid'?'h':'d'}`, sub:`${tipoSist==='backup_hybrid'?'sem rede elétrica':'sem geração solar'}` },
               ].map(({ label, valor, sub }) => (
-                <div key={label} style={{ background:'#0a0a0a', borderRadius:8, padding:'10px 12px' }}>
+                <div key={label} style={{ background:'#f7f6f1', borderRadius:8, padding:'10px 12px' }}>
                   <div style={{ fontSize:10, color:D.textMuted, marginBottom:4 }}>{label}</div>
                   <div style={{ fontSize:15, fontWeight:800, color:D.text }}>{valor}</div>
                   <div style={{ fontSize:10, color:D.textMuted }}>{sub}</div>
@@ -2130,13 +2135,13 @@ function TabKit({ onPrev, onNext }: { onPrev:()=>void; onNext:()=>void }) {
 
           {/* Recomendação do fabricante (extraída do datasheet) */}
           {(s.kit as any).recomendacaoFabricante && (
-            <div style={{ marginTop:10, padding:'10px 14px', background:'#0d0d0f',
+            <div style={{ marginTop:10, padding:'10px 14px', background:'#f2f0e8',
               border:'1px solid #c9a22755', borderRadius:8 }}>
               <div style={{ fontSize:10, fontWeight:700, color:'#c9a227', marginBottom:5,
                 textTransform:'uppercase', letterSpacing:'.06em' }}>
                 📋 Recomendação do fabricante (datasheet)
               </div>
-              <div style={{ fontSize:12, color:'#a0a4c0', lineHeight:1.6 }}>
+              <div style={{ fontSize:12, color:'#5c5a68', lineHeight:1.6 }}>
                 {(s.kit as any).recomendacaoFabricante}
               </div>
             </div>
@@ -2198,11 +2203,11 @@ function TabPreco({ onPrev, onCalc }: { onPrev:()=>void; onCalc:()=>void }) {
       {precoVenda > 0 && (
         <div style={{ background: D.header, borderRadius: 12, padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
           <div>
-            <div style={{ fontSize: 11, color: '#8a8d9e', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 4 }}>Preço de venda</div>
+            <div style={{ fontSize: 11, color: '#6f6d63', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 4 }}>Preço de venda</div>
             <div style={{ fontSize: 26, fontWeight: 900, color: D.gold, fontVariantNumeric: 'tabular-nums' }}>{fmtBRL(precoVenda)}</div>
           </div>
           <div style={{ textAlign: 'right' }}>
-            <div style={{ fontSize: 12, color: '#666666' }}>Impostos: <span style={{ color: '#8a8d9e' }}>{fmtBRL(imposto)}</span></div>
+            <div style={{ fontSize: 12, color: '#666666' }}>Impostos: <span style={{ color: '#6f6d63' }}>{fmtBRL(imposto)}</span></div>
             <div style={{ fontSize: 12, color: '#666666' }}>Lucro: <span style={{ color: '#4ade80' }}>{fmtBRL(lucro)}</span></div>
           </div>
         </div>
@@ -2545,7 +2550,7 @@ function TabResultado({ onPrev }: { onPrev:()=>void }) {
                 return (
                   <div key={mes} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
                     <div style={{ width: '100%', display: 'flex', gap: 1, alignItems: 'flex-end', height: 100 }}>
-                      <div title={`Consumo: ${fmtNum(cons,0)} kWh`} style={{ flex: 1, background: '#e8e3d8', borderRadius: '3px 3px 0 0', height: `${(cons/maxGen)*100}%`, minHeight: 2 }} />
+                      <div title={`Consumo: ${fmtNum(cons,0)} kWh`} style={{ flex: 1, background: '#a39c8a', borderRadius: '3px 3px 0 0', height: `${(cons/maxGen)*100}%`, minHeight: 2 }} />
                       <div title={`Geração: ${fmtNum(gen,0)} kWh`} style={{ flex: 1, background: D.gold, borderRadius: '3px 3px 0 0', height: `${(gen/maxGen)*100}%`, minHeight: 2 }} />
                     </div>
                     <span style={{ fontSize: 10, color: D.textMuted }}>{mes}</span>
@@ -2554,7 +2559,7 @@ function TabResultado({ onPrev }: { onPrev:()=>void }) {
               })}
             </div>
             <div style={{ display: 'flex', gap: 16, marginTop: 10, fontSize: 11, color: D.textMuted }}>
-              <span><span style={{ display:'inline-block', width:10, height:10, background:'#e8e3d8', borderRadius:2, marginRight:4 }}></span>Consumo</span>
+              <span><span style={{ display:'inline-block', width:10, height:10, background:'#a39c8a', borderRadius:2, marginRight:4 }}></span>Consumo</span>
               <span><span style={{ display:'inline-block', width:10, height:10, background: D.gold, borderRadius:2, marginRight:4 }}></span>Geração estimada</span>
             </div>
           </div>

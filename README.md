@@ -12,7 +12,7 @@ Desenvolvido pela Lumen Soluções Ltda — Araguari/MG.
 
 | Item | Estado |
 |------|--------|
-| Testes automatizados | **729 passando** (E2E, cálculos, persistência) |
+| Testes automatizados | **785 passando** (E2E, cálculos, persistência, precificação de serviços) |
 | Build Windows | ✅ GitHub Actions → artifact `LumenSolar-Windows` |
 | Normas implementadas | IEC 61724-1, NBR 16690, NBR 5410, Lei 14.300/2022, REN ANEEL 1.000/2021 |
 | Tarifa CEMIG | R$1,1827/kWh (Res. ANEEL 3.589/2026) |
@@ -149,10 +149,30 @@ Desenvolvido pela Lumen Soluções Ltda — Araguari/MG.
 
 ---
 
+### Tabela de referência de preços — projetos elétricos, subestação, SPDA
+
+Módulo `src/domain/precificacaoServicos/` — não é usado ainda na UI do LumenSolar, mas é
+um agregador de dados pensado para ser reaproveitado tanto aqui quanto no
+[ProjetEletrico](https://github.com/wiliamjunioreng-dotcom/ProjetEletrico-agora-vai):
+
+- `src/data/tabelaReferenciaPrecosServicos.ts` — 27 itens de referência (Toolbox de Elite),
+  data-base ~07/2023, com proveniência documentada (arquivo de origem, data de extração)
+- `indiceCorrecao.ts` — corrige os valores por IPCA acumulado (jul/2023 → jul/2026, fator
+  ≈1,1484), com a justificativa de por que IPCA e não INCC-DI/IGP-M documentada no código
+- `calcularTabelaAtualizada.ts` — gera a tabela corrigida sem perder os valores originais
+- `scripts/gerarTabelaReferenciaXlsx.ts` — exporta a tabela (original + corrigida) para
+  `.xlsx`: `npx tsx scripts/gerarTabelaReferenciaXlsx.ts <saida.xlsx>`
+
+⚠️ Mesmo corrigidos por inflação, os valores desta tabela podem estar abaixo do praticado
+no mercado em algumas regiões (ex.: tabela ABEE-MS cobra mínimo de R$1.900 para projeto
+elétrico residencial, vs. R$1.263 aqui após correção) — usar como piso de referência, não
+como preço final.
+
+---
+
 ## Design
 
-- Tema escuro **60-30-10**: `#0f1117` fundo · `#1a1d2b` cards · `#c9a227` ouro
-- Sincronizado com ProjetEletrico (mesmas variáveis CSS)
+- Tema claro: `#f2f0e8` fundo · `#ffffff` cards · `#1a1a1a` texto · `#c9a227` ouro (accent, mantido escuro em chips pontuais como o resumo de preço de venda)
 - Tooltip com detecção de borda (não corta nas extremidades da tela)
 - Modal de erros ao tentar calcular com campos incompletos
 
@@ -162,7 +182,7 @@ Desenvolvido pela Lumen Soluções Ltda — Araguari/MG.
 
 ```bash
 npm install
-npm test              # 729 testes (Vitest)
+npm test              # 785 testes (Vitest)
 npm run dev           # Vite dev server
 npm run build         # build de produção
 npm run build:win     # gera .exe (requer wine ou Windows)
@@ -191,3 +211,5 @@ npm run build:win     # gera .exe (requer wine ou Windows)
 - [ ] Suporte a Grupo A (P/FP/HR, demanda contratada — sistemas >75 kWp)
 - [ ] Expansão de usina existente (campo "potência atual instalada")
 - [ ] Token `wiliamjunioreng-dotcom` configurado para sincronizar design com ProjetEletrico ✅
+- [ ] Erro de tipo em `App.tsx` (`kit.tipoModulo` não aceita `bifacial_ntype`/`bifacial_ptype`/etc. em `PropostaData`) — `tsc --noEmit` falha, mas `vite build` "passa" porque o esbuild não faz type-check completo; corrigir o tipo em `types.ts` antes que isso mascare um bug real
+- [ ] Tema foi migrado de escuro para claro (ago/2026); ProjetEletrico ficou dessincronizado — decidir se replica lá também
