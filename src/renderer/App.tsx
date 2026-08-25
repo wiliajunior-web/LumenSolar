@@ -9,6 +9,9 @@ import { HSP_MEDIO_POR_UF } from '@data/hspPorUF';
 import { PropostaPDF } from '@domain/proposta/PropostaPDF';
 import { CHECKLIST_PADRAO_CEMIG_MICROGD, resumoChecklist, type ItemChecklistDocumentacao } from '@domain/documentacaoCemig/checklist';
 import { latLonParaUTM } from '@domain/geografia/converterCoordenadas';
+import { calcularCaboCA } from '@domain/dimensionamento/calcularCaboCA';
+import { calcularDPSCA, calcularProtecaoCC } from '@domain/dimensionamento/calcularProtecaoCC';
+import { calcularFDI } from '@domain/dimensionamento/calcularFDI';
 // Excel gerarExcel importado dinamicamente para não impactar o bundle inicial
 
 // ─── Sistema de Design ───────────────────────────────────────────────────────
@@ -1338,9 +1341,15 @@ function ComponentesRecomendados({ kit, tipoLigacao }: { kit: any; tipoLigacao?:
   // Seções de cabo e capacidades de corrente em eletroduto, cabos 70°C, instalação B2
   // (Tabela 36 da NBR 5410 — condutores em eletroduto embutido em parede)
   // Cabo CA com correção de temperatura (NBR 5410 + curso slide 48-58)
+  // BUG CORRIGIDO (ago/2026): as três funções abaixo eram carregadas com
+  // require('@domain/...') dentro do componente. Isso funciona em dev (Vite
+  // resolve o alias @domain), mas no .exe empacotado o `require` vira uma
+  // chamada real do Node em runtime — que não conhece o alias @domain/@data
+  // (é só uma configuração do bundler) — e quebra com "Cannot find module" ao
+  // abrir a aba Kit. Corrigido usando import estático no topo do arquivo, como
+  // o resto do App.tsx já faz.
   const caboCAResult = (() => {
     try {
-      const { calcularCaboCA } = require('@domain/dimensionamento/calcularCaboCA');
       return calcularCaboCA({
         corrMaxSaidaA: kit.corrMaxSaidaA || icaProjeto / 1.25,
         tensaoSaidaV: kit.tensaoSaidaV || 220,
@@ -1362,7 +1371,6 @@ function ComponentesRecomendados({ kit, tipoLigacao }: { kit: any; tipoLigacao?:
   // (mesma fórmula que já rodava aqui, agora testada — ver calcularProtecaoCC.test.ts).
   // O Diagrama Unifilar Básico (DUB) usa a mesma função, então os valores
   // exibidos aqui e no DUB nunca podem divergir.
-  const { calcularDPSCA, calcularProtecaoCC } = require('@domain/dimensionamento/calcularProtecaoCC');
   const { classeKA: dpskA, descricao: dpsDesc } = calcularDPSCA(potCA_kW);
 
   // ── Lado CC (string) ──────────────────────────────────────────────────────
@@ -1606,7 +1614,6 @@ function ComponentesRecomendados({ kit, tipoLigacao }: { kit: any; tipoLigacao?:
       {/* ── FDI — 3 critérios ── */}
       {kit.vocV > 0 && kit.faixaMpptMinV > 0 && kit.potenciaInversorKW > 0 && (() => {
         try {
-          const { calcularFDI } = require('@domain/dimensionamento/calcularFDI');
           const r = calcularFDI({
             potenciaModuloWp: kit.potenciaModuloWp,
             quantidade: kit.quantidade,
