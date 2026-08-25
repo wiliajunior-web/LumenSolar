@@ -13,6 +13,7 @@ import { ResultadoPrecificacao } from '@domain/precificacao/types';
 import { ResultadoEnquadramento } from '@domain/fioB/calculoFioB';
 import { EspecificacaoKit } from '@domain/precificacao/types';
 import { DISTRIBUIDORAS } from '@data/distribuidoras';
+import type { ResultadoGrupoA } from '@domain/dimensionamento/calcularGrupoA';
 
 // Cores institucionais
 const COR_PRIMARIA = '#1a5276';
@@ -134,15 +135,102 @@ export interface PropostaData {
   margemDesejada: number;
   indicadores?: any;
   contas?: any[];
+  /**
+   * Consumo completo (inclui `grupoTensao`). Opcional para não quebrar
+   * chamadores antigos que não passam esse campo. ADICIONADO ago/2026 junto
+   * com `resultadoGrupoA` — ver AvisoGrupoA abaixo.
+   */
+  consumo?: { grupoTensao?: 'B' | 'A' };
+  /**
+   * Resultado do dimensionamento/financeiro Grupo A (Média Tensão), quando
+   * aplicável. ADICIONADO ago/2026: antes deste documento nunca alertava o
+   * usuário quando o cliente era Grupo A e os números de potência/economia/
+   * payback exibidos abaixo (de `dimensionamento`/`custosRecorrentes`/
+   * `indicadores`) eram sempre calculados como Grupo B (tarifa única, sem
+   * demanda contratada) — silenciosamente incorretos para esse cliente. Se
+   * presente e `consumo.grupoTensao==='A'`, uma página de aviso com os
+   * números corretos é inserida como a primeira página do documento (antes
+   * até da capa), para ser impossível de não ver.
+   */
+  resultadoGrupoA?: ResultadoGrupoA | null;
+}
+
+/**
+ * Página de aviso — Grupo A. NÃO substitui os números de dimensionamento/
+ * financeiro do restante do documento (que continuam Grupo B) porque isso
+ * exigiria redefinir campos com semântica diferente entre os dois modelos
+ * (ver README, seção Auditoria ago/2026). Em vez de deixar o documento
+ * silenciosamente errado para esse cliente, esta página torna o erro
+ * impossível de não notar e mostra os números certos.
+ */
+function AvisoGrupoA({ r }: { r: ResultadoGrupoA }) {
+  return (
+    <Page size="A4" style={S.pageInterna}>
+      <View style={{ padding: 32 }}>
+        <Text style={{ fontSize: 16, fontFamily: 'Helvetica-Bold', color: '#b91c1c', marginBottom: 10 }}>
+          ⚠ Cliente Grupo A (Média Tensão) — verificar números antes de enviar
+        </Text>
+        <Text style={{ fontSize: 10, color: COR_TEXTO, marginBottom: 14, lineHeight: 1.5 }}>
+          As páginas seguintes deste documento (potência, número de módulos, geração, conta
+          antes/depois, economia, payback e TIR) foram calculadas como Grupo B — tarifa única de
+          energia, sem parcela de demanda contratada. Para um cliente de média tensão, isso está
+          incorreto: a conta de Grupo A cobra energia em TE Ponta/Fora Ponta separadas mais
+          demanda contratada (kW), frequentemente o maior componente da fatura. Os números abaixo
+          foram calculados corretamente para Grupo A e devem ser usados em seu lugar antes de
+          apresentar esta proposta ao cliente.
+        </Text>
+        <View style={[S.tabela, { marginBottom: 14 }]}>
+          <View style={S.tabelaHeader}>
+            <Text style={[S.tabelaHeaderCell, { flex: 2 }]}>Indicador (Grupo A)</Text>
+            <Text style={[S.tabelaHeaderCell, { flex: 1, textAlign: 'right' }]}>Valor</Text>
+          </View>
+          {[
+            ['Potência recomendada', `${N(r.potenciaRealKWp)} kWp`],
+            ['Número de módulos', `${r.numeroModulos}`],
+            ['Geração mensal estimada', `${N(r.geracaoMensalKWh, 0)} kWh`],
+            ['Geração anual estimada', `${N(r.geracaoAnualKWh, 0)} kWh`],
+            ['Conta antes (Grupo A)', R(r.contaAntesRS)],
+            ['Conta depois (Grupo A)', R(r.contaAposRS)],
+            ['Economia mensal (Grupo A)', R(r.economiaMensalRS)],
+            ['Economia anual (Grupo A)', R(r.economiaAnualRS)],
+          ].map(([label, val], i) => (
+            <View key={label} style={i % 2 ? S.tabelaRowAlt : S.tabelaRow}>
+              <Text style={[S.tabelaCell, { flex: 2 }]}>{label}</Text>
+              <Text style={[S.tabelaCellBold, { flex: 1, textAlign: 'right' }]}>{val}</Text>
+            </View>
+          ))}
+        </View>
+        {r.houveUltrapassagemDemanda && (
+          <Text style={{ fontSize: 9, color: '#92400e', marginBottom: 10, lineHeight: 1.4 }}>
+            ⚠ Há ultrapassagem de demanda medida ({N(r.custoUltrapassagemDemandaRS)} R$/mês adicionais).
+            A fórmula de cobrança de ultrapassagem usada aqui não foi confirmada contra o texto
+            literal da REN ANEEL 1.000/2021 nem contra a ND da distribuidora — confirme antes de
+            repassar este valor ao cliente.
+          </Text>
+        )}
+        {r.alertas.map((a, i) => (
+          <Text key={i} style={{ fontSize: 9, color: '#92400e', marginBottom: 4 }}>⚠ {a}</Text>
+        ))}
+        <Text style={{ fontSize: 8, color: COR_CINZA, marginTop: 10 }}>
+          Payback, TIR e simulações de financiamento das páginas seguintes não foram recalculados
+          com esses números — calcule-os manualmente com a economia mensal acima antes de
+          apresentar a proposta.
+        </Text>
+      </View>
+    </Page>
+  );
 }
 
 export function PropostaPDF({ data }: { data: PropostaData }) {
   const { empresa, cliente, kit, dimensionamento, custosRecorrentes, precificacao, enquadramento, percentuaisFioBPorAno, indicadores } = data;
   const distrib = DISTRIBUIDORAS.find(d => d.codigo === data.codigoDistribuidora);
   const anoAtual = new Date().getFullYear();
+  const mostrarAvisoGrupoA = data.consumo?.grupoTensao === 'A' && !!data.resultadoGrupoA;
 
   return (
     <Document title={`Proposta Solar - ${cliente.nome}`} author={empresa.razaoSocial}>
+
+      {mostrarAvisoGrupoA && <AvisoGrupoA r={data.resultadoGrupoA!} />}
 
       {/* ===== CAPA ===== */}
       <Page size="A4" style={S.page}>

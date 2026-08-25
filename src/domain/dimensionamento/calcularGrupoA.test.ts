@@ -45,6 +45,30 @@ describe('calcularCustoDemanda', () => {
     expect(() => calcularCustoDemanda(-1, 20)).toThrow();
     expect(() => calcularCustoDemanda(100, -1)).toThrow();
   });
+
+  // [REGRESSÃO] tolerância de 5% — adicionada ago/2026 após pesquisa
+  // (ver comentário de TOLERANCIA_ULTRAPASSAGEM_FATOR em calcularGrupoA.ts).
+  // Antes desta correção, QUALQUER medida acima da contratada disparava a
+  // cobrança de ultrapassagem — mesmo 1kW acima, o que a regulação não prevê.
+  it('dentro da tolerância de 5%: NÃO cobra ultrapassagem mesmo com medida > contratada', () => {
+    // medida=103, contratada=100 → 103 <= 100×1.05=105 → dentro da tolerância.
+    const r = calcularCustoDemanda(100, 20, 103);
+    expect(r.houveUltrapassagem).toBe(false);
+    expect(r.custoUltrapassagemRS).toBe(0);
+    expect(r.custoBaseRS).toBeCloseTo(2000, 2); // cobra só a contratada, não a medida
+  });
+
+  it('exatamente no limite de 5% (105): NÃO cobra (o gatilho é "mais de 5%", não "5% ou mais")', () => {
+    const r = calcularCustoDemanda(100, 20, 105);
+    expect(r.houveUltrapassagem).toBe(false);
+  });
+
+  it('logo acima do limite de 5% (105.1): cobra ultrapassagem sobre o excedente total (5,1kW), não só sobre o que passa de 105', () => {
+    const r = calcularCustoDemanda(100, 20, 105.1);
+    expect(r.houveUltrapassagem).toBe(true);
+    expect(r.ultrapassagemKW).toBeCloseTo(5.1, 2);
+    expect(r.custoUltrapassagemRS).toBeCloseTo(5.1 * 2 * 20, 2);
+  });
 });
 
 describe('calcularDimensionamentoGrupoA', () => {

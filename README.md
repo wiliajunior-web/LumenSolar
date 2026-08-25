@@ -12,7 +12,7 @@ Desenvolvido pela Lumen Soluções Ltda — Araguari/MG.
 
 | Item | Estado |
 |------|--------|
-| Testes automatizados | **842 passando** (E2E, cálculos, persistência, precificação de serviços, proteção CC, UTM, checklist de documentação, mapa de células do Formulário CEMIG, dimensionamento Grupo A, wiring do store) |
+| Testes automatizados | **852 passando** (E2E, cálculos, persistência, precificação de serviços, proteção CC, UTM, checklist de documentação, mapa de células do Formulário CEMIG, dimensionamento Grupo A, wiring do store, geração dos PDFs de proposta) |
 | Build Windows | ✅ GitHub Actions → artifact `LumenSolar-Windows` |
 | Normas implementadas | IEC 61724-1, NBR 16690, NBR 5410, Lei 14.300/2022, REN ANEEL 1.000/2021 |
 | Tarifa CEMIG | R$1,1827/kWh (Res. ANEEL 3.589/2026) |
@@ -333,26 +333,51 @@ neste processo). Corrigidos e cobertos por teste de regressão nesta sessão:
 - [x] **ALTO — `calcularGrupoA.ts` e `useProjetoStore.ts` (motor central `calcularTudo()`) tinham
   ZERO cobertura de teste.** A auditoria anterior chegou a descrever `calcularGrupoA.ts` como
   "pronto e testado" — afirmação incorreta, não havia nenhum teste. Adicionados
-  `calcularGrupoA.test.ts` (14 testes, valores calculados manualmente antes de rodar, incluindo
-  regressão específica para detectar histórico Ponta/Fora-Ponta trocado) e
+  `calcularGrupoA.test.ts` (agora 17 testes, valores calculados manualmente antes de rodar,
+  incluindo regressão específica para detectar histórico Ponta/Fora-Ponta trocado) e
   `useProjetoStore.test.ts` (wiring do `resultadoGrupoA`, comparado contra chamada independente
   da função de domínio usando os mesmos hsp/perdas reais).
+- [x] **MÉDIO — ultrapassagem de demanda (`calcularCustoDemanda`, Grupo A) cobrava a partir de
+  QUALQUER excedente, sem tolerância.** Pesquisado nesta sessão (não foi possível acessar o texto
+  literal da REN ANEEL 1.000/2021 — aneel.gov.br bloqueou o fetch repetidamente; usadas fontes
+  secundárias convergentes: Copel, TAB Energia, CUBi Energia, Perfil Energia, pv magazine Brasil).
+  Todas concordam numa tolerância de 5% acima da demanda contratada antes de qualquer cobrança de
+  ultrapassagem — o código não aplicava tolerância nenhuma (5% ainda ficava sujeito à cobrança).
+  Corrigido: `TOLERANCIA_ULTRAPASSAGEM_FATOR = 1.05`. O multiplicador 2× sobre o excedente e a
+  estrutura 1×base+2×penalidade não foram alterados — não há confirmação de fonte primária
+  suficiente para mexer nisso com segurança; a ressalva no código permanece. **Ainda não usar
+  este cálculo para cobrança real a cliente sem confirmar com a ND da CEMIG.**
+- [x] **Investigado e descartado por não ser possível fazer corretamente: "seletividade automática
+  de proteção conforme norma".** Pedido explicitamente nesta sessão. Pesquisado: a NBR 5410 não
+  define uma fórmula numérica universal de seletividade entre disjuntores/fusíveis em série — a
+  coordenação real depende de tabelas de seletividade e curvas tempo-corrente específicas de cada
+  fabricante/modelo, que este app não modela (o cadastro de kit não guarda curva de disparo de
+  disjuntor nenhuma). Implementar uma regra numérica genérica (ex: razão fixa entre correntes
+  nominais) e apresentá-la como "conforme norma" seria fabricar conformidade que não existe. Além
+  disso, os dispositivos que o app hoje dimensiona (fusível de string CC, disjuntor CA, DPS CC/CA)
+  não formam um par em série no sentido clássico de seletividade — são de lados diferentes do
+  inversor. A seletividade que importaria de verdade (disjuntor geral × proteção da distribuidora
+  a montante) depende de dado que o app não tem (ajuste da proteção da distribuidora). Não
+  implementado — não dá para fazer sem inventar norma.
 
 **Não corrigido nesta auditoria — requer trabalho dedicado:**
 
-- [ ] **ALTO — Grupo A (Média Tensão): cálculo agora roda e é exibido, mas ainda não alimenta os
-  documentos.** Nesta sessão, `calcularDimensionamentoGrupoA` foi conectado ao store
-  (`resultadoGrupoA`, calculado quando `consumo.grupoTensao === 'A'`) e ganhou UI própria no
-  painel de Consumo (histórico mensal Ponta/Fora-Ponta, resultado de dimensionamento e
-  financeiro, alertas). Isso é uma melhoria real: antes o painel só mostrava o Fc estático, sem
-  nenhum cálculo de fato. Mas `dimensionamento`/`custosRecorrentes`/`indicadores` — o que
-  realmente alimenta Proposta/Excel/Formulário CEMIG — continuam sempre calculados como Grupo B
-  (tarifa única, sem demanda contratada), porque uma integração completa exigiria redefinir o
+- [ ] **ALTO — Grupo A (Média Tensão): cálculo roda e é exibido no painel; os documentos gerados
+  agora ALERTAM sobre a divergência, mas ainda não usam os números certos por padrão.** Nesta
+  sessão, `calcularDimensionamentoGrupoA` foi conectado ao store (`resultadoGrupoA`, calculado
+  quando `consumo.grupoTensao === 'A'`) e ganhou UI própria no painel de Consumo (histórico mensal
+  Ponta/Fora-Ponta, resultado de dimensionamento e financeiro, alertas). Numa segunda etapa, os
+  três documentos gerados (`PropostaComercialPDF.tsx`, `PropostaPDF.tsx` e a aba "Resumo" do Excel
+  em `gerarExcel.ts`) ganharam uma página/bloco de aviso vermelho, inserido como a primeira coisa
+  visível do documento quando `grupoTensao==='A'`, mostrando os números corretos de Grupo A lado a
+  lado com o aviso de que o restante do documento usa Grupo B. Isso evita o cenário anterior — o
+  documento inteiro silenciosamente errado, sem nenhum sinal — mas **não é a integração completa**:
+  potência/módulos/economia/payback/TIR do restante do PDF e do Excel, e o Formulário CEMIG,
+  continuam sempre calculados como Grupo B. Uma integração completa exigiria redefinir o
   significado de campos compartilhados entre os dois modelos (ex: "taxa de disponibilidade" não
-  existe em Grupo A, que cobra demanda contratada) em cada documento gerado — feito com cuidado,
-  não às pressas, para não gerar documento com rótulo incorreto. Aviso vermelho atualizado no
-  painel para refletir esse escopo mais estreito: ainda não gerar proposta para cliente de média
-  tensão a partir dos documentos do app.
+  existe em Grupo A, que cobra demanda contratada) em cada seção de cada documento — feito com
+  cuidado, não às pressas, para não gerar documento com rótulo incorreto. Continue não gerando
+  proposta final para cliente de média tensão sem revisar manualmente os números do bloco de aviso.
 - [ ] `tributacao.ts` (tabela do Simples Nacional por faixa) e `calcularTabelaAtualizada.ts`
   (correção monetária da tabela de serviços) estão corretos e testados, mas não são chamados em
   lugar nenhum do app em produção — só existem via os próprios testes. Não é bug de cálculo, é

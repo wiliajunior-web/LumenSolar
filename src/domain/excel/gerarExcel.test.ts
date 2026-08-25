@@ -56,4 +56,41 @@ describe('gerarExcelAuditoria — smoke test (regressão do bug FC_T0 + dependê
   it('funciona igual com consumo/kit/preco ausentes (undefined dentro de dados)', () => {
     expect(() => gerarExcelAuditoria({ cliente: { nome: 'Sem Dados' } } as any)).not.toThrow();
   });
+
+  // [REGRESSÃO ago/2026] bloco de aviso Grupo A na aba Resumo — adicionado
+  // nesta sessão para que a aba "Resumo" (voltada ao cliente) não fique
+  // silenciosamente com KPIs de Grupo B para um cliente Grupo A.
+  it('não lança exceção quando consumo.grupoTensao é "A" e resultadoGrupoA está presente', () => {
+    const dados = {
+      cliente: { nome: 'Cliente Grupo A', cidade: 'Uberlândia', uf: 'MG' },
+      consumo: { grupoTensao: 'A', contas: [] },
+      resultadoGrupoA: {
+        mediaConsumoFPkWh: 1000, mediaConsumoPkWh: 200, mediaTotalKWh: 1200,
+        fatorCompensacaoFc: 1.5, geracaoNecessariaKWh: 1300,
+        potenciaMinKWp: 10.056, potenciaRealKWp: 10.45, numeroModulos: 19,
+        geracaoMensalKWh: 1350.9, geracaoAnualKWh: 16210.6,
+        contaAntesRS: 2830, contaAposRS: 2350, economiaMensalRS: 480, economiaAnualRS: 5760,
+        reducaoDemandaPossivel: false, custoDemandaBaseRS: 2000, custoUltrapassagemDemandaRS: 0,
+        houveUltrapassagemDemanda: false, alertas: [], observacoes: [],
+      },
+    };
+    expect(() => gerarExcelAuditoria(dados as any)).not.toThrow();
+  });
+
+  it('não lança exceção quando consumo.grupoTensao é "A" com ultrapassagem de demanda (alerta extra)', () => {
+    const dados = {
+      cliente: { nome: 'Cliente Grupo A' },
+      consumo: { grupoTensao: 'A', contas: [] },
+      resultadoGrupoA: {
+        mediaConsumoFPkWh: 1000, mediaConsumoPkWh: 200, mediaTotalKWh: 1200,
+        fatorCompensacaoFc: 1.5, geracaoNecessariaKWh: 1300,
+        potenciaMinKWp: 10.056, potenciaRealKWp: 10.45, numeroModulos: 19,
+        geracaoMensalKWh: 1350.9, geracaoAnualKWh: 16210.6,
+        contaAntesRS: 3800, contaAposRS: 3320, economiaMensalRS: 480, economiaAnualRS: 5760,
+        reducaoDemandaPossivel: false, custoDemandaBaseRS: 2600, custoUltrapassagemDemandaRS: 1200,
+        houveUltrapassagemDemanda: true, alertas: ['Ultrapassagem de demanda: 30.0kW acima do contratado'], observacoes: [],
+      },
+    };
+    expect(() => gerarExcelAuditoria(dados as any)).not.toThrow();
+  });
 });

@@ -57,7 +57,8 @@ function setCols(ws: WS, widths: number[]) {
 // ── Gerador principal ─────────────────────────────────────────────────────────
 export function gerarExcelAuditoria(dados: any): void {
   const { empresa, cliente, consumo, localizacao, kit, preco,
-          dimensionamento, custosRecorrentes, precificacao, indicadores } = dados;
+          dimensionamento, custosRecorrentes, precificacao, indicadores,
+          resultadoGrupoA } = dados;
 
   const wb: WB = XLSX.utils.book_new();
 
@@ -243,6 +244,34 @@ export function gerarExcelAuditoria(dados: any): void {
   setStr(ws0, r0, 2, dados.cliente?.nome ?? ''); r0++;
   setStr(ws0, r0, 2, `${dados.cliente?.cidade ?? ''} / ${dados.cliente?.uf ?? 'MG'}`);
   setStr(ws0, r0, 5, `Data: ${dataFmt}`); r0+=2;
+
+  // ── Aviso Grupo A ─────────────────────────────────────────────────────────
+  // ADICIONADO ago/2026: os KPIs abaixo ("RESUMO DO PROJETO"/"IMPACTO NA
+  // CONTA DE ENERGIA") são sempre calculados como Grupo B (tarifa única,
+  // sem demanda contratada) — nunca alertavam quando o cliente era Grupo A,
+  // deixando a aba "Resumo" (primeira aba, voltada ao cliente) silenciosamente
+  // errada para esse caso. Não remapeamos os KPIs porque os dois modelos têm
+  // campos com semântica diferente (ver README, Auditoria ago/2026); em vez
+  // disso, este bloco torna o erro visível e mostra os números certos.
+  if (consumo?.grupoTensao === 'A' && resultadoGrupoA) {
+    const rga = resultadoGrupoA;
+    setStr(ws0, r0, 2, '⚠ CLIENTE GRUPO A (MÉDIA TENSÃO) — VERIFIQUE ANTES DE ENVIAR'); r0++;
+    setStr(ws0, r0, 2, 'Os KPIs abaixo (Resumo do Projeto / Impacto na Conta) foram calculados como');
+    r0++;
+    setStr(ws0, r0, 2, 'Grupo B (tarifa única). Use os valores Grupo A corretos abaixo em seu lugar:');
+    r0++;
+    setStr(ws0, r0, 2, 'Potência recomendada (Grupo A)'); setNum(ws0, r0, 3, rga.potenciaRealKWp, F_KWP); r0++;
+    setStr(ws0, r0, 2, 'Número de módulos (Grupo A)'); setNum(ws0, r0, 3, rga.numeroModulos, F_INT); r0++;
+    setStr(ws0, r0, 2, 'Conta ANTES (Grupo A)'); setNum(ws0, r0, 3, rga.contaAntesRS, F_BRL); r0++;
+    setStr(ws0, r0, 2, 'Conta DEPOIS (Grupo A)'); setNum(ws0, r0, 3, rga.contaAposRS, F_BRL); r0++;
+    setStr(ws0, r0, 2, 'Economia mensal (Grupo A)'); setNum(ws0, r0, 3, rga.economiaMensalRS, F_BRL); r0++;
+    setStr(ws0, r0, 2, 'Economia anual (Grupo A)'); setNum(ws0, r0, 3, rga.economiaAnualRS, F_BRL); r0++;
+    if (rga.houveUltrapassagemDemanda) {
+      setStr(ws0, r0, 2, '⚠ Há ultrapassagem de demanda — fórmula não confirmada contra REN 1.000/2021');
+      r0++;
+    }
+    r0++;
+  }
 
   // ── KPIs ──────────────────────────────────────────────────────────────────
   setStr(ws0, r0, 2, '▌ RESUMO DO PROJETO'); r0++;

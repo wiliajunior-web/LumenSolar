@@ -165,6 +165,69 @@ const GraficoGeracaoConsumo = ({ geracaoMensal, consumoMedio }: { geracaoMensal:
   );
 };
 
+// ── Aviso Grupo A ────────────────────────────────────────────────────────────
+// ADICIONADO ago/2026: até então, um cliente Grupo A (Média Tensão) recebia
+// esta proposta com potência/economia/payback calculados como Grupo B
+// (tarifa única, sem demanda contratada) sem qualquer aviso — silenciosamente
+// incorreto. Não remapeamos os números de `dimensionamento`/`custosRecorrentes`
+// (usados no resto do documento) para os de Grupo A porque os dois modelos
+// têm campos com semântica diferente (ver README, Auditoria ago/2026); em vez
+// disso, esta página torna o erro visível e mostra os números certos.
+const AvisoGrupoA = ({ empresa, cliente, r }: { empresa: any; cliente: any; r: any }) => (
+  <Page size="A4" style={S.page}>
+    <View style={S.row}>
+      <View style={{ width: 14, backgroundColor: '#b91c1c' }} />
+      <View style={S.body}>
+        <Text style={{ fontSize: 16, fontFamily: 'Helvetica-Bold', color: '#b91c1c', marginBottom: 4 }}>
+          ⚠ Cliente Grupo A (Média Tensão)
+        </Text>
+        <Text style={{ fontSize: 10, color: C.muted, marginBottom: 14 }}>
+          {cliente.nome} — verifique estes números antes de enviar a proposta
+        </Text>
+        <Text style={{ fontSize: 9, color: C.text, marginBottom: 14, lineHeight: 1.6 }}>
+          As páginas seguintes (potência, módulos, geração, economia, payback, financiamento)
+          foram calculadas como Grupo B — tarifa única, sem demanda contratada. Para este
+          cliente de média tensão isso subestima ou superestima a conta real, porque a fatura de
+          Grupo A cobra energia em TE Ponta/Fora Ponta separadas mais demanda contratada (kW) —
+          muitas vezes o maior item da conta. Os valores abaixo foram calculados corretamente
+          para Grupo A.
+        </Text>
+        <View style={{ marginBottom: 14 }}>
+          <View style={S.tblHead}>
+            <Text style={[S.tblHeadTxt, { flex: 2 }]}>INDICADOR (GRUPO A)</Text>
+            <Text style={[S.tblHeadTxt, { flex: 1, textAlign: 'right' }]}>VALOR</Text>
+          </View>
+          {[
+            ['Potência recomendada', `${N(r.potenciaRealKWp)} kWp`],
+            ['Número de módulos', `${r.numeroModulos}`],
+            ['Geração mensal estimada', `${N(r.geracaoMensalKWh, 0)} kWh`],
+            ['Conta antes (Grupo A)', R(r.contaAntesRS)],
+            ['Conta depois (Grupo A)', R(r.contaAposRS)],
+            ['Economia mensal (Grupo A)', R(r.economiaMensalRS)],
+            ['Economia anual (Grupo A)', R(r.economiaAnualRS)],
+          ].map(([label, val]: [string, string], i: number) => (
+            <View key={label} style={i % 2 ? S.tblRowAlt : S.tblRow}>
+              <Text style={[S.tblCell, { flex: 2 }]}>{label}</Text>
+              <Text style={[S.tblCellB, { flex: 1, textAlign: 'right' }]}>{val}</Text>
+            </View>
+          ))}
+        </View>
+        {r.houveUltrapassagemDemanda && (
+          <Text style={{ fontSize: 8, color: '#92400e', marginBottom: 8, lineHeight: 1.4 }}>
+            ⚠ Há ultrapassagem de demanda medida. A fórmula de cobrança de ultrapassagem usada
+            aqui não foi confirmada contra o texto literal da REN ANEEL 1.000/2021 nem contra a
+            ND da distribuidora — confirme antes de repassar este valor ao cliente.
+          </Text>
+        )}
+        <Text style={{ fontSize: 8, color: C.muted, marginTop: 8 }}>
+          Payback, TIR e simulações de financiamento das páginas seguintes NÃO foram
+          recalculados com esses números.
+        </Text>
+      </View>
+    </View>
+  </Page>
+);
+
 // ── Componente principal ───────────────────────────────────────────────────────
 export function PropostaComercialPDF({ data }: { data: any }) {
   const { empresa, cliente, kit, dimensionamento: dim, custosRecorrentes: cr,
@@ -173,9 +236,12 @@ export function PropostaComercialPDF({ data }: { data: any }) {
   const distrib = DISTRIBUIDORAS.find((d: any) => d.codigo === data.codigoDistribuidora);
   const anoAtual = new Date().getFullYear();
   const simul = ind?.simulacoesFinanciamento ?? [];
+  const mostrarAvisoGrupoA = data.consumo?.grupoTensao === 'A' && !!data.resultadoGrupoA;
 
   return (
     <Document title={`Proposta Solar - ${cliente.nome}`} author={empresa.razaoSocial}>
+
+      {mostrarAvisoGrupoA && <AvisoGrupoA empresa={empresa} cliente={cliente} r={data.resultadoGrupoA} />}
 
       {/* ════ CAPA - foto Lumen como background full-bleed ════ */}
       <Page size="A4" style={{ fontFamily: 'Helvetica', padding: 0 }}>

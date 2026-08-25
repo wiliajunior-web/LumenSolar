@@ -102,23 +102,45 @@ export interface ResultadoCustoDemanda {
   houveUltrapassagem: boolean;
 }
 
+// Tolerância de 5% acima da demanda contratada, isenta de cobrança de
+// ultrapassagem — CORRIGIDO (ago/2026): a versão anterior desta função
+// cobrava ultrapassagem a partir de QUALQUER excedente (tolerância 0%), o
+// que superestimava a conta em qualquer medição levemente acima do
+// contratado. Verificado nesta sessão via múltiplas fontes secundárias
+// convergentes (não foi possível acessar o texto literal da REN ANEEL
+// 1.000/2021 diretamente — aneel.gov.br bloqueou o fetch repetidamente;
+// ver ressalva abaixo): Copel ("a cobrança ocorre apenas quando a demanda
+// medida excede em mais de 5% os valores contratados",
+// www.copel.com/site/copel-distribuicao/para-sua-empresa/demanda/, citando
+// art. 165 da REN ANEEL 414/2010 — norma predecessora consolidada pela REN
+// 1.000/2021), TAB Energia, CUBi Energia e Perfil Energia concordam
+// independentemente no mesmo valor de 5%. A pv magazine Brasil confirma o
+// mesmo padrão de multiplicador 2× para a demanda de INJEÇÃO (tolerância
+// 1%, mais rigorosa — não é o caso de consumo tratado aqui).
+const TOLERANCIA_ULTRAPASSAGEM_FATOR = 1.05;
+
 /**
  * Custo de demanda, incluindo ultrapassagem sobre a demanda contratada.
  *
  * Fórmula reproduzida da planilha de referência (CÁLCULOS AQUI! / Dimen. A,
  * Toolbox de Elite): custo = (demanda_medida × tarifa) + (demanda_medida −
  * demanda_contratada) × 2 × tarifa, aplicado somente quando a demanda
- * medida excede a contratada. Isso equivale a cobrar a parcela dentro do
- * contrato a 1× a tarifa e a parcela excedente a 3× a tarifa.
+ * medida excede a contratada em mais de 5% (ver TOLERANCIA_ULTRAPASSAGEM_FATOR
+ * acima). Isso equivale a cobrar a parcela dentro do contrato a 1× a tarifa
+ * e a parcela excedente (acima do total contratado, não só acima do limite
+ * de 5%, uma vez ultrapassado o gatilho) a 3× a tarifa.
  *
  * ATENÇÃO — verificar antes de uso comercial: a regra de faturamento de
  * ultrapassagem de demanda no Brasil está na REN ANEEL nº 1.000/2021,
- * Capítulo X, Seção VII (art. 301 e seguintes). Não foi possível confirmar
- * nesta implementação, a partir de fonte primária, se a distribuidora
- * aplicável (CEMIG) adota margem de tolerância isenta de cobrança antes de
- * multiplicar a tarifa — a planilha de referência não aplica tolerância
- * alguma. Confirme o percentual de tolerância (se houver) e o multiplicador
- * vigente diretamente na ND da CEMIG ou na REN 1.000/2021 antes de usar
+ * Capítulo X, Seção VII (art. 301 e seguintes). A margem de tolerância de
+ * 5% acima foi confirmada por múltiplas fontes secundárias convergentes
+ * (ver comentário de TOLERANCIA_ULTRAPASSAGEM_FATOR), mas o texto literal
+ * da REN 1.000/2021 não pôde ser acessado nesta sessão para confirmar (a)
+ * o número exato do artigo vigente e (b) se a estrutura 1×base+2×penalidade
+ * (= 3× no total sobre o excedente) é exatamente a da resolução atual ou
+ * se a "tarifa de ultrapassagem" é um valor tarifário publicado à parte
+ * (não necessariamente 2× a tarifa normal de demanda). Confirme os dois
+ * pontos diretamente na ND da CEMIG ou na REN 1.000/2021 antes de usar
  * este cálculo para gerar cobrança/proposta real a cliente.
  */
 export function calcularCustoDemanda(
@@ -130,8 +152,9 @@ export function calcularCustoDemanda(
   if (tarifaDemandaKW < 0) throw new Error('Tarifa de demanda não pode ser negativa.');
 
   const medida = demandaMedidaKW ?? demandaContratadaKW;
-  const ultrapassagem = Math.max(0, medida - demandaContratadaKW);
-  const houveUltrapassagem = ultrapassagem > 0;
+  const limiteToleravel = demandaContratadaKW * TOLERANCIA_ULTRAPASSAGEM_FATOR;
+  const houveUltrapassagem = medida > limiteToleravel;
+  const ultrapassagem = houveUltrapassagem ? medida - demandaContratadaKW : 0;
 
   const custoBase = (houveUltrapassagem ? medida : demandaContratadaKW) * tarifaDemandaKW;
   const custoUltrapassagem = houveUltrapassagem ? ultrapassagem * 2 * tarifaDemandaKW : 0;

@@ -2342,12 +2342,16 @@ function TabResultado({ onPrev }: { onPrev:()=>void }) {
   function buildData() {
     const { empresa, cliente, consumo, kit, dimensionamento, custosRecorrentes,
       precificacao, enquadramento, percentuaisFioBPorAno, consumoMedioMensalKWh,
-      valorMedioMensalRS, preco, indicadores } = s;
+      valorMedioMensalRS, preco, indicadores, resultadoGrupoA } = s;
     const distribuidoraObj = DISTRIBUIDORAS.find(d => d.codigo === consumo.codigoDistribuidora) ?? DISTRIBUIDORAS[0];
     return {
       empresa, cliente,
       // Consumo completo + distribuidora (usados por Memorial e Procuracao)
       consumo,
+      // Grupo A (ago/2026): usado por PropostaPDF/PropostaComercialPDF para
+      // exibir a página de aviso quando consumo.grupoTensao==='A' — ver
+      // comentário de AvisoGrupoA nos dois arquivos.
+      resultadoGrupoA,
       codigoDistribuidora: consumo.codigoDistribuidora,
       distribuidora: distribuidoraObj,
       // Localizacao (Memorial Descritivo)
@@ -2576,6 +2580,7 @@ function TabResultado({ onPrev }: { onPrev:()=>void }) {
         localizacao: st.localizacao, kit: st.kit, preco: st.preco,
         dimensionamento: st.dimensionamento, custosRecorrentes: st.custosRecorrentes,
         precificacao: st.precificacao, indicadores: st.indicadores,
+        resultadoGrupoA: st.resultadoGrupoA,
       });
     } catch(e) { alert('Erro ao gerar Excel: ' + (e instanceof Error ? e.message : String(e)));
     } finally { setGerando(false); }
