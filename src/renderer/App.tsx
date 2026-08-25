@@ -1022,7 +1022,12 @@ function TabConsumo({ onPrev, onNext }: { onPrev:()=>void; onNext:()=>void }) {
             >
               <div style={{ display:'flex', gap:8 }}>
                 <input className="inp inp-num" type="number" step="0.00001" value={s.consumo.tarifaRealKWhComICMS || ''} onChange={e => s.atualizarConsumo({ tarifaRealKWhComICMS: Number(e.target.value) })} placeholder="Ex: 1.18272801" style={{ flex:1 }} />
-                <button onClick={() => window.open('https://www.aneel.gov.br/tarifas', '_blank')} style={{ padding:'6px 12px', borderRadius:8, border:'1px solid #ddd9cb', background:'#eeece2', color:'#6f6d63', fontSize:12, fontWeight:600, cursor:'pointer', whiteSpace:'nowrap' }} title="Consultar tarifas vigentes no portal ANEEL">⚡ ANEEL</button>
+                {/* BUG CORRIGIDO (ago/2026): link antigo 'aneel.gov.br/tarifas' — reportado
+                    pelo usuário como falhando ao clicar. O domínio aneel.gov.br antigo foi
+                    migrado para o portal unificado gov.br (a versão antiga agora vive em
+                    'antigo.aneel.gov.br'); a página de tarifas atual e indexada é
+                    gov.br/aneel/pt-br/assuntos/tarifas. */}
+                <button onClick={() => window.open('https://www.gov.br/aneel/pt-br/assuntos/tarifas', '_blank')} style={{ padding:'6px 12px', borderRadius:8, border:'1px solid #ddd9cb', background:'#eeece2', color:'#6f6d63', fontSize:12, fontWeight:600, cursor:'pointer', whiteSpace:'nowrap' }} title="Consultar tarifas vigentes no portal ANEEL (gov.br)">⚡ ANEEL</button>
               </div>
             </Campo>
             <Campo label="CIP / Iluminação pública (R$/mês)" hint="Linha 'Contrib. Ilum. Publica Municipal'" tip="Contribuição municipal de iluminação pública. Na conta CEMIG aparece como 'Contrib. Ilum. Publica Municipal'. Persiste após instalação solar.">
@@ -2412,7 +2417,12 @@ function TabResultado({ onPrev }: { onPrev:()=>void }) {
   }
 
   function abrirAldoSolar() {
-    window.open('https://www.aldosolar.com.br/equipamentos', '_blank');
+    // BUG CORRIGIDO (ago/2026): domínio antigo 'aldosolar.com.br' não resolve mais
+    // (falha de DNS, confirmado por busca — a empresa passou a operar em
+    // 'aldo.com.br'). Encontrado ao investigar o mesmo relato do usuário sobre o
+    // link da ANEEL falhando — aproveitei para checar os outros links externos do
+    // app (Belenus segue resolvendo normalmente, sem alteração).
+    window.open('https://www.aldo.com.br/categoria/energia-solar/gerador-de-energia-solar-fotovoltaico/on-grid', '_blank');
   }
 
   function abrirINMETRO() {
@@ -2425,13 +2435,14 @@ function TabResultado({ onPrev }: { onPrev:()=>void }) {
   }
 
   function abrirSolfacil() {
-    // Abre Solfácil com valores pré-preenchidos na URL quando possível
-    const st = useProjetoStore.getState();
-    const valor = Math.round(st.precificacao?.precoVenda ?? 0);
-    const url = valor > 0
-      ? `https://app.solfacil.com.br/simular?valor=${valor}`
-      : 'https://app.solfacil.com.br';
-    window.open(url, '_blank');
+    // BUG CORRIGIDO (ago/2026): 'app.solfacil.com.br' hoje redireciona (302) para um
+    // domínio de terceiro sem relação (solarinove.com.br) — confirmado por busca. O
+    // simulador de financiamento real da Solfácil mudou para
+    // financiamento.solfacil.com.br/simulation/new. O parâmetro `valor` de
+    // pré-preenchimento não pôde ser confirmado nessa nova URL (formato do
+    // simulador mudou), então foi removido em vez de arriscar um link quebrado —
+    // o usuário preenche o valor manualmente no simulador.
+    window.open('https://financiamento.solfacil.com.br/simulation/new', '_blank');
   }
 
   function abrirGoogleMaps() {
@@ -2447,12 +2458,12 @@ function TabResultado({ onPrev }: { onPrev:()=>void }) {
   }
 
   function abrirCEMIG() {
-    const st = useProjetoStore.getState();
-    const uc = st.localizacao?.numeroUC?.replace(/\D/g,'') ?? '';
-    const url = uc
-      ? `https://www.cemig.com.br/servicos/segunda-via-da-conta/?uc=${uc}`
-      : 'https://atende.cemig.com.br';
-    window.open(url, '_blank');
+    // BUG CORRIGIDO (ago/2026): '/servicos/segunda-via-da-conta/' retorna 404 hoje —
+    // caminho atual confirmado é '/como-solicitar-os-principais-servicos/
+    // segunda-via-de-conta/'. Não há suporte a parâmetro `?uc=` documentado nessa
+    // página (era uma suposição do código antigo), removido para não sugerir um
+    // preenchimento automático que não existe.
+    window.open('https://www.cemig.com.br/como-solicitar-os-principais-servicos/segunda-via-de-conta/', '_blank');
   }
 
   async function gerarCronograma() {
