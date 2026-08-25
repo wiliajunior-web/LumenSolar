@@ -12,7 +12,7 @@ Desenvolvido pela Lumen Soluções Ltda — Araguari/MG.
 
 | Item | Estado |
 |------|--------|
-| Testes automatizados | **828 passando** (E2E, cálculos, persistência, precificação de serviços, proteção CC, UTM, checklist de documentação, mapa de células do Formulário CEMIG) |
+| Testes automatizados | **842 passando** (E2E, cálculos, persistência, precificação de serviços, proteção CC, UTM, checklist de documentação, mapa de células do Formulário CEMIG, dimensionamento Grupo A, wiring do store) |
 | Build Windows | ✅ GitHub Actions → artifact `LumenSolar-Windows` |
 | Normas implementadas | IEC 61724-1, NBR 16690, NBR 5410, Lei 14.300/2022, REN ANEEL 1.000/2021 |
 | Tarifa CEMIG | R$1,1827/kWh (Res. ANEEL 3.589/2026) |
@@ -320,19 +320,39 @@ neste processo). Corrigidos e cobertos por teste de regressão nesta sessão:
 - [x] **BAIXO — `tipoLigacao` hardcoded em `'bifasica'`** em `ComponentesRecomendados` (App.tsx)
   e `DiagramaUnifilarBasico.tsx`, ignorando o valor real do cliente — inflava a queda de tensão
   CA exibida em ~15,6% para todo cliente trifásico.
+- [x] **CRÍTICO — crash no `.exe` empacotado:** `require('@domain/dimensionamento/...')` dinâmico
+  em 3 pontos de `App.tsx` resolvia o alias `@domain` só em `npm run dev` (via Vite); no
+  Electron empacotado (`app.asar`) o `require()` é uma chamada real do Node, que não conhece o
+  alias — `Cannot find module` na inicialização, sempre. Corrigido convertendo os 3 para `import`
+  estático no topo do arquivo. Confirmado pré-existente (build antigo, não introduzido nesta
+  sessão) e confirmado ausente do bundle gerado após a correção.
+- [x] **MÉDIO — 4 links externos quebrados:** botão ANEEL (domínio migrado), Aldo Solar (DNS
+  morto), Solfácil (redirecionava para domínio não relacionado) e CEMIG (caminho 404). Cada URL
+  nova só foi trocada após confirmar via busca/fetch que carrega de fato — 1 link (INMETRO) ficou
+  como estava por falta de evidência conclusiva (timeout de conexão não é prova de link quebrado).
+- [x] **ALTO — `calcularGrupoA.ts` e `useProjetoStore.ts` (motor central `calcularTudo()`) tinham
+  ZERO cobertura de teste.** A auditoria anterior chegou a descrever `calcularGrupoA.ts` como
+  "pronto e testado" — afirmação incorreta, não havia nenhum teste. Adicionados
+  `calcularGrupoA.test.ts` (14 testes, valores calculados manualmente antes de rodar, incluindo
+  regressão específica para detectar histórico Ponta/Fora-Ponta trocado) e
+  `useProjetoStore.test.ts` (wiring do `resultadoGrupoA`, comparado contra chamada independente
+  da função de domínio usando os mesmos hsp/perdas reais).
 
 **Não corrigido nesta auditoria — requer trabalho dedicado:**
 
-- [ ] **CRÍTICO — Grupo A (Média Tensão) tem UI completa e funcional mas está 100% desconectada
-  do motor de cálculo.** Existe um módulo pronto e testado (`calcularGrupoA.ts`) que nunca é
-  chamado — `calcularTudo()` sempre roda o caminho de Grupo B (tarifa única), ignorando
-  completamente a parcela de demanda contratada (frequentemente o maior componente da conta de
-  cliente comercial/industrial). Toda proposta gerada hoje para um cliente Grupo A sai com
-  dimensionamento e viabilidade financeira de cliente residencial. Não foi corrigido às pressas
-  porque exige revisar todo o fluxo de cálculo e os documentos gerados — risco de introduzir bug
-  novo maior que o já existente. Adicionado nesta sessão, como contenção: um aviso vermelho
-  visível na tela quando "Grupo A" é selecionado, instruindo a não gerar proposta pelo app até
-  esta integração ser feita.
+- [ ] **ALTO — Grupo A (Média Tensão): cálculo agora roda e é exibido, mas ainda não alimenta os
+  documentos.** Nesta sessão, `calcularDimensionamentoGrupoA` foi conectado ao store
+  (`resultadoGrupoA`, calculado quando `consumo.grupoTensao === 'A'`) e ganhou UI própria no
+  painel de Consumo (histórico mensal Ponta/Fora-Ponta, resultado de dimensionamento e
+  financeiro, alertas). Isso é uma melhoria real: antes o painel só mostrava o Fc estático, sem
+  nenhum cálculo de fato. Mas `dimensionamento`/`custosRecorrentes`/`indicadores` — o que
+  realmente alimenta Proposta/Excel/Formulário CEMIG — continuam sempre calculados como Grupo B
+  (tarifa única, sem demanda contratada), porque uma integração completa exigiria redefinir o
+  significado de campos compartilhados entre os dois modelos (ex: "taxa de disponibilidade" não
+  existe em Grupo A, que cobra demanda contratada) em cada documento gerado — feito com cuidado,
+  não às pressas, para não gerar documento com rótulo incorreto. Aviso vermelho atualizado no
+  painel para refletir esse escopo mais estreito: ainda não gerar proposta para cliente de média
+  tensão a partir dos documentos do app.
 - [ ] `tributacao.ts` (tabela do Simples Nacional por faixa) e `calcularTabelaAtualizada.ts`
   (correção monetária da tabela de serviços) estão corretos e testados, mas não são chamados em
   lugar nenhum do app em produção — só existem via os próprios testes. Não é bug de cálculo, é

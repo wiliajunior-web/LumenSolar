@@ -7,6 +7,7 @@ import type { ResultadoEnquadramento } from '@domain/fioB/calculoFioB';
 import type { ResultadoDimensionamento } from '@domain/dimensionamento/types';
 import { DISTRIBUIDORAS, type TipoLigacao } from '@data/distribuidoras';
 import { calcularCustosRecorrentes, projetarCustosAnuais, type ResultadoCustosRecorrentes } from '@domain/custosRecorrentes/calcularCustos';
+import { calcularDimensionamentoGrupoA, type ResultadoGrupoA } from '@domain/dimensionamento/calcularGrupoA';
 import { calcularPrecificacao } from '@domain/precificacao/calcularPrecificacao';
 import type { ResultadoPrecificacao } from '@domain/precificacao/types';
 import { DADOS_EMPRESA_PADRAO, type DadosEmpresa } from '@data/empresa';
@@ -55,6 +56,33 @@ export interface EntradaConsumo {
    * SEMPRE prefira o valor da conta: é mais preciso que o banco de dados.
    */
   tarifaRealKWhComICMS: number;
+  // ── Grupo A — Média Tensão (ver @domain/dimensionamento/calcularGrupoA) ──
+  // Adicionados formalmente à interface em ago/2026: antes só existiam no
+  // objeto default do estado, acessados via `(s.consumo as any)` em toda a
+  // UI — o que também é a razão de calcularTudo() nunca ter usado esses
+  // campos (não apareciam no tipo que calcularTudo() enxergava).
+  /** 'B' = Baixa Tensão (residencial/comercial padrão). 'A' = Média Tensão. */
+  grupoTensao: 'B' | 'A';
+  agrupamentoAtivo: boolean;
+  unidadesConsumidoras: Array<{ id: string; historico: number[]; tipoLigacao: string; percentualCredito: number }>;
+  /** Histórico de consumo fora de ponta por mês (kWh) — Grupo A. */
+  historicoFP: number[];
+  /** Histórico de consumo em ponta por mês (kWh) — Grupo A. */
+  historicoP: number[];
+  /** TE Ponta (R$/kWh) — só a parcela de Tarifa de Energia, sem TUSD. */
+  tePontaKWh: number;
+  /** TE Fora Ponta (R$/kWh). */
+  teForaPontaKWh: number;
+  /** TUSD Ponta (R$/kWh). */
+  tusdPontaKWh: number;
+  /** TUSD Fora Ponta (R$/kWh). */
+  tusdForaPontaKWh: number;
+  /** Tarifa de demanda contratada (R$/kW). */
+  tarifaDemandaKW: number;
+  /** Demanda contratada (kW). */
+  demandaContratadaKW: number;
+  /** Demanda medida no ciclo atual (kW) — opcional, usada para alerta de redução e cobrança de ultrapassagem. */
+  demandaMedidaFPkW: number;
 }
 
 export interface EntradaKit {
@@ -136,6 +164,16 @@ interface ProjetoState {
   percentuaisFioBPorAno: Record<number, number>;
   detalhamentoPerdas: string[];
   indicadores: IndicadoresFinanceiros | null;
+  /**
+   * Dimensionamento/análise financeira Grupo A (média tensão), calculado
+   * quando consumo.grupoTensao === 'A' — ver @domain/dimensionamento/
+   * calcularGrupoA.ts. IMPORTANTE (ago/2026): ainda não alimenta
+   * `dimensionamento`/`custosRecorrentes`/os PDFs/Excel — aqueles continuam
+   * calculados como Grupo B. Só é exibido no painel "Grupo A" da tela de
+   * Consumo. Não gerar proposta para cliente Grupo A a partir dos documentos
+   * do app enquanto essa integração não for concluída (ver README).
+   */
+  resultadoGrupoA: ResultadoGrupoA | null;
   checklistDocumentacao: ItemChecklistDocumentacao[];
 
   atualizarEmpresa: (p: Partial<DadosEmpresa>) => void;
@@ -213,6 +251,7 @@ export const useProjetoStore = create<ProjetoState>((set, get) => ({
   dimensionamento:null, enquadramento:null,
   custosRecorrentes:null, precificacao:null,
   percentuaisFioBPorAno:{}, detalhamentoPerdas:[], indicadores:null,
+  resultadoGrupoA:null,
   checklistDocumentacao: CHECKLIST_PADRAO_CEMIG_MICROGD,
 
   atualizarEmpresa: p => set(s => ({ empresa:{...s.empresa,...p} })),
@@ -264,6 +303,33 @@ export const useProjetoStore = create<ProjetoState>((set, get) => ({
     );
     const dimensionamento = dimensionarSistema({consumoMedioMensalKWh:mediaKWh,hspLocal:hsp,perdasSistema:perdas.perdaTotalLiquida,potenciaModuloWp:kit.potenciaModuloWp,percentualCompensacaoDesejado:kit.percentualCompensacaoDesejado});
     const enquadramento = classificarEnquadramento({dataProtocoloAcesso:kit.dataProtocoloAcesso,potenciaInstaladaKW:dimensionamento.potenciaInstaladaRealKWp,fonte:'fotovoltaica',modalidade:'autoconsumo_local'});
+
+    // Grupo A (média tensão) — calculado à parte, com fórmula própria (fator de
+    // compensação Fc = TE_Ponta/TE_ForaPonta), ver @domain/dimensionamento/
+    // calcularGrupoA.ts. NÃO substitui `dimensionamento`/`custosRecorrentes`
+    // acima (que continuam sempre Grupo B) — ver comentário do campo
+    // `resultadoGrupoA` na interface ProjetoState para o porquê.
+    const resultadoGrupoA: ResultadoGrupoA | null = consumo.grupoTensao === 'A'
+      ? calcularDimensionamentoGrupoA({
+          consumo: {
+            historicoBFP: consumo.historicoFP,
+            historicoBP: consumo.historicoP,
+            demandaMedidaFPkW: consumo.demandaMedidaFPkW || undefined,
+            demandaContratadaKW: consumo.demandaContratadaKW,
+          },
+          tarifa: {
+            tePontaKWh: consumo.tePontaKWh,
+            teForaPontaKWh: consumo.teForaPontaKWh,
+            tusdPontaKWh: consumo.tusdPontaKWh,
+            tusdForaPontaKWh: consumo.tusdForaPontaKWh,
+            demandaKW: consumo.tarifaDemandaKW,
+          },
+          hspLocal: hsp,
+          perdasSistema: perdas.perdaTotalLiquida,
+          potenciaModuloWp: kit.potenciaModuloWp,
+          percentualCompensacao: kit.percentualCompensacaoDesejado,
+        })
+      : null;
 
     const anos=[2025,2026,2027,2028,2029,2030,2035,2040,2045];
     const pfb:Record<number,number>={};
@@ -331,6 +397,6 @@ export const useProjetoStore = create<ProjetoState>((set, get) => ({
       geracaoMensalKWh:gen12,
       simulacoesFinanciamento:simulacoes,
     };
-    set({consumoMedioMensalKWh:mediaKWh,valorMedioMensalRS:mediaRS,dimensionamento,enquadramento,custosRecorrentes,precificacao,percentuaisFioBPorAno:pfb,detalhamentoPerdas:perdas.detalhamento,indicadores});
+    set({consumoMedioMensalKWh:mediaKWh,valorMedioMensalRS:mediaRS,dimensionamento,enquadramento,custosRecorrentes,precificacao,percentuaisFioBPorAno:pfb,detalhamentoPerdas:perdas.detalhamento,indicadores,resultadoGrupoA});
   },
 }));

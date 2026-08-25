@@ -980,22 +980,77 @@ function TabConsumo({ onPrev, onNext }: { onPrev:()=>void; onNext:()=>void }) {
                   Geração necessária = Média_FP + {((s.consumo as any).tePontaKWh/(s.consumo as any).teForaPontaKWh).toFixed(2)} × Média_P
                 </div>
               )}
-              {/* AVISO CRÍTICO (ago/2026, auditoria completa): estes campos NÃO alimentam
-                  o motor de cálculo (calcularTudo/dimensionarSistema/calcularCustosRecorrentes).
-                  Dimensionamento, conta antes/depois, economia, payback e TIR usados em toda
-                  proposta/PDF/Excel ainda são calculados como Grupo B (tarifa única, sem
-                  parcela de demanda contratada). Existe um módulo pronto e testado para Grupo A
-                  (@domain/dimensionamento/calcularGrupoA.ts) mas ele não está conectado ao
-                  store — corrigir isso exige revisar todo o fluxo de cálculo e os documentos
-                  gerados, por isso não foi feito às pressas nesta auditoria. Até lá, NÃO gerar
-                  proposta para cliente Grupo A a partir deste app — calcule a viabilidade
-                  manualmente. */}
+
+              {/* Histórico de consumo Ponta/Fora Ponta — 12 meses.
+                  ADICIONADO (ago/2026): antes não existia UI nenhuma para preencher
+                  historicoFP/historicoP, então calcularDimensionamentoGrupoA nunca
+                  tinha dados reais para trabalhar mesmo depois de conectado. */}
+              <div style={{ marginTop:14, marginBottom:10 }}>
+                <div style={{ fontSize:11, fontWeight:700, color:'#6f6d63', textTransform:'uppercase', letterSpacing:'.05em', marginBottom:8 }}>
+                  Histórico de consumo — Fora Ponta / Ponta (kWh, últimos 12 meses)
+                </div>
+                <div style={{ display:'grid', gridTemplateColumns:'repeat(4, 1fr)', gap:8 }}>
+                  {MESES.map((mes, i) => {
+                    const histFP = s.consumo.historicoFP.length === 12 ? s.consumo.historicoFP : Array(12).fill(0);
+                    const histP  = s.consumo.historicoP.length  === 12 ? s.consumo.historicoP  : Array(12).fill(0);
+                    const setFP = (v: number) => { const n = [...histFP]; n[i] = v; s.atualizarConsumo({ historicoFP: n }); };
+                    const setP  = (v: number) => { const n = [...histP];  n[i] = v; s.atualizarConsumo({ historicoP: n }); };
+                    return (
+                      <div key={mes} style={{ display:'flex', flexDirection:'column', gap:2 }}>
+                        <span style={{ fontSize:10, color:'#8a8776' }}>{mes}</span>
+                        <input className="inp inp-num" type="number" step="1" value={histFP[i] || ''} onChange={e => setFP(Number(e.target.value))} placeholder="FP" title="Consumo fora ponta (kWh)" style={{ fontSize:11, padding:'4px 6px' }} />
+                        <input className="inp inp-num" type="number" step="1" value={histP[i] || ''} onChange={e => setP(Number(e.target.value))} placeholder="P" title="Consumo ponta (kWh)" style={{ fontSize:11, padding:'4px 6px' }} />
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Resultado Grupo A — ADICIONADO (ago/2026): calcularDimensionamentoGrupoA
+                  agora roda de verdade (useProjetoStore.calcularTudo), com os dados acima.
+                  Ainda NÃO alimenta dimensionamento/custosRecorrentes/indicadores nem os
+                  PDFs/Excel — ver aviso abaixo. */}
+              {s.resultadoGrupoA && (
+                <div style={{ background:'#0f1a0f', border:'1px solid #22c55e44', borderRadius:8, padding:12, marginBottom:10 }}>
+                  <div style={{ fontSize:11, fontWeight:700, color:'#86efac', textTransform:'uppercase', letterSpacing:'.05em', marginBottom:8 }}>
+                    Cálculo Grupo A (preview)
+                  </div>
+                  <div style={{ display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:'6px 16px', fontSize:12, color:'#d1d5db' }}>
+                    <div>Potência mínima: <strong>{s.resultadoGrupoA.potenciaMinKWp.toFixed(2)} kWp</strong></div>
+                    <div>Potência real: <strong>{s.resultadoGrupoA.potenciaRealKWp.toFixed(2)} kWp</strong></div>
+                    <div>Módulos: <strong>{s.resultadoGrupoA.numeroModulos}</strong></div>
+                    <div>Conta antes: <strong>R$ {s.resultadoGrupoA.contaAntesRS.toFixed(2)}</strong></div>
+                    <div>Conta depois: <strong>R$ {s.resultadoGrupoA.contaAposRS.toFixed(2)}</strong></div>
+                    <div>Economia mensal: <strong style={{color:'#86efac'}}>R$ {s.resultadoGrupoA.economiaMensalRS.toFixed(2)}</strong></div>
+                  </div>
+                  {s.resultadoGrupoA.alertas.length > 0 && (
+                    <div style={{ marginTop:8, fontSize:11, color:'#fbbf24' }}>
+                      {s.resultadoGrupoA.alertas.map((a, i) => <div key={i}>⚠ {a}</div>)}
+                    </div>
+                  )}
+                  {s.resultadoGrupoA.houveUltrapassagemDemanda && (
+                    <div style={{ marginTop:6, fontSize:10, color:'#8a8776', fontStyle:'italic' }}>
+                      Cobrança de ultrapassagem de demanda: fórmula não verificada contra a ND
+                      da CEMIG/REN 1.000/2021 — confirme antes de repassar ao cliente (ver
+                      comentário em calcularGrupoA.ts).
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* AVISO (ago/2026): o cálculo acima já é REAL (não é mais só o Fc estático) —
+                  mas dimensionamento/custosRecorrentes/indicadores (o que alimenta os PDFs,
+                  o Excel e o Formulário CEMIG) ainda são sempre calculados como Grupo B.
+                  Conectar de fato exigiria redefinir o significado de vários campos
+                  compartilhados (ex: "taxa de disponibilidade" não existe em Grupo A, que
+                  cobra demanda contratada) em cada documento — feito com cuidado, não às
+                  pressas, para não gerar documento com rótulo errado. */}
               <div style={{ padding:'10px 12px', background:'#3a1414', border:'1.5px solid #ef4444', borderRadius:8, fontSize:12, color:'#fca5a5', marginTop:8, fontWeight:600 }}>
-                ⚠ ATENÇÃO — Grupo A ainda NÃO é usado no cálculo. Os campos acima são apenas
-                informativos por enquanto: dimensionamento, economia, payback e TIR da proposta
-                continuam sendo calculados como Grupo B (tarifa única, sem cobrança de demanda
-                contratada). NÃO gere proposta para cliente de média tensão a partir deste app —
-                calcule a viabilidade manualmente até esta integração ser concluída.
+                ⚠ ATENÇÃO — o cálculo acima é real, mas ainda NÃO alimenta os documentos.
+                Dimensionamento, economia, payback e TIR da Proposta/Excel/Formulário CEMIG
+                continuam sendo calculados como Grupo B (tarifa única, sem demanda contratada).
+                NÃO gere proposta para cliente de média tensão a partir deste app — use os
+                números deste painel manualmente até a integração com os documentos ser concluída.
               </div>
             </div>
           )}
