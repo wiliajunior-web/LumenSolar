@@ -86,6 +86,9 @@ export interface EntradaKit {
   ipGabinete: string;       // Grau de proteção (ex: IP65)
   fatorPotencia: string;    // Ex: ">0.99"
   thd: string;              // Distorção harmônica (ex: "<3%")
+  // Estratégia de dimensionamento
+  percentualCompensacaoDesejado?: number; // 1.0 = cobrir 100% do consumo; >1 = superdimensionar
+  motivoSuperdimensionamento?: string;    // justificativa quando percentual > 1.0
 }
 
 export interface EntradaPrecificacao {
@@ -107,7 +110,7 @@ export interface IndicadoresFinanceiros {
   simulacoesFinanciamento: SimulacaoFinanciamento[];
 }
 
-const MESES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+export const MESES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 
 interface ProjetoState {
   empresa: DadosEmpresa;

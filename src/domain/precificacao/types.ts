@@ -13,7 +13,18 @@
  * percentuais por cima do custo, que subestima o imposto.
  */
 
-/** Especificação do kit fotovoltaico conforme informado pelo fornecedor. */
+/**
+ * Especificação do kit fotovoltaico conforme informado pelo fornecedor.
+ *
+ * ATENÇÃO — tipo desalinhado (não corrigido agora, ver relatório): este
+ * campo só tem 3 dos 6 valores de PRESETS_MODULO (src/data/presetsModulo.ts
+ * tem também bifacial_ntype, bifacial_ptype, hibrido, cdte). Isso NÃO causa
+ * crash em runtime — PropostaPDF só exibe kit.tipoModulo como texto — mas é
+ * uma inconsistência de tipos que se propaga por vários arquivos de teste
+ * que usam o literal "bifacial" (que não é uma chave real de
+ * PRESETS_MODULO). Alinhar isso exige também corrigir esses testes; deixado
+ * como item separado para não misturar com as correções de bugs de runtime.
+ */
 export interface EspecificacaoKit {
   marcaModulo: string;
   modeloModulo: string;

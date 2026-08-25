@@ -61,6 +61,18 @@ export function gerarExcelAuditoria(dados: any): void {
 
   const wb: WB = XLSX.utils.book_new();
 
+  // BUG CORRIGIDO: a aba "Resumo" (ws0, construída primeiro) referenciava
+  // FC_T0 — a linha inicial dos dados na aba "Fluxo_Caixa" (ws7) — antes de
+  // FC_T0 ser calculado, mais abaixo, quando ws7 é montada. Isso é
+  // `const FC_T0` usada antes de declarada: ReferenceError garantido em
+  // toda execução de gerarExcelAuditoria (ou seja, toda exportação de
+  // Excel quebrava). FC_T0 depende só de incrementos fixos de linha
+  // (não de dados variáveis) — por isso pode ser calculado aqui como uma
+  // constante estável, replicando exatamente a sequência da aba
+  // Fluxo_Caixa: título(+2) → FC_INV,FC_ECO,FC_DEG,FC_REA(+1 cada) →
+  // FC_TMA(+2) → linha de cabeçalho(+1) = 1+2+1+1+1+1+2+1 = 10.
+  const FC_T0 = 10;
+
   // Extrair valores para preencher as células de entrada
   const contas: number[] = (consumo?.contas ?? []).slice(0, 12).map((c:any) => c.kWh || 0);
   while (contas.length < 12) contas.push(0);
@@ -562,7 +574,10 @@ export function gerarExcelAuditoria(dados: any): void {
   const FC_TMA = r; setStr(ws7, r, 1, 'TMA'); setFrm(ws7, r, 2, `=${E(ROW_TMA)}`, F_PCT); r+=2;
 
   for (let i = 1; i <= 6; i++) setStr(ws7, r, i, ['Ano','Fator Degrad.','Fator Reajuste','Economia Anual (R$)','Fluxo (R$)','Fluxo Acum. (R$)'][i-1]); r++;
-  const FC_T0 = r;
+  // FC_T0 já foi declarado (constante) no início da função — checagem de
+  // consistência: se a sequência de linhas acima mudar, este assert falha
+  // alto e rápido em vez de silenciosamente desalinhar as fórmulas do Resumo.
+  if (r !== FC_T0) throw new Error(`gerarExcelAuditoria: layout do Fluxo_Caixa mudou (r=${r}, FC_T0=${FC_T0}) — atualize a constante FC_T0 no início da função.`);
   setNum(ws7, r, 1, 0, F_INT);
   setNum(ws7, r, 2, 1); setNum(ws7, r, 3, 1); setNum(ws7, r, 4, 0, F_BRL);
   ws7[`E${r}`] = { t:'n', f:`=-B${FC_INV}`, v:0, z:F_BRL };

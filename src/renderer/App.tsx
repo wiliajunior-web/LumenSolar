@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { pdf } from '@react-pdf/renderer';
-import { useProjetoStore, PRESETS_MODULO, type TipoModuloPreset } from './store/useProjetoStore';
+import { useProjetoStore, PRESETS_MODULO, MESES, type TipoModuloPreset } from './store/useProjetoStore';
 import { salvarArquivo, importarArquivo, listarRecentes, removerRecente, carregarEmpresa, salvarEmpresa, gerarId, type MetadataProposta } from './services/persistence';
 import { validarCliente, validarConsumo, validarKit, validarPreco, validarProjetoCompleto, validarCPF, validarCNPJ, formatarCPF, type StatusPasso } from './services/validation';
 import { DISTRIBUIDORAS } from '@data/distribuidoras';
@@ -384,7 +384,7 @@ export default function App() {
     // Limpa o store para uma nova proposta
     useProjetoStore.setState({
       cliente: { nome:'', cpf:'', rg:'', estadoCivil:'solteiro', profissao:'', endereco:'', telefone:'', email:'', cidade:'', uf:'MG' },
-      consumo: { contas: gerarUltimos12Meses(), codigoDistribuidora:'CEMIG', tipoLigacao:'monofasica', cipMensalRS:18, tarifaRealKWhComICMS:0 },
+      consumo: { contas: MESES.map(mes => ({ mes, kWh: 0, valorRS: 0 })), codigoDistribuidora:'CEMIG', tipoLigacao:'monofasica', cipMensalRS:18, tarifaRealKWhComICMS:0 },
       kit: { tipoModulo:'bifacial_ntype' as const, marcaModulo:'', modeloModulo:'', potenciaModuloWp:550, quantidade:0, marcaInversor:'', modeloInversor:'', potenciaInversorKW:0, eficienciaInversorPercent:98.4, custoKitRS:0, dataProtocoloAcesso: new Date().toISOString().slice(0,10), vmppV:0, imppA:0, vocV:0, iscA:0, comprimentoMm:0, larguraMm:0, pesoKgModulo:0, certificacoes:'INMETRO, IEC 61215, IEC 61730', garantiaProdutoAnos:12, garantiaPotenciaAnos:25, potenciaGarantidaPercent:80, numStrings:1, modulosPorString:1, faixaMpptMinV:0, faixaMpptMaxV:0, tensaoMaxEntradaV:0, tensaoSaidaV:220, corrMaxSaidaA:0, numMppt:1, ipGabinete:'IP65', fatorPotencia:'>0.99', thd:'<3%' },
       preco: {
         estruturaRS: 0, materiaisEletricosRS: 0, maoDeObraRS: 0,
@@ -397,7 +397,7 @@ export default function App() {
       percentuaisFioBPorAno: {}, detalhamentoPerdas: [],
     } as any);
     const newId = gerarId();
-    setId(newId);
+    setProposalId(newId);
     setSaving('idle');
     setValidationErrors([]);
     setAba('cliente');
@@ -406,7 +406,7 @@ export default function App() {
   async function salvar() {
     const s = useProjetoStore.getState();
     const id = proposalId ?? gerarId();
-    if (!proposalId) setId(id);
+    if (!proposalId) setProposalId(id);
     setSaving('saving');
     // Preservar criadoEm original via localStorage
     const criadoEmOriginal = localStorage.getItem('lumen:criado:' + id) || new Date().toISOString();
@@ -433,7 +433,7 @@ export default function App() {
     if (data.localizacao) st.atualizarLocalizacao(data.localizacao);
     if (data.kit)         st.atualizarKit(data.kit);
     if (data.preco)       st.atualizarPreco(data.preco);
-    setId(data.id || gerarId());
+    setProposalId(data.id || gerarId());
     setNomeArquivoAtual('');
     setValidationErrors([]);
     setStepStatus(calcStepStatus());
@@ -503,7 +503,7 @@ export default function App() {
             </div>
           )}
           <div style={{ padding: '20px 24px', flex: 1 }}>
-            {showEmpresa && <TabEmpresa onClose={() => { setShowEmpresa(false); salvarEmpresa(useProjetoStore.getState().empresa).catch(()=>{}); }} />}
+            {showEmpresa && <TabEmpresa onClose={() => { setShowEmpresa(false); salvarEmpresa(useProjetoStore.getState().empresa); }} />}
             {!showEmpresa && aba === 'home' && <TabHome onNovaProposta={novaProposta} onAbrirProposta={abrirProposta} />}
             {!showEmpresa && aba === 'cliente'   && <TabCliente   onNext={() => setAba('consumo')} />}
             {!showEmpresa && aba === 'consumo'   && <TabConsumo   onPrev={() => setAba('cliente')} onNext={() => setAba('local')} />}
@@ -1310,7 +1310,26 @@ function ComponentesRecomendados({ kit }: { kit: any }) {
 
   // DPS CC (entre strings e inversor)
   const dpsCC_kA = isc > 0 ? (isc <= 12 ? 5 : 10) : 0;
-  const vocTotal = (kit.vocV || 0) * (kit.modulosPorString || 1);
+
+  // Voc do sistema (STC) e corrigido por temperatura mínima — NBR 16690:2019 5.3.3
+  const vocMod = kit.vocV || 0;
+  const nModStr = kit.modulosPorString || 1;
+  const vocSistema = vocMod * nModStr;
+  // O datasheet do kit hoje só guarda o coeficiente de temperatura de Pmax
+  // (PRESETS_MODULO — usado em calcularPerdas), não um coeficiente de Voc
+  // dedicado. Usamos o de Pmax como aproximação: na prática |β_Voc| é menor
+  // que |γ_Pmax|, então isso SUPERESTIMA a alta de Voc no frio — conservador
+  // para a verificação de segurança (nunca subestima o risco de passar de
+  // 1000V), mas não é o coeficiente real do módulo. Para precisão, adicionar
+  // um campo coefTempVocPercent dedicado ao datasheet do kit.
+  const coefVoc = PRESETS_MODULO[kit.tipoModulo]?.coef ?? -0.34;
+  const TMIN_PROJETO_C = 5; // NBR 16690:2019 5.3.3 — temperatura mínima de projeto
+  const vocMax = vocSistema * (1 + (coefVoc / 100) * (TMIN_PROJETO_C - 25));
+  const LIMITE_VDC = 1000; // NBR 16690:2019 5.3.3 — tensão CC máxima admissível
+
+  // Fusível de string — NBR 16690:2019 5.4.2: Isc ≤ Ifuse ≤ 2.5 × Isc
+  const FUSES_PADRAO = [8, 10, 12, 15, 20, 25, 30] as const;
+  const fuseIdeal = FUSES_PADRAO.find(f => f >= isc && f <= 2.5 * isc) ?? 0;
 
   const naoPreenchido = potCA_kW === 0;
 
@@ -1945,6 +1964,7 @@ function TabKit({ onPrev, onNext }: { onPrev:()=>void; onNext:()=>void }) {
 
       {/* ── Dimensionamento de Bateria (opcional) ── */}
       {mediaKWh > 0 && (() => {
+        const DIAS_MES = 365 / 12; // 30.4167 — mesma convenção usada nos módulos de domínio
         const consumoDiario = mediaKWh / DIAS_MES;
         const tipoBat = (s.kit as any).tipoBateria2 || 'estacionaria_comum';
         const tipoSist = (s.kit as any).tipoSistemaBat || 'backup_hybrid';

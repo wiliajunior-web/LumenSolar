@@ -1,7 +1,11 @@
 import {
   Document, Page, Text, View, StyleSheet, Font, Image,
 } from '@react-pdf/renderer';
-import { DadosCliente } from '../../data/presetsModulo';
+// Import type-only: DadosCliente vive em useProjetoStore.ts (Zustand), mas
+// como é só tipo (apagado na compilação), não reintroduz a dependência de
+// Zustand no bundle de renderização do PDF — presetsModulo.ts continua sem
+// essa dependência, que é o motivo de ele existir isolado (ver README).
+import type { DadosCliente } from '../../renderer/store/useProjetoStore';
 import { DadosEmpresa } from '@data/empresa';
 import { ResultadoDimensionamento } from '@domain/dimensionamento/types';
 import { ResultadoCustosRecorrentes } from '@domain/custosRecorrentes/calcularCustos';
