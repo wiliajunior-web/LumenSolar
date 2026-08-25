@@ -12,7 +12,7 @@ Desenvolvido pela Lumen Soluções Ltda — Araguari/MG.
 
 | Item | Estado |
 |------|--------|
-| Testes automatizados | **824 passando** (E2E, cálculos, persistência, precificação de serviços, proteção CC, UTM, checklist de documentação, mapa de células do Formulário CEMIG) |
+| Testes automatizados | **828 passando** (E2E, cálculos, persistência, precificação de serviços, proteção CC, UTM, checklist de documentação, mapa de células do Formulário CEMIG) |
 | Build Windows | ✅ GitHub Actions → artifact `LumenSolar-Windows` |
 | Normas implementadas | IEC 61724-1, NBR 16690, NBR 5410, Lei 14.300/2022, REN ANEEL 1.000/2021 |
 | Tarifa CEMIG | R$1,1827/kWh (Res. ANEEL 3.589/2026) |
@@ -267,11 +267,83 @@ não é do software; o usuário confirma manualmente que anexou por fora. O bot�
   parte do repositório (documento interno da CEMIG), então o teste só impede regressão
   acidental do mapa já verificado, não revalida contra o arquivo a cada execução.
 - [ ] Teste de fluxo completo no `.exe` (criar proposta → gerar todos os documentos)
-- [ ] Suporte a Grupo A (P/FP/HR, demanda contratada — sistemas >75 kWp)
-- [ ] Expansão de usina existente (campo "potência atual instalada")
-- [ ] Token `wiliamjunioreng-dotcom` configurado para sincronizar design com ProjetEletrico ✅
-- [ ] Erro de tipo em `App.tsx` (`kit.tipoModulo` não aceita `bifacial_ntype`/`bifacial_ptype`/etc. em `PropostaData`) — `tsc --noEmit` falha, mas `vite build` "passa" porque o esbuild não faz type-check completo; corrigir o tipo em `types.ts` antes que isso mascare um bug real
+- [x] **Corrigido (ago/2026):** erro de tipo em `App.tsx` (`kit.tipoModulo` não aceitava
+  `bifacial_ntype`/`bifacial_ptype`/`hibrido`/`cdte` em `PropostaData`) — `tsc --noEmit` falhava
+  silenciosamente (mascarado porque `vite build`/esbuild não faz type-check completo).
+  `EspecificacaoKit.tipoModulo` ampliado para `TipoModuloPreset | 'bifacial'`.
 - [ ] Tema foi migrado de escuro para claro (ago/2026); ProjetEletrico ficou dessincronizado — decidir se replica lá também
 - [ ] Fusível/proteção CC do DUB (`calcularProtecaoCC`) usa o coeficiente de temperatura de Pmax como aproximação de Voc (conservador, mas não é o valor real do datasheet) — adicionar campo `coefTempVocPercent` dedicado ao kit
 - [ ] Busca de tiles de satélite da Planta de Situação (Esri World Imagery) não pôde ser testada de ponta a ponta no ambiente onde foi construída (rede bloqueada para arcgisonline.com) — só a matemática de qual tile buscar foi testada; testar a busca real no primeiro uso no computador do usuário
 - [ ] `gerarPacoteCompleto()` dispara 6 downloads em sequência via `<a download>` — em alguns navegadores/SOs isso pode exigir permissão explícita para "múltiplos downloads"; testar no .exe real
+
+### Auditoria completa (ago/2026) — cálculos, retornos e procedimentos
+
+Auditoria de ponta a ponta (dimensionamento, financeiro/retornos, precificação, geração de
+documentos, App.tsx/store) usando 5 agentes independentes, cada um recalculando as fórmulas à
+mão/script antes de confiar no "expected" dos testes existentes (vários testes tautológicos —
+que replicavam o mesmo bug do código no cálculo do "expected" — foram encontrados e corrigidos
+neste processo). Corrigidos e cobertos por teste de regressão nesta sessão:
+
+- [x] **CRÍTICO — `calcularCaboCA.ts`:** queda de tensão CA (NBR 5410) dividia por `tensaoSaidaV`
+  duas vezes, retornando valores ~220x/380x menores que o real — `quedaTensaoOk` praticamente
+  nunca dava `false`, e o Diagrama Unifilar Básico mostrava "0,00% (OK)" mesmo acima dos 4% da
+  norma. Teste tautológico correspondente (`auditoria_completa_v2.test.ts`, bloco CA-4) também
+  corrigido — replicava o mesmo bug no valor esperado.
+- [x] **CRÍTICO — `PropostaPDF.tsx` (Doc Técnica) divergia de `PropostaComercialPDF.tsx`:**
+  reimplementava payback e "economia em 25 anos" com fórmula ingênua (sem degradação, reajuste
+  ou Fio B), chegando a divergir >100% do valor do outro PDF para os mesmos dados. Agora ambos
+  usam `indicadores` (calcularFluxoCaixa).
+- [x] **ALTO — Fio B ficava congelado no percentual do ano de instalação por toda a projeção de
+  25 anos** (`useProjetoStore.ts`), apesar do texto do PDF afirmar o contrário ("já considerado
+  na projeção financeira" — Lei 14.300/2022 escalona 15%→100% entre 2023 e 2029). Corrigido
+  conectando `projetarCustosAnuais` (existia, testado, mas nunca era chamado em lugar nenhum) ao
+  fluxo de caixa e às simulações de financiamento via novo parâmetro `economiaMensalPorAno`.
+- [x] **ALTO — Excel de Auditoria (aba Resumo):** Payback e TIR sempre exibiam 0,00 (nomes de
+  campo errados: `paybackSimplesAnos`/`tir` não existiam no objeto real). VPL da aba Resumo tinha
+  TMA hardcoded em 8% em vez de referenciar a célula real (divergia do VPL da aba Fluxo_Caixa).
+  "Área necessária" lia um campo inexistente e caía sempre no fallback impreciso.
+- [x] **ALTO — Formulário MicroGD CEMIG:** campo do fuso UTM nunca era preenchido (`fusoUtm` vs
+  `utmFuso` — nome de campo errado), mesmo com o usuário preenchendo corretamente no app.
+- [x] **MÉDIO — `calcularCustosRecorrentes`:** quando geração < consumo (sistema
+  subdimensionado), a energia não compensada não era cobrada — economia relatada podia sair mais
+  que o dobro da real. Hoje mitigado pela UI (Estratégia de kWp trava em 100%-300%), mas a função
+  de domínio em si tinha o bug.
+- [x] **MÉDIO — tabela de projeção do Fio B nos PDFs:** usava geração total em vez de energia
+  compensada (min(geração, consumo)) e fração de tarifa do Fio B hardcoded em 35% (ignorando
+  `empresa.fracaoTarifaFioB` configurável) — superestimava o custo futuro em até ~50% para
+  sistemas superdimensionados.
+- [x] **MÉDIO — Excel de Auditoria (aba FioB_Economia):** referências de Tarifa/CIP/kWh mínimo
+  apontavam para linhas erradas da aba Entradas; a "correção" anterior tinha travado esses
+  valores como estáticos em vez de fórmula viva, quebrando a promessa de "segunda opinião
+  auditável" — se o usuário mudasse esses valores em Entradas, a cadeia inteira (Fluxo_Caixa,
+  VPL, TIR, Payback) não recalculava.
+- [x] **BAIXO — `tipoLigacao` hardcoded em `'bifasica'`** em `ComponentesRecomendados` (App.tsx)
+  e `DiagramaUnifilarBasico.tsx`, ignorando o valor real do cliente — inflava a queda de tensão
+  CA exibida em ~15,6% para todo cliente trifásico.
+
+**Não corrigido nesta auditoria — requer trabalho dedicado:**
+
+- [ ] **CRÍTICO — Grupo A (Média Tensão) tem UI completa e funcional mas está 100% desconectada
+  do motor de cálculo.** Existe um módulo pronto e testado (`calcularGrupoA.ts`) que nunca é
+  chamado — `calcularTudo()` sempre roda o caminho de Grupo B (tarifa única), ignorando
+  completamente a parcela de demanda contratada (frequentemente o maior componente da conta de
+  cliente comercial/industrial). Toda proposta gerada hoje para um cliente Grupo A sai com
+  dimensionamento e viabilidade financeira de cliente residencial. Não foi corrigido às pressas
+  porque exige revisar todo o fluxo de cálculo e os documentos gerados — risco de introduzir bug
+  novo maior que o já existente. Adicionado nesta sessão, como contenção: um aviso vermelho
+  visível na tela quando "Grupo A" é selecionado, instruindo a não gerar proposta pelo app até
+  esta integração ser feita.
+- [ ] `tributacao.ts` (tabela do Simples Nacional por faixa) e `calcularTabelaAtualizada.ts`
+  (correção monetária da tabela de serviços) estão corretos e testados, mas não são chamados em
+  lugar nenhum do app em produção — só existem via os próprios testes. Não é bug de cálculo, é
+  funcionalidade que nunca foi conectada à UI.
+- [ ] Suspeita não totalmente confirmada: o dimensionamento e todos os indicadores financeiros
+  usam `dimensionamento.geracaoMensalEstimadaKWh` (geração teórica recomendada pelo algoritmo),
+  não a quantidade de módulos realmente configurada em `kit.quantidade` — se o instalador digitar
+  uma quantidade diferente da sugerida, os indicadores do PDF podem não refletir o sistema
+  vendido de fato. Não aprofundado nesta auditoria (fora do escopo de cálculo puro).
+- [ ] Observação de risco comercial, não de cálculo: o PDF "Doc Técnica"
+  (`PropostaPDF.tsx`, botão "🔧 Técnica") exibe a composição completa de custos, incluindo o
+  custo de compra do kit junto ao fornecedor — se esse documento for de fato entregue ao cliente
+  (e não só uso interno/engenharia), o cliente consegue calcular a margem exata da empresa.
+  Confirmar com quem usa o app qual é o uso real desse PDF.

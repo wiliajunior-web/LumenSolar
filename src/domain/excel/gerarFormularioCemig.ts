@@ -104,16 +104,21 @@ const DEFAULTS_CEMIG = {
 };
 
 export function gerarFormularioCemigMicroGD(dados: any): void {
-  const { cliente, consumo, localizacao, kit, dimensionamento, empresa } = dados;
+  const { cliente, consumo, localizacao, kit, dimensionamento, indicadores, empresa } = dados;
 
   // ── Derivar dados calculados ───────────────────────────────────────────
   const hoje = new Date();
   const dataFormatada = `${cliente?.cidade || 'Local'}, ${hoje.getDate().toString().padStart(2,'0')}/${(hoje.getMonth()+1).toString().padStart(2,'0')}/${hoje.getFullYear()}`;
   const potTotalModulos = ((kit?.potenciaModuloWp || 0) * (kit?.quantidade || 0) / 1000);
   const potTotalInversores = (kit?.potenciaInversorKW || 0) * (kit?.numInversores || 1);
+  // BUG CORRIGIDO (ago/2026): fallback antigo lia `dimensionamento?.areaNecessariaM2`,
+  // campo que não existe em ResultadoDimensionamento (sempre undefined → 0). O valor
+  // correto de área estimada (quando as dimensões físicas do módulo não são
+  // informadas) vem de `indicadores.areaNecessariaM2` (areaTotalNecessariaM2 em
+  // financeiro/indicadores.ts), já calculado e usado em MemorialDescritivo.tsx.
   const areaMod = kit?.comprimentoMm && kit?.larguraMm
     ? (kit.comprimentoMm / 1000) * (kit.larguraMm / 1000) * (kit.quantidade || 1) * 1.1
-    : (dimensionamento?.areaNecessariaM2 || 0);
+    : (indicadores?.areaNecessariaM2 || 0);
   const tensao = consumo?.tipoLigacao === 'trifasica' ? '220/380' : '127/220';
 
   // ── Criar workbook com os valores do projeto ───────────────────────────
@@ -137,7 +142,10 @@ export function gerarFormularioCemigMicroGD(dados: any): void {
   escrever(MAPA_CELULAS.uc_email,     cliente?.email || '');
 
   // ── Seção 2 ──────────────────────────────────────────────────────────
-  if (localizacao?.fusoUtm)  escrever(MAPA_CELULAS.utm_fuso, localizacao.fusoUtm, 'n');
+  // BUG CORRIGIDO (ago/2026): campo real na store é `utmFuso`, não `fusoUtm` — a
+  // condição nunca era verdadeira e a célula do fuso UTM (formulário oficial CEMIG)
+  // ficava sempre em branco mesmo com o usuário preenchendo o campo corretamente.
+  if (localizacao?.utmFuso)  escrever(MAPA_CELULAS.utm_fuso, localizacao.utmFuso, 'n');
   if (localizacao?.utmE)     escrever(MAPA_CELULAS.utm_e,    localizacao.utmE, 'n');
   if (localizacao?.utmN)     escrever(MAPA_CELULAS.utm_n,    localizacao.utmN, 'n');
   escrever(MAPA_CELULAS.tipo_solicitacao, DEFAULTS_CEMIG.tipo_solicitacao);

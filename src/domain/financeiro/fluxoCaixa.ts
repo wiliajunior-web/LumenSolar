@@ -17,18 +17,35 @@ export function calcularFluxoCaixa(params: ParametrosFluxoCaixa): ResultadoFluxo
     reajusteTarifarioAnual,
     horizonteAnos,
     taxaMinimaAtratividadeAnual,
+    economiaMensalPorAno,
   } = params;
 
   if (investimentoInicial <= 0) throw new Error('Investimento inicial deve ser maior que zero.');
   if (horizonteAnos <= 0) throw new Error('Horizonte deve ser maior que zero.');
   if (degradacaoAnualModulos < 0 || degradacaoAnualModulos > 1) throw new Error('Degradação anual deve ser entre 0 e 1 (0% a 100%).');
+  if (economiaMensalPorAno && economiaMensalPorAno.length < horizonteAnos) {
+    throw new Error('economiaMensalPorAno deve cobrir todo o horizonteAnos.');
+  }
 
   const fluxoAnual: number[] = [-investimentoInicial];
 
+  // BUG CORRIGIDO (ago/2026): sem `economiaMensalPorAno`, a economia de cada ano
+  // era escalada só por degradação e reajuste tarifário, mantendo o percentual do
+  // Fio B (embutido em `economiaMensalAno1`) FIXO no valor do ano 1 pelos 25 anos
+  // do horizonte — apesar de a Lei 14.300/2022 escaloná-lo até 100% em 2029. Isso
+  // superestimava a economia projetada (verificado: +13,6% na economia total e
+  // +23,7% no VPL em um cenário de teste com sistema instalado em 2026). Quando o
+  // chamador fornece `economiaMensalPorAno` (ver projetarCustosAnuais), cada ano já
+  // vem com o Fio B, reajuste e degradação corretos — não reaplicar os fatores.
   for (let ano = 1; ano <= horizonteAnos; ano++) {
-    const fatorDegradacao = Math.pow(1 - degradacaoAnualModulos, ano - 1);
-    const fatorTarifa = Math.pow(1 + reajusteTarifarioAnual, ano - 1);
-    const economiaAnual = economiaMensalAno1 * 12 * fatorDegradacao * fatorTarifa;
+    let economiaAnual: number;
+    if (economiaMensalPorAno) {
+      economiaAnual = economiaMensalPorAno[ano - 1] * 12;
+    } else {
+      const fatorDegradacao = Math.pow(1 - degradacaoAnualModulos, ano - 1);
+      const fatorTarifa = Math.pow(1 + reajusteTarifarioAnual, ano - 1);
+      economiaAnual = economiaMensalAno1 * 12 * fatorDegradacao * fatorTarifa;
+    }
     fluxoAnual.push(economiaAnual);
   }
 

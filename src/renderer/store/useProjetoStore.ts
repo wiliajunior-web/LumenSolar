@@ -6,7 +6,7 @@ import { classificarEnquadramento, percentualFioBPorAno } from '@domain/fioB/cal
 import type { ResultadoEnquadramento } from '@domain/fioB/calculoFioB';
 import type { ResultadoDimensionamento } from '@domain/dimensionamento/types';
 import { DISTRIBUIDORAS, type TipoLigacao } from '@data/distribuidoras';
-import { calcularCustosRecorrentes, type ResultadoCustosRecorrentes } from '@domain/custosRecorrentes/calcularCustos';
+import { calcularCustosRecorrentes, projetarCustosAnuais, type ResultadoCustosRecorrentes } from '@domain/custosRecorrentes/calcularCustos';
 import { calcularPrecificacao } from '@domain/precificacao/calcularPrecificacao';
 import type { ResultadoPrecificacao } from '@domain/precificacao/types';
 import { DADOS_EMPRESA_PADRAO, type DadosEmpresa } from '@data/empresa';
@@ -107,6 +107,8 @@ export interface IndicadoresFinanceiros {
   tirAnualPercent: number | null;
   roiMultiplo: number;
   paybackSimples: string;
+  /** Valor numérico bruto (anos, fracionário) por trás de `paybackSimples` — null se não paga em 25 anos. Para uso em planilhas/exportações que precisam de número, não texto formatado. */
+  paybackSimplesAnos: number | null;
   paybackDescontado: string;
   economiaTotalHorizonte: number;
   economia25Anos: number;
@@ -287,20 +289,40 @@ export const useProjetoStore = create<ProjetoState>((set, get) => ({
     });
 
     const HORIZONTE=25;
+    const DEGRADACAO_ANUAL=0.005;
     const economiaMensal=custosRecorrentes.economiaMensalRS;
     const investimento=precificacao.precoVenda;
-    const fluxo=calcularFluxoCaixa({investimentoInicial:investimento,economiaMensalAno1:economiaMensal,degradacaoAnualModulos:0.005,reajusteTarifarioAnual:empresa.reajusteTarifarioAnual,horizonteAnos:HORIZONTE,taxaMinimaAtratividadeAnual:empresa.taxaMinimaAtratividadeAnual});
+    // BUG CORRIGIDO (ago/2026): `economiaMensal` (ano 1) usava o percentual do Fio B
+    // do ano corrente — mas ficava FIXO nesse valor pelos 25 anos da projeção
+    // abaixo, apesar do escalonamento da Lei 14.300/2022 (15%→100% entre 2023 e
+    // 2029). `projetarCustosAnuais` recalcula a economia mensal ano a ano com o
+    // percentual de Fio B, reajuste tarifário e degradação da geração corretos;
+    // `economiaMensalPorAno` é repassado a calcularFluxoCaixa/simularFinanciamento
+    // para substituir a projeção ingênua (que assumia Fio B constante).
+    const anoCalendarioBase=new Date().getFullYear();
+    const anosProjecao=Array.from({length:HORIZONTE},(_,i)=>anoCalendarioBase+i);
+    const projecaoAnual=projetarCustosAnuais(
+      {distribuidora:distribuidoraComTarifa,tipoLigacao:consumo.tipoLigacao,cipRS:consumo.cipMensalRS,consumoMedioMensalKWh:mediaKWh,geracaoMensalKWh:dimensionamento.geracaoMensalEstimadaKWh,percentualFioB:0,fracaoTarifaFioB:empresa.fracaoTarifaFioB},
+      (ano)=>percentualFioBPorAno(enquadramento,ano),
+      empresa.reajusteTarifarioAnual,
+      anosProjecao,
+      DEGRADACAO_ANUAL,
+      anoCalendarioBase
+    );
+    const economiaMensalPorAno=projecaoAnual.map(p=>p.custos.economiaMensalRS);
+    const fluxo=calcularFluxoCaixa({investimentoInicial:investimento,economiaMensalAno1:economiaMensal,degradacaoAnualModulos:DEGRADACAO_ANUAL,reajusteTarifarioAnual:empresa.reajusteTarifarioAnual,horizonteAnos:HORIZONTE,taxaMinimaAtratividadeAnual:empresa.taxaMinimaAtratividadeAnual,economiaMensalPorAno});
     const tir=calcularTIR(fluxo.fluxoAnual);
     const gen12=geracaoMensalPorMes(potKWp,hsp,perdas.perdaTotalLiquida,cliente.uf);
     const simulacoes=[
-      simularFinanciamento(investimento,economiaMensal,empresa.taxaSolfacil48Mensal,48,0.005,empresa.reajusteTarifarioAnual,HORIZONTE,'Solfácil 48×'),
-      simularFinanciamento(investimento,economiaMensal,empresa.taxaSolfacil60Mensal,60,0.005,empresa.reajusteTarifarioAnual,HORIZONTE,'Solfácil 60×'),
-      simularFinanciamento(investimento,economiaMensal,empresa.taxaOutroFinanciamento,empresa.parcelasOutroFinanciamento,0.005,empresa.reajusteTarifarioAnual,HORIZONTE,empresa.descricaoOutroFinanciamento),
+      simularFinanciamento(investimento,economiaMensal,empresa.taxaSolfacil48Mensal,48,DEGRADACAO_ANUAL,empresa.reajusteTarifarioAnual,HORIZONTE,'Solfácil 48×',economiaMensalPorAno),
+      simularFinanciamento(investimento,economiaMensal,empresa.taxaSolfacil60Mensal,60,DEGRADACAO_ANUAL,empresa.reajusteTarifarioAnual,HORIZONTE,'Solfácil 60×',economiaMensalPorAno),
+      simularFinanciamento(investimento,economiaMensal,empresa.taxaOutroFinanciamento,empresa.parcelasOutroFinanciamento,DEGRADACAO_ANUAL,empresa.reajusteTarifarioAnual,HORIZONTE,empresa.descricaoOutroFinanciamento,economiaMensalPorAno),
     ];
     const indicadores:IndicadoresFinanceiros={
       tirAnualPercent:tir!==null?tir*100:null,
       roiMultiplo:calcularROI(investimento,fluxo.economiaTotalHorizonte),
       paybackSimples:formatarPayback(fluxo.paybackSimplesAnos),
+      paybackSimplesAnos:fluxo.paybackSimplesAnos,
       paybackDescontado:formatarPayback(fluxo.paybackDescontadoAnos),
       economiaTotalHorizonte:fluxo.economiaTotalHorizonte,
       economia25Anos:fluxo.economiaTotalHorizonte,

@@ -977,6 +977,23 @@ function TabConsumo({ onPrev, onNext }: { onPrev:()=>void; onNext:()=>void }) {
                   Geração necessária = Média_FP + {((s.consumo as any).tePontaKWh/(s.consumo as any).teForaPontaKWh).toFixed(2)} × Média_P
                 </div>
               )}
+              {/* AVISO CRÍTICO (ago/2026, auditoria completa): estes campos NÃO alimentam
+                  o motor de cálculo (calcularTudo/dimensionarSistema/calcularCustosRecorrentes).
+                  Dimensionamento, conta antes/depois, economia, payback e TIR usados em toda
+                  proposta/PDF/Excel ainda são calculados como Grupo B (tarifa única, sem
+                  parcela de demanda contratada). Existe um módulo pronto e testado para Grupo A
+                  (@domain/dimensionamento/calcularGrupoA.ts) mas ele não está conectado ao
+                  store — corrigir isso exige revisar todo o fluxo de cálculo e os documentos
+                  gerados, por isso não foi feito às pressas nesta auditoria. Até lá, NÃO gerar
+                  proposta para cliente Grupo A a partir deste app — calcule a viabilidade
+                  manualmente. */}
+              <div style={{ padding:'10px 12px', background:'#3a1414', border:'1.5px solid #ef4444', borderRadius:8, fontSize:12, color:'#fca5a5', marginTop:8, fontWeight:600 }}>
+                ⚠ ATENÇÃO — Grupo A ainda NÃO é usado no cálculo. Os campos acima são apenas
+                informativos por enquanto: dimensionamento, economia, payback e TIR da proposta
+                continuam sendo calculados como Grupo B (tarifa única, sem cobrança de demanda
+                contratada). NÃO gere proposta para cliente de média tensão a partir deste app —
+                calcule a viabilidade manualmente até esta integração ser concluída.
+              </div>
             </div>
           )}
 
@@ -1306,7 +1323,7 @@ function StrategiaKwp({ mediaKWh, uf, s }: { mediaKWh: number; uf: string; s: an
  * Dimensionamento automático de componentes elétricos.
  * Referências: NBR 5410:2004 (instalações CA) + ABNT NBR 16690 (CC fotovoltaico)
  */
-function ComponentesRecomendados({ kit }: { kit: any }) {
+function ComponentesRecomendados({ kit, tipoLigacao }: { kit: any; tipoLigacao?: 'monofasica'|'bifasica'|'trifasica' }) {
   // ── Lado CA ──────────────────────────────────────────────────────────────
   const potCA_kW = kit.potenciaInversorKW || 0;
   const tensaoCA = kit.tensaoSaidaV || 220;
@@ -1327,7 +1344,11 @@ function ComponentesRecomendados({ kit }: { kit: any }) {
       return calcularCaboCA({
         corrMaxSaidaA: kit.corrMaxSaidaA || icaProjeto / 1.25,
         tensaoSaidaV: kit.tensaoSaidaV || 220,
-        tipoLigacao: 'bifasica',
+        // BUG CORRIGIDO (ago/2026): tipoLigacao estava hardcoded em 'bifasica',
+        // ignorando o valor real escolhido pelo cliente (s.consumo.tipoLigacao).
+        // Para trifásico, α=1,73 em vez de 2 — o hardcode superestimava a queda de
+        // tensão CA em ~15,6% para todo sistema trifásico.
+        tipoLigacao: tipoLigacao || 'bifasica',
         temperaturaAmbienteC: (kit as any).temperaturaInstalacaoC || 40,
         comprimentoCaboCAm: (kit as any).comprimentoCaboCAm || 10,
       });
@@ -1990,7 +2011,7 @@ function TabKit({ onPrev, onNext }: { onPrev:()=>void; onNext:()=>void }) {
         </div>
       </div>
 
-      <ComponentesRecomendados kit={s.kit} />
+      <ComponentesRecomendados kit={s.kit} tipoLigacao={s.consumo?.tipoLigacao} />
 
       {/* ── Dimensionamento de Bateria (opcional) ── */}
       {mediaKWh > 0 && (() => {

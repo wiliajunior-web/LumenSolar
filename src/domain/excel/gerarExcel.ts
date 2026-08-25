@@ -134,11 +134,11 @@ export function gerarExcelAuditoria(dados: any): void {
   setStr(ws1, r, 1, '2. CONSUMO (da conta de energia)'); r++;
   setStr(ws1, r, 1, 'Distribuidora');           setStr(ws1, r, 2, consumo?.codigoDistribuidora ?? 'CEMIG'); r++;
   setStr(ws1, r, 1, 'Tipo de ligação');         setStr(ws1, r, 2, consumo?.tipoLigacao ?? 'bifasica'); r++;
-  setStr(ws1, r, 1, 'kWh mínimo disponib.');    setNum(ws1, r, 2, kwhMin, F_INT);
+  const ROW_KWMIN = r; setStr(ws1, r, 1, 'kWh mínimo disponib.');    setNum(ws1, r, 2, kwhMin, F_INT);
   setStr(ws1, r, 3, '30 monofásica / 50 bifásica / 100 trifásica'); r++;
-  setStr(ws1, r, 1, 'Tarifa real (R$/kWh)');    setNum(ws1, r, 2, tarifa, F_BRL);
+  const ROW_TARIFA = r; setStr(ws1, r, 1, 'Tarifa real (R$/kWh)');    setNum(ws1, r, 2, tarifa, F_BRL);
   setStr(ws1, r, 3, "Campo 'Preço Unit.' da conta CEMIG"); r++;
-  setStr(ws1, r, 1, 'CIP / Ilum. pública (R$/mês)'); setNum(ws1, r, 2, cip, F_BRL); r++;
+  const ROW_CIP = r; setStr(ws1, r, 1, 'CIP / Ilum. pública (R$/mês)'); setNum(ws1, r, 2, cip, F_BRL); r++;
 
   const ROW_MES1 = r + 1; // linha do Mês 1
   setStr(ws1, r, 1, 'HISTÓRICO — Mês 1 = mais recente'); r++;
@@ -213,13 +213,24 @@ export function gerarExcelAuditoria(dados: any): void {
   const ecoMes   = custosRecorrentes?.economiaMensalRS    ?? 0;
   const ecoAno   = ecoMes * 12;
   const precoVnd  = precificacao?.precoVenda               ?? 0;
-  const pbAnos    = indicadores?.paybackSimplesAnos        ?? 0;
-  const tirVal    = (indicadores?.tir ?? 0) * 100;
+  // BUG CORRIGIDO (ago/2026): os nomes de campo usados aqui (`paybackSimplesAnos`
+  // direto na raiz de `indicadores`, e `indicadores.tir`) nunca existiram no objeto
+  // real (ver IndicadoresFinanceiros em useProjetoStore.ts: os campos reais são
+  // `paybackSimplesAnos` — agora adicionado à interface — e `tirAnualPercent`, já em
+  // formato percentual). O `?? 0` mascarava o erro fazendo a aba "Resumo" (primeira
+  // aba, voltada ao cliente) sempre exibir Payback 0,00 anos e TIR 0,00%.
+  const pbAnos    = indicadores?.paybackSimplesAnos        ?? null;
+  const tirVal    = indicadores?.tirAnualPercent            ?? 0;
   const kwpReal   = dimensionamento?.potenciaInstaladaRealKWp ?? 0;
   const gerMens   = dimensionamento?.geracaoMensalEstimadaKWh ?? 0;
   const contaAntes = custosRecorrentes?.contaAntesRS       ?? 0;
   const contaApos  = custosRecorrentes?.contaAposRS        ?? 0;
-  const areaNec    = ((dimensionamento as any)?.areaNecessariaM2 ?? (kwpReal * 4.4));
+  // BUG CORRIGIDO (ago/2026): `dimensionamento?.areaNecessariaM2` não existe em
+  // ResultadoDimensionamento (sempre undefined) — o valor real vem de
+  // `indicadores.areaNecessariaM2` (areaTotalNecessariaM2, já usado em
+  // MemorialDescritivo.tsx). O fallback grosseiro `kwpReal*4.4` só entra se nem
+  // isso estiver disponível.
+  const areaNec    = (indicadores?.areaNecessariaM2 ?? (kwpReal * 4.4));
   const hoje = new Date();
   const dataFmt = `${String(hoje.getDate()).padStart(2,'0')}/${String(hoje.getMonth()+1).padStart(2,'0')}/${hoje.getFullYear()}`;
   const pctFioB26 = 0.60;
@@ -290,11 +301,20 @@ export function gerarExcelAuditoria(dados: any): void {
   // ── Análise Financeira ────────────────────────────────────────────────────
   setStr(ws0, r0, 2, '▌ ANÁLISE FINANCEIRA'); r0++;
   setStr(ws0, r0, 2, 'Investimento total');         setNum(ws0, r0, 3, precoVnd,  F_BRL); r0++;
-  setStr(ws0, r0, 2, '★ Payback simples');           setNum(ws0, r0, 3, pbAnos,   '#,##0.00');
-  setStr(ws0, r0, 4, 'anos'); r0++;
+  setStr(ws0, r0, 2, '★ Payback simples');
+  // pbAnos é null quando o sistema não se paga dentro do horizonte de 25 anos —
+  // nesse caso escreve texto em vez de forçar um número enganoso (0 pareceria
+  // "payback instantâneo").
+  if (pbAnos === null) { setStr(ws0, r0, 3, 'Acima de 25 anos'); }
+  else { setNum(ws0, r0, 3, pbAnos, '#,##0.00'); setStr(ws0, r0, 4, 'anos'); }
+  r0++;
   setStr(ws0, r0, 2, 'TIR (Taxa Interna de Retorno)'); setNum(ws0, r0, 3, tirVal/100, F_PCT); r0++;
-  setStr(ws0, r0, 2, 'VPL (TMA 8%)');
-  setFrm(ws0, r0, 3, `=NPV(0.08,Fluxo_Caixa!E${FC_T0+1}:Fluxo_Caixa!E${FC_T0+25})+Fluxo_Caixa!E${FC_T0}`, F_BRL); r0++;
+  // BUG CORRIGIDO (ago/2026): TMA estava hardcoded em 0.08 na fórmula do VPL desta
+  // aba (Resumo), divergindo do VPL da aba Fluxo_Caixa — que corretamente referencia
+  // Entradas!B{ROW_TMA} — sempre que o usuário mudasse a TMA na aba Entradas. Ambas
+  // as células agora referenciam a mesma célula viva de TMA.
+  setStr(ws0, r0, 2, 'VPL (TMA — ver aba Entradas)');
+  setFrm(ws0, r0, 3, `=NPV(Entradas!B${ROW_TMA},Fluxo_Caixa!E${FC_T0+1}:Fluxo_Caixa!E${FC_T0+25})+Fluxo_Caixa!E${FC_T0}`, F_BRL); r0++;
   setStr(ws0, r0, 2, 'Economia total em 25 anos');
   setFrm(ws0, r0, 3, `=SUM(Fluxo_Caixa!E${FC_T0+1}:Fluxo_Caixa!E${FC_T0+25})`, F_BRL); r0+=2;
 
@@ -423,18 +443,19 @@ export function gerarExcelAuditoria(dados: any): void {
   r = 1;
   setStr(ws4, r, 1, 'FIO B E CUSTOS RECORRENTES — Lei 14.300/2022'); r+=2;
 
-  const FE_TAR  = r; setStr(ws4, r, 1, 'Tarifa (R$/kWh)'); setFrm(ws4, r, 2, `=${E(ROW_MEDIA+3)}` /* tarifa row */, F_BRL); r++;
-  // Corrija referência: buscar a linha certa da tarifa
-  // Reseta com valor direto
-  ws4[`B${FE_TAR}`] = { t:'n', f:`=Entradas!B${ROW_MEDIA+3}`, v:tarifa, z:F_BRL };
-  const FE_CIP  = r; setStr(ws4, r, 1, 'CIP/COSIP (R$/mês)'); setFrm(ws4, r, 2, `=Entradas!B${ROW_MEDIA+4}`, F_BRL); r++;
-  ws4[`B${FE_CIP}`] = { t:'n', f:`=Entradas!B${ROW_MEDIA+4}`, v:cip, z:F_BRL };
-  const FE_KWMIN= r; setStr(ws4, r, 1, 'kWh disponibilidade mínima'); setFrm(ws4, r, 2, `=Entradas!B${ROW_MEDIA+2}`, F_INT); r++;
-
-  // Usar referências absolutas corretas
-  ws4[`B${FE_TAR}`] = { t:'n', v:tarifa, z:F_BRL };   // valor direto
-  ws4[`B${FE_CIP}`] = { t:'n', v:cip, z:F_BRL };
-  ws4[`B${FE_KWMIN}`]= { t:'n', v:kwhMin, z:F_INT };
+  // BUG CORRIGIDO (ago/2026): as tentativas de referência aqui (ROW_MEDIA+2/+3/+4)
+  // apontavam para as linhas erradas da aba Entradas (ROW_MEDIA é a linha da "Média
+  // dos 12 meses", não de Tarifa/CIP/kWh mínimo — essas ficam mais acima, seção "2.
+  // CONSUMO"). O código antigo percebeu que a referência estava errada e "corrigiu"
+  // travando em valores estáticos (sem fórmula), quebrando a promessa do cabeçalho
+  // do arquivo ("cada cálculo é replicado como fórmula Excel... permitindo segunda
+  // opinião") — se o usuário mudasse Tarifa/CIP/kWh mínimo na aba Entradas para
+  // testar um cenário, esta aba (e toda a cadeia dependente: Fluxo_Caixa, VPL, TIR,
+  // Payback) não recalculava. Agora usa as linhas certas (ROW_TARIFA/ROW_CIP/
+  // ROW_KWMIN, capturadas na montagem da aba Entradas), com fórmula viva.
+  const FE_TAR  = r; setStr(ws4, r, 1, 'Tarifa (R$/kWh)'); setFrm(ws4, r, 2, `=Entradas!B${ROW_TARIFA}`, F_BRL, tarifa); r++;
+  const FE_CIP  = r; setStr(ws4, r, 1, 'CIP/COSIP (R$/mês)'); setFrm(ws4, r, 2, `=Entradas!B${ROW_CIP}`, F_BRL, cip); r++;
+  const FE_KWMIN= r; setStr(ws4, r, 1, 'kWh disponibilidade mínima'); setFrm(ws4, r, 2, `=Entradas!B${ROW_KWMIN}`, F_INT, kwhMin); r++;
 
   const FE_CONS = r; setStr(ws4, r, 1, 'Consumo médio (kWh/mês)'); setFrm(ws4, r, 2, `=Dimensionamento!B${D_CONS}`, F_KWH); r++;
   const FE_GER  = r; setStr(ws4, r, 1, 'Geração mensal (kWh/mês)'); setFrm(ws4, r, 2, `=Dimensionamento!B${D_GERM}`, F_KWH); r++;

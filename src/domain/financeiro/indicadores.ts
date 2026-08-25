@@ -98,6 +98,10 @@ export interface SimulacaoFinanciamento {
  * @param degradacaoAnual Degradação anual dos módulos (fração)
  * @param reajusteTarifario Reajuste tarifário anual esperado (fração)
  * @param horizonteAnos Horizonte de análise
+ * @param economiaMensalPorAno Opcional: economia mensal já projetada ano a ano
+ *   (índice 0 = ano 1), incorporando o escalonamento do Fio B — ver
+ *   `projetarCustosAnuais`. Quando fornecido, substitui o cálculo por
+ *   degradação/reajuste isolados (que mantêm o Fio B fixo no valor do ano 1).
  */
 export function simularFinanciamento(
   valorFinanciado: number,
@@ -107,7 +111,8 @@ export function simularFinanciamento(
   degradacaoAnual: number,
   reajusteTarifario: number,
   horizonteAnos: number,
-  descricao: string
+  descricao: string,
+  economiaMensalPorAno?: number[]
 ): SimulacaoFinanciamento {
   const i = taxaJurosMensal;
   const n = numeroParcelas;
@@ -124,9 +129,12 @@ export function simularFinanciamento(
   const parcelasAnual = parcelaMensal * 12;
 
   for (let ano = 1; ano <= horizonteAnos; ano++) {
-    const fatorDeg = (1 - degradacaoAnual) ** (ano - 1);
-    const fatorTar = (1 + reajusteTarifario) ** (ano - 1);
-    const economiaAnual = economiaMensalAno1 * 12 * fatorDeg * fatorTar;
+    // BUG CORRIGIDO (ago/2026): mesma correção de calcularFluxoCaixa.ts — sem
+    // economiaMensalPorAno, o Fio B ficava fixo no percentual do ano 1 pelos 25
+    // anos, apesar do escalonamento da Lei 14.300/2022.
+    const economiaAnual = economiaMensalPorAno
+      ? economiaMensalPorAno[ano - 1] * 12
+      : economiaMensalAno1 * 12 * ((1 - degradacaoAnual) ** (ano - 1)) * ((1 + reajusteTarifario) ** (ano - 1));
     // Parcelas restantes a pagar (corrigido: usa totalParcelasPagas, não saldoAcumulado)
     const restante = Math.max(0, totalPago - totalParcelasPagas);
     const parcelasNoAno = ano <= Math.ceil(n / 12) ? Math.min(parcelasAnual, restante) : 0;

@@ -25,6 +25,17 @@ export interface ParametrosFluxoCaixa {
   horizonteAnos: number;
   /** Taxa mínima de atratividade anual, para cálculo de VPL (fração). */
   taxaMinimaAtratividadeAnual?: number;
+  /**
+   * Economia mensal já corretamente projetada ano a ano (índice 0 = ano 1),
+   * incorporando reajuste tarifário, degradação da geração E o escalonamento
+   * do Fio B (Lei 14.300/2022) — ver `projetarCustosAnuais` em
+   * custosRecorrentes/calcularCustos.ts. Quando fornecido (comprimento deve
+   * cobrir `horizonteAnos`), substitui o cálculo por `economiaMensalAno1` ×
+   * fatores de degradação/reajuste, que não reflete a variação do Fio B ano
+   * a ano. Opcional para manter compatibilidade com chamadores que só têm a
+   * economia do ano 1 (ex.: simulações rápidas de UI).
+   */
+  economiaMensalPorAno?: number[];
 }
 
 export interface ResultadoFluxoCaixa {

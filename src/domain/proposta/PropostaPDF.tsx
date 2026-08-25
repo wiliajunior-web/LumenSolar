@@ -137,7 +137,7 @@ export interface PropostaData {
 }
 
 export function PropostaPDF({ data }: { data: PropostaData }) {
-  const { empresa, cliente, kit, dimensionamento, custosRecorrentes, precificacao, enquadramento, percentuaisFioBPorAno } = data;
+  const { empresa, cliente, kit, dimensionamento, custosRecorrentes, precificacao, enquadramento, percentuaisFioBPorAno, indicadores } = data;
   const distrib = DISTRIBUIDORAS.find(d => d.codigo === data.codigoDistribuidora);
   const anoAtual = new Date().getFullYear();
 
@@ -305,7 +305,11 @@ export function PropostaPDF({ data }: { data: PropostaData }) {
             </View>
             <View style={{ flex: 1, backgroundColor: '#f2f3f4', borderRadius: 4, padding: '8 12' }}>
               <Text style={{ fontSize: 9, color: COR_CINZA }}>Economia em 25 anos (est.)</Text>
-              <Text style={{ fontSize: 14, fontFamily: 'Helvetica-Bold', color: COR_POSITIVO, marginTop: 2 }}>{R(custosRecorrentes.economiaMensalRS * 12 * 25)}</Text>
+              {/* BUG CORRIGIDO (ago/2026): usava economiaMensalRS*12*25 (economia
+                  constante, sem degradação dos módulos nem reajuste tarifário) — este
+                  arquivo divergia de PropostaComercialPDF.tsx, que usa indicadores.
+                  economia25Anos (calculado por calcularFluxoCaixa, ano a ano). */}
+              <Text style={{ fontSize: 14, fontFamily: 'Helvetica-Bold', color: COR_POSITIVO, marginTop: 2 }}>{R(indicadores?.economia25Anos ?? (custosRecorrentes.economiaMensalRS * 12 * 25))}</Text>
             </View>
           </View>
 
@@ -332,7 +336,15 @@ export function PropostaPDF({ data }: { data: PropostaData }) {
                 </View>
                 {[anoAtual, anoAtual+1, anoAtual+2, anoAtual+3, 2029, 2030].filter((v,i,a) => a.indexOf(v)===i && v<=2035).map((ano, idx) => {
                   const pct = percentuaisFioBPorAno[ano] ?? 1;
-                  const custo = dimensionamento.geracaoMensalEstimadaKWh * (distrib?.tarifaKWhComICMS ?? 0.87) * 0.35 * pct;
+                  // BUG CORRIGIDO (ago/2026): usava geracaoMensalEstimadaKWh (energia
+                  // total gerada) em vez da energia efetivamente compensada
+                  // (min(geração, consumo) — mesma regra de calcularCustos.ts), e
+                  // fração de tarifa do Fio B hardcoded em 0.35 em vez de
+                  // empresa.fracaoTarifaFioB (configurável). Para sistemas
+                  // superdimensionados (ex: estratégia 150%) isso superestimava o
+                  // custo futuro do Fio B mostrado ao cliente em até ~50%.
+                  const energiaCompensadaKWh = Math.min(dimensionamento.geracaoMensalEstimadaKWh, data.consumoMedioMensalKWh ?? dimensionamento.geracaoMensalEstimadaKWh);
+                  const custo = energiaCompensadaKWh * (distrib?.tarifaKWhComICMS ?? 0.87) * (empresa.fracaoTarifaFioB ?? 0.35) * pct;
                   const isAlt = idx % 2 === 1;
                   return (
                     <View key={ano} style={isAlt ? S.tabelaRowAlt : S.tabelaRow}>
@@ -384,17 +396,25 @@ export function PropostaPDF({ data }: { data: PropostaData }) {
           </View>
 
           <Text style={S.secaoTitulo}>Retorno do investimento</Text>
+          {/* BUG CORRIGIDO (ago/2026): payback e "lucro líquido em 25 anos" eram
+              recalculados aqui com fórmula ingênua (precoVenda / economiaMensal*12;
+              economiaMensal*12*25 - precoVenda), sem degradação dos módulos, sem
+              reajuste tarifário e sem o escalonamento do Fio B — divergindo de
+              PropostaComercialPDF.tsx, que usa `indicadores` (calcularFluxoCaixa).
+              Verificado numericamente: a fórmula antiga chegou a divergir em mais de
+              100% da "economia em 25 anos" mostrada no outro PDF, para os mesmos
+              dados de entrada. Agora ambos os documentos usam a mesma fonte. */}
           <View style={S.destaque}>
             <View style={S.destaqueItem}>
               <Text style={[S.destaqueValor, { color: COR_POSITIVO }]}>{R(custosRecorrentes.economiaMensalRS)}</Text>
               <Text style={S.destaqueLabel}>Economia mensal</Text>
             </View>
             <View style={S.destaqueItem}>
-              <Text style={[S.destaqueValor, { color: COR_ACENTO }]}>{N(precificacao.precoVenda / (custosRecorrentes.economiaMensalRS * 12), 1)} anos</Text>
+              <Text style={[S.destaqueValor, { color: COR_ACENTO }]}>{indicadores?.paybackSimples ?? `${N(precificacao.precoVenda / (custosRecorrentes.economiaMensalRS * 12), 1)} anos`}</Text>
               <Text style={S.destaqueLabel}>Payback estimado</Text>
             </View>
             <View style={S.destaqueItem}>
-              <Text style={[S.destaqueValor, { color: COR_POSITIVO }]}>{R(custosRecorrentes.economiaMensalRS * 12 * 25 - precificacao.precoVenda)}</Text>
+              <Text style={[S.destaqueValor, { color: COR_POSITIVO }]}>{R((indicadores?.economia25Anos ?? (custosRecorrentes.economiaMensalRS * 12 * 25)) - precificacao.precoVenda)}</Text>
               <Text style={S.destaqueLabel}>Lucro líquido em 25 anos</Text>
             </View>
           </View>

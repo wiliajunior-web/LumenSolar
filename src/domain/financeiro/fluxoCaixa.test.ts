@@ -53,6 +53,28 @@ describe('calcularFluxoCaixa', () => {
     expect(r.vpl as number).toBeGreaterThan(-10000);
   });
 
+  // BUG CORRIGIDO (ago/2026): sem economiaMensalPorAno, o Fio B ficava fixo no
+  // percentual do ano 1 pelos 25 anos (encontrado na auditoria completa de
+  // ago/2026). economiaMensalPorAno permite ao chamador (useProjetoStore, via
+  // projetarCustosAnuais) fornecer a economia já correta ano a ano.
+  it('[REGRESSÃO] usa economiaMensalPorAno quando fornecido, ignorando degradação/reajuste/economiaMensalAno1', () => {
+    const r = calcularFluxoCaixa({
+      investimentoInicial: 3000,
+      economiaMensalAno1: 999999, // deliberadamente errado — deve ser ignorado
+      degradacaoAnualModulos: 0.5, // deliberadamente absurdo — deve ser ignorado
+      reajusteTarifarioAnual: 2.0, // deliberadamente absurdo — deve ser ignorado
+      horizonteAnos: 3,
+      economiaMensalPorAno: [100, 150, 200], // R$/mês por ano 1, 2, 3
+    });
+    // Verificado manualmente: fluxoAnual = [-3000, 100×12, 150×12, 200×12]
+    //                                     = [-3000, 1200, 1800, 2400]
+    // acumulado: ano1 -3000+1200=-1800 (<0); ano2 -1800+1800=0 (>=0) →
+    // payback = 1 + (-(-1800)/1800) = 1 + 1 = 2,0 anos exatos.
+    expect(r.fluxoAnual).toEqual([-3000, 1200, 1800, 2400]);
+    expect(r.paybackSimplesAnos).toBeCloseTo(2.0, 6);
+    expect(r.economiaTotalHorizonte).toBeCloseTo(5400, 6);
+  });
+
   it('lança erro para investimento inicial inválido', () => {
     expect(() =>
       calcularFluxoCaixa({

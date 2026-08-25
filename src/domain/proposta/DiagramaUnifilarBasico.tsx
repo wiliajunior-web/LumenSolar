@@ -180,10 +180,13 @@ function montarDadosDiagrama(data: any) {
   const icaNominal = potCA > 0 ? (potCA * 1000) / (tensaoCA * fp) : 0;
   const icaProjeto = icaNominal * 1.25;
 
+  // BUG CORRIGIDO (ago/2026): tipoLigacao estava hardcoded em 'bifasica', ignorando
+  // o valor real (data.consumo.tipoLigacao) — mesmo bug corrigido em
+  // ComponentesRecomendados (App.tsx). Para trifásico, α=1,73 em vez de 2.
   const caboCA = calcularCaboCA({
     corrMaxSaidaA: kit.corrMaxSaidaA || icaProjeto / 1.25,
     tensaoSaidaV: tensaoCA,
-    tipoLigacao: 'bifasica',
+    tipoLigacao: (data.consumo?.tipoLigacao as 'monofasica'|'bifasica'|'trifasica') || 'bifasica',
     temperaturaAmbienteC: kit.temperaturaInstalacaoC || 40,
     comprimentoCaboCAm: kit.comprimentoCaboCAm || 10,
   });
