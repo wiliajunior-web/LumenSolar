@@ -1,0 +1,55 @@
+import { describe, it, expect } from 'vitest';
+import { latLonParaUTM, distanciaUTM } from './converterCoordenadas';
+
+// Casos de referência migrados de cpf_utm.test.ts (onde uma cópia local da
+// mesma fórmula era usada só para o teste — nunca testava a função real de
+// produção). Mesmos valores, agora testando o módulo compartilhado de verdade.
+describe('latLonParaUTM', () => {
+  it('[UTM01] Araguari/MG: fuso 22, E≈805km, N≈7933km', () => {
+    const { utmE, utmN, fuso } = latLonParaUTM(-18.6476, -48.1936);
+    expect(fuso).toBe(22);
+    expect(utmE).toBeGreaterThan(780000); expect(utmE).toBeLessThan(820000);
+    expect(utmN).toBeGreaterThan(7920000); expect(utmN).toBeLessThan(7960000);
+  });
+
+  it('[UTM02] Belo Horizonte/MG: fuso 23', () => {
+    expect(latLonParaUTM(-19.9167, -43.9345).fuso).toBe(23);
+  });
+
+  it('[UTM03] São Paulo/SP: fuso 23', () => {
+    expect(latLonParaUTM(-23.5505, -46.6333).fuso).toBe(23);
+  });
+
+  it('[UTM04] Equador (lat=0, lon=0): E=166022, N=0, fuso=31', () => {
+    const { utmE, utmN, fuso } = latLonParaUTM(0, 0);
+    expect(fuso).toBe(31);
+    expect(Math.abs(utmE - 166022)).toBeLessThan(10);
+    expect(Math.abs(utmN)).toBeLessThan(10);
+  });
+
+  it('hemisfério sul soma a falsa origem de 10.000.000 em N; hemisfério norte não', () => {
+    const sul = latLonParaUTM(-18.6476, -48.1936);
+    const norte = latLonParaUTM(18.6476, -48.1936);
+    expect(sul.utmN).toBeGreaterThan(5_000_000);
+    expect(norte.utmN).toBeLessThan(5_000_000);
+  });
+});
+
+describe('distanciaUTM', () => {
+  it('retorna null quando os fusos são diferentes (E/N não comparáveis)', () => {
+    const a = { utmE: 800000, utmN: 7930000, fuso: 22 };
+    const b = { utmE: 800000, utmN: 7930000, fuso: 23 };
+    expect(distanciaUTM(a, b)).toBeNull();
+  });
+
+  it('distância euclidiana simples quando o fuso é o mesmo (3-4-5 conferido na mão)', () => {
+    const a = { utmE: 800000, utmN: 7930000, fuso: 22 };
+    const b = { utmE: 800003, utmN: 7930004, fuso: 22 };
+    expect(distanciaUTM(a, b)).toBe(5);
+  });
+
+  it('duas coordenadas iguais têm distância zero', () => {
+    const a = { utmE: 800000, utmN: 7930000, fuso: 22 };
+    expect(distanciaUTM(a, { ...a })).toBe(0);
+  });
+});

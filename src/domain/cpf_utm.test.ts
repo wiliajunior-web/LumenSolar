@@ -1,5 +1,13 @@
 /**
- * Testes: CPF/CNPJ (Receita Federal) + Conversão UTM (WGS84)
+ * Testes: CPF/CNPJ (Receita Federal)
+ *
+ * Os testes de conversão UTM (WGS84) que viviam aqui foram movidos para
+ * `geografia/converterCoordenadas.test.ts` (ago/2026): antes havia uma cópia
+ * LOCAL da fórmula colada só para este arquivo testar, então o teste nunca
+ * checava de verdade a função `latLonToUTM` usada em produção (App.tsx). A
+ * fórmula foi extraída para um módulo compartilhado e agora há um teste só,
+ * testando a função real usada tanto pelo botão "Buscar coordenadas UTM"
+ * quanto pela Planta de Situação.
  */
 import { describe, expect, it } from 'vitest';
 import { validarCPF, validarCNPJ, formatarCPF } from '../renderer/services/validation';
@@ -50,48 +58,4 @@ describe('CNPJ — Algoritmo Receita Federal', () => {
   });
 });
 
-describe('Conversão Lat/Lon → UTM WGS84', () => {
-  // Araguari/MG: aproximadamente -18.65, -48.19
-  // UTM: Fuso 22, E≈805000, N≈7933000
-
-  function latLonToUTM(lat: number, lon: number) {
-    const a=6378137.0, f=1/298.257223563, b=a*(1-f), e2=1-(b/a)**2;
-    const k0=0.9996, E0=500000;
-    const fuso=Math.floor((lon+180)/6)+1;
-    const lon0=((fuso-1)*6-180+3)*Math.PI/180;
-    const phi=lat*Math.PI/180, lam=lon*Math.PI/180;
-    const N=a/Math.sqrt(1-e2*Math.sin(phi)**2);
-    const T=Math.tan(phi)**2, C=(e2/(1-e2))*Math.cos(phi)**2;
-    const A=Math.cos(phi)*(lam-lon0);
-    const e4=e2**2, e6=e2**3;
-    const M=a*((1-e2/4-3*e4/64-5*e6/256)*phi-(3*e2/8+3*e4/32+45*e6/1024)*Math.sin(2*phi)+(15*e4/256+45*e6/1024)*Math.sin(4*phi)-(35*e6/3072)*Math.sin(6*phi));
-    const utmE=Math.round(k0*N*(A+(1-T+C)*A**3/6+(5-18*T+T**2+72*C-58*(e2/(1-e2)))*A**5/120)+E0);
-    const utmNraw=Math.round(k0*(M+N*Math.tan(phi)*(A**2/2+(5-T+9*C+4*C**2)*A**4/24+(61-58*T+T**2+600*C-330*(e2/(1-e2)))*A**6/720)));
-    const utmN=utmNraw+(lat<0?10_000_000:0);
-    return { utmE, utmN, fuso };
-  }
-
-  it('[UTM01] Araguari/MG: fuso 22, E≈805km, N≈7933km', () => {
-    const { utmE, utmN, fuso } = latLonToUTM(-18.6476, -48.1936);
-    expect(fuso).toBe(22);
-    expect(utmE).toBeGreaterThan(780000); expect(utmE).toBeLessThan(820000);
-    expect(utmN).toBeGreaterThan(7920000); expect(utmN).toBeLessThan(7960000);
-  });
-
-  it('[UTM02] Belo Horizonte/MG: fuso 23', () => {
-    const { fuso } = latLonToUTM(-19.9167, -43.9345);
-    expect(fuso).toBe(23);
-  });
-
-  it('[UTM03] São Paulo/SP: fuso 23', () => {
-    const { fuso } = latLonToUTM(-23.5505, -46.6333);
-    expect(fuso).toBe(23);
-  });
-
-  it('[UTM04] Equador (lat=0, lon=0): E=166022, N=0, fuso=31', () => {
-    const { utmE, utmN, fuso } = latLonToUTM(0, 0);
-    expect(fuso).toBe(31);
-    expect(Math.abs(utmE - 166022)).toBeLessThan(10);
-    expect(Math.abs(utmN)).toBeLessThan(10);
-  });
-});
+// Testes de conversão UTM: ver src/domain/geografia/converterCoordenadas.test.ts

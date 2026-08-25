@@ -12,7 +12,7 @@ Desenvolvido pela Lumen Soluções Ltda — Araguari/MG.
 
 | Item | Estado |
 |------|--------|
-| Testes automatizados | **785 passando** (E2E, cálculos, persistência, precificação de serviços) |
+| Testes automatizados | **822 passando** (E2E, cálculos, persistência, precificação de serviços, proteção CC, UTM, checklist de documentação) |
 | Build Windows | ✅ GitHub Actions → artifact `LumenSolar-Windows` |
 | Normas implementadas | IEC 61724-1, NBR 16690, NBR 5410, Lei 14.300/2022, REN ANEEL 1.000/2021 |
 | Tarifa CEMIG | R$1,1827/kWh (Res. ANEEL 3.589/2026) |
@@ -86,8 +86,27 @@ Desenvolvido pela Lumen Soluções Ltda — Araguari/MG.
 | Proposta Técnica | NBR 16690, IEC 61724-1 | PDF |
 | Memorial Descritivo | ND CEMIG 5.30 | PDF |
 | Procuração | REN ANEEL 1.000/2021 Art.9 | PDF |
+| DUB — Diagrama Unifilar Básico | NBR 5410, NBR 16690:2019 | PDF |
+| Planta de Situação (satélite + UTM) | ND CEMIG 5.30 | PDF |
 | Formulário CEMIG MicroGD | Rev. N4 (03/12/2024) | Excel |
 | Auditoria técnica | 8 abas com 490+ fórmulas vivas | Excel |
+
+**DUB (ago/2026):** diagrama unifilar simplificado gerado a partir dos dados reais do
+projeto — reaproveita `calcularCaboCA` (lado CA) e o novo `calcularProtecaoCC` (lado CC:
+cabo solar, fusível de string, DPS, Voc corrigido por temperatura mínima — NBR 16690:2019
+5.3.3/5.4.2), a mesma função que já alimentava (sem teste, até esta correção) o painel
+"Componentes Recomendados" do passo Kit Solar. É um diagrama **simplificado**: mostra
+topologia e as grandezas dimensionadas, não substitui um projeto com simbologia NBR 5444
+revisado por responsável técnico — o próprio PDF traz esse aviso.
+
+**Planta de Situação (ago/2026):** geocodifica o endereço do cliente (Nominatim/
+OpenStreetMap, gratuito) e monta um mosaico de imagem de satélite (Esri World Imagery,
+gratuito, sem chave de API) com marcador nas coordenadas — mais uma tabela conferindo a
+UTM digitada no passo Local contra a UTM do endereço geocodificado, alertando se
+divergirem mais de 300m. Depende de internet no computador do usuário; a busca de tiles
+não pôde ser testada de ponta a ponta no ambiente onde foi desenvolvida (sem acesso de
+rede para arcgisonline.com) — a matemática de qual tile buscar é testada
+(`src/domain/plantaSituacao/tileMercator.test.ts`), a busca/stitch em si roda só no app real.
 
 **Excel — 8 abas:**
 - `Resumo` — visual para o cliente (KPIs, FioB, checklist CEMIG)
@@ -182,26 +201,46 @@ como preço final.
 
 ```bash
 npm install
-npm test              # 785 testes (Vitest)
+npm test              # 822 testes (Vitest)
 npm run dev           # Vite dev server
 npm run build         # build de produção
 npm run build:win     # gera .exe (requer wine ou Windows)
+```
+
+**Scripts de verificação visual** (não fazem parte do build do app):
+```bash
+# Screenshots da UI real (Electron completo, não o bundle num browser comum —
+# ver comentário no topo do arquivo sobre por quê)
+xvfb-run -a node scripts/verificarUiVisualmente.mjs [pasta-de-saida]
+
+# Renderiza um PDF (DUB, Planta de Situação, etc.) fora do Electron, com dados
+# de exemplo — útil pra conferir layout sem precisar rodar o app inteiro
+npx tsx scripts/testarGeracaoPdf.tsx [saida.pdf]
+npx tsx scripts/testarPlantaSituacao.tsx [saida.pdf]
 ```
 
 ---
 
 ## Checklist de documentos CEMIG (MicroGD)
 
+O app tem um checklist real (persistido no `.lumensolar`, visível no passo Resultado) —
+`src/domain/documentacaoCemig/checklist.ts`. Itens "gerado pelo LumenSolar" se marcam
+sozinhos quando o PDF/Excel correspondente é gerado; os 3 últimos são documentos de
+terceiro (profissional responsável técnico, cliente, fabricante) que o app **nunca**
+gera automaticamente — nem finge gerar — porque exigem assinatura/responsabilidade que
+não é do software; o usuário confirma manualmente que anexou por fora. O botão
+"📦 Pacote Completo" (passo Resultado) gera os 6 documentos automatizáveis em sequência.
+
 | Documento | Gerado pelo LumenSolar |
 |-----------|----------------------|
 | Formulário MicroGD Rev. N4 | ✅ |
 | Procuração (Art.9 REN 1.000/2021) | ✅ |
 | Memorial Descritivo (ND 5.30) | ✅ |
-| DUB — Diagrama Unifilar Básico | ❌ manual |
-| Planta de Situação (satélite + UTM) | ❌ manual |
-| ART do Responsável Técnico | ❌ manual |
-| RG + CPF + Comprovante de imóvel | ❌ manual |
-| Certificados INMETRO | ❌ manual |
+| DUB — Diagrama Unifilar Básico | ✅ (ago/2026 — simplificado, ver acima) |
+| Planta de Situação (satélite + UTM) | ✅ (ago/2026 — ver acima) |
+| ART do Responsável Técnico | ❌ manual — exige assinatura de responsável técnico |
+| RG + CPF + Comprovante de imóvel | ❌ manual — documento do cliente |
+| Certificados INMETRO | ❌ manual — emitido pelo fabricante |
 
 ---
 
@@ -213,3 +252,6 @@ npm run build:win     # gera .exe (requer wine ou Windows)
 - [ ] Token `wiliamjunioreng-dotcom` configurado para sincronizar design com ProjetEletrico ✅
 - [ ] Erro de tipo em `App.tsx` (`kit.tipoModulo` não aceita `bifacial_ntype`/`bifacial_ptype`/etc. em `PropostaData`) — `tsc --noEmit` falha, mas `vite build` "passa" porque o esbuild não faz type-check completo; corrigir o tipo em `types.ts` antes que isso mascare um bug real
 - [ ] Tema foi migrado de escuro para claro (ago/2026); ProjetEletrico ficou dessincronizado — decidir se replica lá também
+- [ ] Fusível/proteção CC do DUB (`calcularProtecaoCC`) usa o coeficiente de temperatura de Pmax como aproximação de Voc (conservador, mas não é o valor real do datasheet) — adicionar campo `coefTempVocPercent` dedicado ao kit
+- [ ] Busca de tiles de satélite da Planta de Situação (Esri World Imagery) não pôde ser testada de ponta a ponta no ambiente onde foi construída (rede bloqueada para arcgisonline.com) — só a matemática de qual tile buscar foi testada; testar a busca real no primeiro uso no computador do usuário
+- [ ] `gerarPacoteCompleto()` dispara 6 downloads em sequência via `<a download>` — em alguns navegadores/SOs isso pode exigir permissão explícita para "múltiplos downloads"; testar no .exe real

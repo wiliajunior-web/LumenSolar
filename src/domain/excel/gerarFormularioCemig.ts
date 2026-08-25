@@ -182,76 +182,46 @@ export function gerarFormularioCemigMicroGD(dados: any): void {
   XLSX.writeFile(wb, `FormularioCEMIG_MicroGD_${nomeCliente}.xlsx`);
 }
 
-/** Checklist de documentos CEMIG por tipo de instalação */
+/**
+ * Checklist de documentos CEMIG por tipo de instalação.
+ *
+ * CORRIGIDO (ago/2026): a versão anterior tinha 4 condicionais do tipo
+ * `condicao ? 'pendente' : 'pendente'` — os dois ramos retornavam o MESMO
+ * valor, ou seja, "pendente" sempre, independente da condição (código morto
+ * nunca coberto por teste, encontrado ao auditar este arquivo por causa do
+ * DUB/Planta de Situação). Corrigido delegando para o checklist com estado
+ * real (`@domain/documentacaoCemig/checklist`), que é a mesma lista que
+ * alimenta a UI — os itens "gerado_automaticamente" agora refletem
+ * `dados.checklistDocumentacao` de verdade (preenchido pelo app quando cada
+ * documento é gerado), e os "anexo_manual" (ART, RG/CPF, INMETRO) mostram
+ * 'pendente' honestamente até o usuário confirmar que anexou, em vez de uma
+ * fórmula que fingia checar algo que não tinha como checar a partir de `dados`.
+ */
+import {
+  CHECKLIST_PADRAO_CEMIG_MICROGD,
+  type ItemChecklistDocumentacao,
+} from '../documentacaoCemig/checklist';
+
 export function checklistDocumentosCEMIG(dados: any): Array<{doc: string; obrigatorio: boolean; geradoPeloApp: boolean; status: 'ok'|'pendente'|'nao_aplicavel'}> {
-  const { cliente, localizacao, kit, empresa } = dados;
+  const checklist: ItemChecklistDocumentacao[] = dados?.checklistDocumentacao ?? CHECKLIST_PADRAO_CEMIG_MICROGD;
+  const porId = (id: string) => checklist.find((i) => i.id === id);
+  const concluido = (id: string) => {
+    const item = porId(id);
+    if (!item) return false;
+    return item.tipo === 'gerado_automaticamente' ? !!item.geradoEm : !!item.anexado;
+  };
 
   return [
-    {
-      doc: 'Formulário MicroGD CEMIG (Rev. N4)',
-      obrigatorio: true,
-      geradoPeloApp: true,
-      status: 'ok',
-    },
-    {
-      doc: 'Procuração (Art. 9 REN 1.000/2021)',
-      obrigatorio: true,
-      geradoPeloApp: true,
-      status: empresa?.responsavelTecnico ? 'ok' : 'pendente',
-    },
-    {
-      doc: 'Memorial Descritivo Técnico (ND 5.30)',
-      obrigatorio: true,
-      geradoPeloApp: true,
-      status: (localizacao?.numeroUC && kit?.vocV) ? 'ok' : 'pendente',
-    },
-    {
-      doc: 'DUB — Diagrama Unifilar Básico',
-      obrigatorio: true,
-      geradoPeloApp: false,
-      status: 'pendente',
-    },
-    {
-      doc: 'Planta de Situação (satélite + UTM)',
-      obrigatorio: true,
-      geradoPeloApp: false,
-      status: (localizacao?.utmE && localizacao?.utmN) ? 'pendente' : 'pendente',
-    },
-    {
-      doc: 'ART do Responsável Técnico',
-      obrigatorio: true,
-      geradoPeloApp: false,
-      status: empresa?.crea ? 'pendente' : 'pendente',
-    },
-    {
-      doc: 'RG + CPF do Titular da UC',
-      obrigatorio: true,
-      geradoPeloApp: false,
-      status: cliente?.cpf ? 'pendente' : 'pendente',
-    },
-    {
-      doc: 'Comprovante de Propriedade/Posse do Imóvel',
-      obrigatorio: true,
-      geradoPeloApp: false,
-      status: 'pendente',
-    },
-    {
-      doc: 'Certificado INMETRO — Módulos e Inversores',
-      obrigatorio: true,
-      geradoPeloApp: false,
-      status: kit?.certificacoes ? 'pendente' : 'pendente',
-    },
-    {
-      doc: 'CAR (Cadastro Ambiental Rural)',
-      obrigatorio: false,
-      geradoPeloApp: false,
-      status: 'nao_aplicavel', // apenas imóveis rurais
-    },
-    {
-      doc: 'Formulário de Análise de Carga (ligação nova)',
-      obrigatorio: false,
-      geradoPeloApp: false,
-      status: 'nao_aplicavel', // apenas para ligação nova ou aumento de carga
-    },
+    { doc: 'Formulário MicroGD CEMIG (Rev. N4)', obrigatorio: true, geradoPeloApp: true, status: concluido('formulario_microgd') ? 'ok' : 'pendente' },
+    { doc: 'Procuração (Art. 9 REN 1.000/2021)', obrigatorio: true, geradoPeloApp: true, status: concluido('procuracao') ? 'ok' : 'pendente' },
+    { doc: 'Memorial Descritivo Técnico (ND 5.30)', obrigatorio: true, geradoPeloApp: true, status: concluido('memorial_descritivo') ? 'ok' : 'pendente' },
+    { doc: 'DUB — Diagrama Unifilar Básico', obrigatorio: true, geradoPeloApp: true, status: concluido('dub') ? 'ok' : 'pendente' },
+    { doc: 'Planta de Situação (satélite + UTM)', obrigatorio: true, geradoPeloApp: true, status: concluido('planta_situacao') ? 'ok' : 'pendente' },
+    { doc: 'ART do Responsável Técnico', obrigatorio: true, geradoPeloApp: false, status: concluido('art') ? 'ok' : 'pendente' },
+    { doc: 'RG + CPF do Titular da UC', obrigatorio: true, geradoPeloApp: false, status: concluido('rg_cpf_comprovante') ? 'ok' : 'pendente' },
+    { doc: 'Comprovante de Propriedade/Posse do Imóvel', obrigatorio: true, geradoPeloApp: false, status: concluido('rg_cpf_comprovante') ? 'ok' : 'pendente' },
+    { doc: 'Certificado INMETRO — Módulos e Inversores', obrigatorio: true, geradoPeloApp: false, status: concluido('certificados_inmetro') ? 'ok' : 'pendente' },
+    { doc: 'CAR (Cadastro Ambiental Rural)', obrigatorio: false, geradoPeloApp: false, status: 'nao_aplicavel' }, // apenas imóveis rurais
+    { doc: 'Formulário de Análise de Carga (ligação nova)', obrigatorio: false, geradoPeloApp: false, status: 'nao_aplicavel' }, // apenas para ligação nova ou aumento de carga
   ];
 }

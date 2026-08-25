@@ -15,6 +15,12 @@ import { calcularTIR, calcularROI, formatarPayback, areaTotalNecessariaM2, pesoD
 import { geracaoMensalPorMes } from '@data/hspMensal';
 import { LOCALIZACAO_PADRAO, type DadosLocalizacao } from '@data/localizacao';
 import { PRESETS_MODULO, type TipoModuloPreset } from '@data/presetsModulo';
+import {
+  CHECKLIST_PADRAO_CEMIG_MICROGD,
+  marcarItemGerado,
+  marcarItemAnexado,
+  type ItemChecklistDocumentacao,
+} from '@domain/documentacaoCemig/checklist';
 
 // BUG CORRIGIDO: `export { X } from 'Y'` é um re-export transparente — não
 // cria um binding local. calcularTudo() (abaixo) usava PRESETS_MODULO como
@@ -128,6 +134,7 @@ interface ProjetoState {
   percentuaisFioBPorAno: Record<number, number>;
   detalhamentoPerdas: string[];
   indicadores: IndicadoresFinanceiros | null;
+  checklistDocumentacao: ItemChecklistDocumentacao[];
 
   atualizarEmpresa: (p: Partial<DadosEmpresa>) => void;
   atualizarCliente: (p: Partial<DadosCliente>) => void;
@@ -140,6 +147,9 @@ interface ProjetoState {
   atualizarPreco: (p: Partial<EntradaPrecificacao>) => void;
   recalcularDefaultsPreco: () => void;
   calcularTudo: () => void;
+  marcarDocumentoGerado: (id: string) => void;
+  marcarDocumentoAnexado: (id: string, anexado: boolean, observacao?: string) => void;
+  resetarChecklistDocumentacao: () => void;
 }
 
 export const useProjetoStore = create<ProjetoState>((set, get) => ({
@@ -201,6 +211,7 @@ export const useProjetoStore = create<ProjetoState>((set, get) => ({
   dimensionamento:null, enquadramento:null,
   custosRecorrentes:null, precificacao:null,
   percentuaisFioBPorAno:{}, detalhamentoPerdas:[], indicadores:null,
+  checklistDocumentacao: CHECKLIST_PADRAO_CEMIG_MICROGD,
 
   atualizarEmpresa: p => set(s => ({ empresa:{...s.empresa,...p} })),
   atualizarCliente: p => set(s => ({ cliente:{...s.cliente,...p} })),
@@ -211,6 +222,9 @@ export const useProjetoStore = create<ProjetoState>((set, get) => ({
   atualizarLocalizacao: p => set(s => ({ localizacao:{...s.localizacao,...p} })),
   atualizarKit: p => set(s => ({ kit:{...s.kit,...p} })),
   atualizarPreco: p => set(s => ({ preco:{...s.preco,...p} })),
+  marcarDocumentoGerado: id => set(s => ({ checklistDocumentacao: marcarItemGerado(s.checklistDocumentacao, id, new Date().toISOString()) })),
+  marcarDocumentoAnexado: (id, anexado, observacao) => set(s => ({ checklistDocumentacao: marcarItemAnexado(s.checklistDocumentacao, id, anexado, observacao) })),
+  resetarChecklistDocumentacao: () => set({ checklistDocumentacao: CHECKLIST_PADRAO_CEMIG_MICROGD }),
 
   recalcularDefaultsPreco: () => {
     const {kit,empresa} = get();

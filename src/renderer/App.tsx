@@ -7,6 +7,8 @@ import { DISTRIBUIDORAS } from '@data/distribuidoras';
 import { TIPO_TELHADO_LABELS, ORIENTACOES, type TipoTelhado } from '@data/localizacao';
 import { HSP_MEDIO_POR_UF } from '@data/hspPorUF';
 import { PropostaPDF } from '@domain/proposta/PropostaPDF';
+import { CHECKLIST_PADRAO_CEMIG_MICROGD, resumoChecklist, type ItemChecklistDocumentacao } from '@domain/documentacaoCemig/checklist';
+import { latLonParaUTM } from '@domain/geografia/converterCoordenadas';
 // Excel gerarExcel importado dinamicamente para não impactar o bundle inicial
 
 // ─── Sistema de Design ───────────────────────────────────────────────────────
@@ -241,6 +243,62 @@ const KPI = ({ label, val, sub, color }: { label: string; val: string; sub?: str
   </div>
 );
 
+// ─── Checklist de documentação CEMIG ────────────────────────────────────────
+// Itens "gerado_automaticamente" (Formulário, Procuração, Memorial, DUB,
+// Planta) se marcam sozinhos quando o botão correspondente gera o PDF —
+// ver marcarDocumentoGerado nas funções gerarX(). Itens "anexo_manual"
+// (ART, RG/CPF, INMETRO) são documentos de terceiro que o app não pode
+// gerar (ver checklist.ts) — o usuário confirma manualmente aqui.
+function ChecklistDocumentacaoCard({ checklist }: { checklist: ItemChecklistDocumentacao[] }) {
+  const [aberto, setAberto] = React.useState(false);
+  const resumo = resumoChecklist(checklist);
+
+  return (
+    <div className="card" style={{ marginBottom: 16 }}>
+      <div className="card-head" style={{ display:'flex', alignItems:'center', justifyContent:'space-between', cursor:'pointer' }}
+        onClick={() => setAberto(!aberto)}>
+        <span>📋 Checklist de documentação CEMIG (MicroGD) — {resumo.concluidos}/{resumo.total} ({resumo.percentualCompleto}%)</span>
+        <span style={{ fontSize:12, color:D.textMuted }}>{aberto ? '▲ ocultar' : '▼ ver detalhes'}</span>
+      </div>
+      <div style={{ height:6, background:D.borderLight, borderRadius:3, margin:'0 16px 12px', overflow:'hidden' }}>
+        <div style={{ height:'100%', width:`${resumo.percentualCompleto}%`, background: resumo.percentualCompleto===100 ? D.success : D.gold, borderRadius:3, transition:'width .3s' }} />
+      </div>
+      {aberto && (
+        <div className="card-body" style={{ paddingTop:0 }}>
+          {checklist.map((item) => {
+            const concluido = item.tipo === 'gerado_automaticamente' ? !!item.geradoEm : !!item.anexado;
+            return (
+              <div key={item.id} style={{ display:'flex', alignItems:'flex-start', gap:10, padding:'8px 0', borderBottom:`1px solid ${D.borderLight}` }}>
+                {item.tipo === 'anexo_manual' ? (
+                  <input type="checkbox" checked={!!item.anexado} style={{ marginTop:3, cursor:'pointer' }}
+                    onChange={(e) => useProjetoStore.getState().marcarDocumentoAnexado(item.id, e.target.checked)} />
+                ) : (
+                  <span style={{ fontSize:14, marginTop:1 }}>{concluido ? '✅' : '⬜'}</span>
+                )}
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:13, color:D.text, fontWeight:600 }}>
+                    {item.label}
+                    {item.tipo === 'anexo_manual' && <span style={{ fontSize:10, color:D.textMuted, fontWeight:400 }}> — anexo do usuário/terceiro, não gerado pelo app</span>}
+                  </div>
+                  <div style={{ fontSize:11, color:D.textMuted }}>
+                    {item.normaBase}
+                    {item.tipo === 'gerado_automaticamente' && item.geradoEm && ` — gerado em ${new Date(item.geradoEm).toLocaleString('pt-BR')}`}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+          <p style={{ fontSize:11, color:D.textMuted, marginTop:10, lineHeight:1.5 }}>
+            ART, RG/CPF/comprovante e certificados INMETRO não são gerados pelo LumenSolar de propósito —
+            são documentos de terceiro (o profissional responsável técnico e o cliente) ou exigem
+            assinatura/responsabilidade que o software não pode assumir.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Sidebar ─────────────────────────────────────────────────────────────────
 type Aba = 'home' | 'cliente' | 'consumo' | 'local' | 'kit' | 'preco' | 'resultado';
 const STEPS: { id: Aba; label: string; icon: string }[] = [
@@ -401,6 +459,7 @@ export default function App() {
       dimensionamento: null, enquadramento: null, custosRecorrentes: null, precificacao: null, indicadores: null,
       percentuaisFioBPorAno: {}, detalhamentoPerdas: [],
     } as any);
+    useProjetoStore.getState().resetarChecklistDocumentacao();
     const newId = gerarId();
     setProposalId(newId);
     setSaving('idle');
@@ -421,6 +480,7 @@ export default function App() {
       uf: s.cliente.uf, criadoEm: criadoEmOriginal, atualizadoEm: new Date().toISOString(),
       potenciaKWp: s.dimensionamento?.potenciaInstaladaRealKWp, precoVenda: s.precificacao?.precoVenda,
       empresa: s.empresa, cliente: s.cliente, consumo: s.consumo, localizacao: s.localizacao, kit: s.kit, preco: s.preco,
+      checklistDocumentacao: s.checklistDocumentacao,
     };
     const nomeArq = await salvarArquivo(data);
     setNomeArquivoAtual(nomeArq);
@@ -438,6 +498,9 @@ export default function App() {
     if (data.localizacao) st.atualizarLocalizacao(data.localizacao);
     if (data.kit)         st.atualizarKit(data.kit);
     if (data.preco)       st.atualizarPreco(data.preco);
+    // Arquivos .lumensolar salvos antes desta funcionalidade não têm esse
+    // campo — cair no padrão (nada gerado/anexado ainda) em vez de undefined.
+    useProjetoStore.setState({ checklistDocumentacao: data.checklistDocumentacao ?? CHECKLIST_PADRAO_CEMIG_MICROGD } as any);
     setProposalId(data.id || gerarId());
     setNomeArquivoAtual('');
     setValidationErrors([]);
@@ -1274,67 +1337,42 @@ function ComponentesRecomendados({ kit }: { kit: any }) {
   const disjCA  = caboCAResult?.disjuntorA ?? 25;
   const quedaCA = caboCAResult?.quedaTensaoPct ?? 0;
 
-  // DPS CA 275 V — classe por potência/risco
-  // NBR IEC 62305-3: Class II 20 kA para residencial/comercial padrão
-  const dpskA = potCA_kW <= 3 ? 15 : potCA_kW <= 12 ? 20 : 45;
-  const dpsDesc = dpskA === 15 ? 'Residencial baixa exposição' : dpskA === 20 ? 'Residencial/comercial padrão' : 'Alta exposição / industrial';
+  // DPS CA + proteção CC — extraído para @domain/dimensionamento/calcularProtecaoCC
+  // (mesma fórmula que já rodava aqui, agora testada — ver calcularProtecaoCC.test.ts).
+  // O Diagrama Unifilar Básico (DUB) usa a mesma função, então os valores
+  // exibidos aqui e no DUB nunca podem divergir.
+  const { calcularDPSCA, calcularProtecaoCC } = require('@domain/dimensionamento/calcularProtecaoCC');
+  const { classeKA: dpskA, descricao: dpsDesc } = calcularDPSCA(potCA_kW);
 
   // ── Lado CC (string) ──────────────────────────────────────────────────────
   const isc = kit.iscA || 0;
   const nStrings = kit.numStrings || 1;
-  // Corrente CC total = Isc × numStrings
-  const iccTotal = isc * nStrings;
-  // Fator de correção CC: 1.25 (NBR 16690 / IEC 60364-7-712)
-  const iccProjeto = iccTotal * 1.25;
-
-  // Seções para cabo CC solar (NBR 16690 Tab. 5 — cabo solar XLPE 90°C, unipolar, PV1-F)
-  // FTA XLPE 90°C (NBR 16612 Tab. C.2 / IEC 60364-5-52):
-  //   30°C=1.00 | 40°C=0.91 | 50°C=0.82 | 60°C=0.71 | 70°C=0.58 | 80°C=0.41
-  const TABELA_FTA_XLPE90 = [[30,1.00],[40,0.91],[50,0.82],[60,0.71],[70,0.58],[80,0.41]] as const;
   const tempTelhado = (kit as any).temperaturaInstalacaoC || 40; // reutiliza campo do cabo CA
-  const ftaCC = (() => {
-    const t = Math.min(80, Math.max(30, tempTelhado));
-    for (let i = 0; i < TABELA_FTA_XLPE90.length - 1; i++) {
-      if (t >= TABELA_FTA_XLPE90[i][0] && t <= TABELA_FTA_XLPE90[i+1][0]) {
-        const r = (t - TABELA_FTA_XLPE90[i][0]) / (TABELA_FTA_XLPE90[i+1][0] - TABELA_FTA_XLPE90[i][0]);
-        return parseFloat((TABELA_FTA_XLPE90[i][1] + r * (TABELA_FTA_XLPE90[i+1][1] - TABELA_FTA_XLPE90[i][1])).toFixed(3));
-      }
-    }
-    return TABELA_FTA_XLPE90[TABELA_FTA_XLPE90.length-1][1];
-  })();
-  // Iz_req_CC = iccProjeto / ftaCC (corrente mínima sem correção para o cabo CC)
-  const iccProjetoComFTA = iccProjeto / ftaCC;
-  const SECOES_CC = [
-    { secao: 4.0,  imax: 32.0 },
-    { secao: 6.0,  imax: 41.0 },
-    { secao: 10.0, imax: 57.0 },
-    { secao: 16.0, imax: 76.0 },
-  ];
-  const cableCC = SECOES_CC.find(s => s.imax >= iccProjetoComFTA) || SECOES_CC[SECOES_CC.length - 1];
-  const izCorrCC = parseFloat((cableCC.imax * ftaCC).toFixed(1));
-
-  // DPS CC (entre strings e inversor)
-  const dpsCC_kA = isc > 0 ? (isc <= 12 ? 5 : 10) : 0;
-
-  // Voc do sistema (STC) e corrigido por temperatura mínima — NBR 16690:2019 5.3.3
   const vocMod = kit.vocV || 0;
   const nModStr = kit.modulosPorString || 1;
-  const vocSistema = vocMod * nModStr;
   // O datasheet do kit hoje só guarda o coeficiente de temperatura de Pmax
   // (PRESETS_MODULO — usado em calcularPerdas), não um coeficiente de Voc
-  // dedicado. Usamos o de Pmax como aproximação: na prática |β_Voc| é menor
-  // que |γ_Pmax|, então isso SUPERESTIMA a alta de Voc no frio — conservador
-  // para a verificação de segurança (nunca subestima o risco de passar de
-  // 1000V), mas não é o coeficiente real do módulo. Para precisão, adicionar
-  // um campo coefTempVocPercent dedicado ao datasheet do kit.
+  // dedicado. calcularProtecaoCC usa o de Pmax como aproximação: na prática
+  // |β_Voc| é menor que |γ_Pmax|, então isso SUPERESTIMA a alta de Voc no
+  // frio — conservador (nunca subestima o risco de passar de 1000V), mas
+  // não é o coeficiente real do módulo. Para precisão, adicionar um campo
+  // coefTempVocPercent dedicado ao datasheet do kit.
   const coefVoc = PRESETS_MODULO[kit.tipoModulo]?.coef ?? -0.34;
-  const TMIN_PROJETO_C = 5; // NBR 16690:2019 5.3.3 — temperatura mínima de projeto
-  const vocMax = vocSistema * (1 + (coefVoc / 100) * (TMIN_PROJETO_C - 25));
   const LIMITE_VDC = 1000; // NBR 16690:2019 5.3.3 — tensão CC máxima admissível
 
-  // Fusível de string — NBR 16690:2019 5.4.2: Isc ≤ Ifuse ≤ 2.5 × Isc
-  const FUSES_PADRAO = [8, 10, 12, 15, 20, 25, 30] as const;
-  const fuseIdeal = FUSES_PADRAO.find(f => f >= isc && f <= 2.5 * isc) ?? 0;
+  const protecaoCC = calcularProtecaoCC({
+    iscA: isc, vocV: vocMod, numStrings: nStrings, modulosPorString: nModStr,
+    coeficienteTemperaturaPercentPorC: coefVoc, temperaturaInstalacaoC: tempTelhado,
+  });
+  const iccProjeto = protecaoCC.correnteProjetoA;
+  const ftaCC = protecaoCC.fta;
+  const iccProjetoComFTA = protecaoCC.correnteProjetoComFtaA;
+  const cableCC = { secao: protecaoCC.secaoCaboMm2, imax: protecaoCC.izCaboA };
+  const izCorrCC = protecaoCC.izCorrigidaA;
+  const dpsCC_kA = protecaoCC.dpsClasseKA;
+  const vocSistema = protecaoCC.vocSistemaV;
+  const vocMax = protecaoCC.vocMaximoFrioV;
+  const fuseIdeal = protecaoCC.fusivelStringA;
 
   const naoPreenchido = potCA_kW === 0;
 
@@ -1460,7 +1498,7 @@ function ComponentesRecomendados({ kit }: { kit: any }) {
               sub="Do datasheet do módulo (STC: 1000 W/m², 25°C)"
               norma="NBR 16690:2019 — item 5.3.1 (corrente de curto-circuito)"
               slide="Curso slide 39 — Isc_módulo do datasheet"
-              formula={`Isc = ${isc}A por string × ${nStrings} string(s) = ${iccTotal.toFixed(1)}A total`}
+              formula={`Isc = ${isc}A por string × ${nStrings} string(s) = ${protecaoCC.correnteCurtoCircuitoTotalA.toFixed(1)}A total`}
             />
             <Linha
               label="Corrente de projeto CC (×1,25)"
@@ -1780,23 +1818,10 @@ Use valores numéricos reais. coefTempPmax deve ser negativo (ex: -0.35). Se nã
 }
 
 // ─── Buscador de Coordenadas UTM via Nominatim (OpenStreetMap, gratuito) ────────
-function latLonToUTM(lat: number, lon: number): { utmE: number; utmN: number; fuso: number } {
-  const a = 6378137.0, f = 1/298.257223563;
-  const b = a*(1-f), e2 = 1-(b/a)**2;
-  const k0 = 0.9996, E0 = 500000;
-  const fuso = Math.floor((lon+180)/6)+1;
-  const lon0 = ((fuso-1)*6-180+3)*Math.PI/180;
-  const phi = lat*Math.PI/180, lam = lon*Math.PI/180;
-  const N = a/Math.sqrt(1-e2*Math.sin(phi)**2);
-  const T = Math.tan(phi)**2, C = (e2/(1-e2))*Math.cos(phi)**2;
-  const A = Math.cos(phi)*(lam-lon0);
-  const e4=e2**2, e6=e2**3;
-  const M = a*((1-e2/4-3*e4/64-5*e6/256)*phi-(3*e2/8+3*e4/32+45*e6/1024)*Math.sin(2*phi)+(15*e4/256+45*e6/1024)*Math.sin(4*phi)-(35*e6/3072)*Math.sin(6*phi));
-  const utmE = Math.round(k0*N*(A+(1-T+C)*A**3/6+(5-18*T+T**2+72*C-58*(e2/(1-e2)))*A**5/120)+E0);
-  const utmNraw = Math.round(k0*(M+N*Math.tan(phi)*(A**2/2+(5-T+9*C+4*C**2)*A**4/24+(61-58*T+T**2+600*C-330*(e2/(1-e2)))*A**6/720)));
-  const utmN = utmNraw + (lat < 0 ? 10_000_000 : 0); // Hemisfério Sul: falsa origem
-  return { utmE, utmN, fuso };
-}
+// Conversão lat/lon -> UTM: ver @domain/geografia/converterCoordenadas (extraída
+// daqui em ago/2026 — era duplicada uma segunda vez dentro de cpf_utm.test.ts,
+// que testava a cópia, não esta função; agora há uma função só, testada, também
+// usada pela Planta de Situação para conferir a UTM digitada contra a geocodificada).
 
 function BuscadorCoordenadas({ endereco, cidade, uf, onEncontrado }: {
   endereco: string; cidade: string; uf: string;
@@ -1815,7 +1840,7 @@ function BuscadorCoordenadas({ endereco, cidade, uf, onEncontrado }: {
       const data = await r.json();
       if (!data.length) { setEstado('erro'); setMsg('Endereço não encontrado — ajuste e tente novamente'); return; }
       const { lat, lon } = data[0];
-      const { utmE, utmN, fuso } = latLonToUTM(parseFloat(lat), parseFloat(lon));
+      const { utmE, utmN, fuso } = latLonParaUTM(parseFloat(lat), parseFloat(lon));
       onEncontrado(utmE, utmN, fuso);
       setEstado('ok'); setMsg(`UTM ${fuso}S: E=${utmE.toLocaleString()} N=${utmN.toLocaleString()}`);
       setTimeout(() => setEstado('idle'), 4000);
@@ -2250,6 +2275,8 @@ function TabResultado({ onPrev }: { onPrev:()=>void }) {
       indicadores: indicadores!, contas: consumo.contas,
       // Perdas detalhadas (Memorial)
       detalhamentoPerdas: s.detalhamentoPerdas,
+      // Checklist de documentação CEMIG (para o checklist real e o pacote completo)
+      checklistDocumentacao: s.checklistDocumentacao,
     };
   }
 
@@ -2426,6 +2453,7 @@ function TabResultado({ onPrev }: { onPrev:()=>void }) {
       const st = useProjetoStore.getState();
       const d = buildData();
       gerarFormularioCemigMicroGD(d);
+      st.marcarDocumentoGerado('formulario_microgd');
       // Mostrar checklist após gerar
       const lista = checklistDocumentosCEMIG(d);
       const pendentes = lista.filter(i => i.obrigatorio && i.status === 'pendente');
@@ -2470,6 +2498,7 @@ function TabResultado({ onPrev }: { onPrev:()=>void }) {
       a.href = url;
       a.download = 'Memorial_' + (s.cliente.nome||'Cliente').replace(/\s+/g,'_') + '_' + new Date().toISOString().slice(0,10) + '.pdf';
       a.click(); URL.revokeObjectURL(url);
+      useProjetoStore.getState().marcarDocumentoGerado('memorial_descritivo');
     } catch(e) {
       alert('Erro ao gerar Memorial Descritivo: ' + (e instanceof Error ? e.message : String(e)));
     } finally { setGerando(false); }
@@ -2486,8 +2515,63 @@ function TabResultado({ onPrev }: { onPrev:()=>void }) {
       a.href = url;
       a.download = 'Procuracao_' + (s.cliente.nome||'Cliente').replace(/\s+/g,'_') + '_' + new Date().toISOString().slice(0,10) + '.pdf';
       a.click(); URL.revokeObjectURL(url);
+      useProjetoStore.getState().marcarDocumentoGerado('procuracao');
     } catch(e) {
       alert('Erro ao gerar Procuração: ' + (e instanceof Error ? e.message : String(e)));
+    } finally { setGerando(false); }
+  }
+
+  async function gerarDUB() {
+    setGerando(true);
+    try {
+      const { DiagramaUnifilarBasico } = await import('@domain/proposta/DiagramaUnifilarBasico');
+      const d = buildData();
+      const blob = await pdf(<DiagramaUnifilarBasico data={d} />).toBlob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'DUB_' + (s.cliente.nome||'Cliente').replace(/\s+/g,'_') + '_' + new Date().toISOString().slice(0,10) + '.pdf';
+      a.click(); URL.revokeObjectURL(url);
+      useProjetoStore.getState().marcarDocumentoGerado('dub');
+    } catch(e) {
+      alert('Erro ao gerar DUB: ' + (e instanceof Error ? e.message : String(e)));
+    } finally { setGerando(false); }
+  }
+
+  async function gerarPlantaSituacao() {
+    setGerando(true);
+    try {
+      const { montarMosaicoSatelite } = await import('./services/satelliteMosaic');
+      const { PlantaDeSituacao } = await import('@domain/proposta/PlantaDeSituacao');
+      const d = buildData();
+      const endereco = [d.cliente.endereco, d.cliente.cidade, d.cliente.uf].filter(Boolean).join(', ');
+      if (!endereco.trim()) {
+        alert('Preencha ao menos cidade/UF do cliente (passo Cliente) antes de gerar a Planta de Situação — ela precisa localizar o endereço no mapa.');
+        return;
+      }
+      const mosaico = await montarMosaicoSatelite(endereco);
+      const blob = await pdf(<PlantaDeSituacao data={d} mosaico={mosaico} />).toBlob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'PlantaSituacao_' + (s.cliente.nome||'Cliente').replace(/\s+/g,'_') + '_' + new Date().toISOString().slice(0,10) + '.pdf';
+      a.click(); URL.revokeObjectURL(url);
+      useProjetoStore.getState().marcarDocumentoGerado('planta_situacao');
+    } catch(e) {
+      alert('Erro ao gerar Planta de Situação: ' + (e instanceof Error ? e.message : String(e)) + '\n\nVerifique sua conexão com a internet — este documento busca uma imagem de satélite pública (Esri World Imagery, sem necessidade de chave de API).');
+    } finally { setGerando(false); }
+  }
+
+  async function gerarPacoteCompleto() {
+    setGerando(true);
+    try {
+      await gerarPDFCliente();
+      await gerarMemorial();
+      await gerarProcuracao();
+      await gerarDUB();
+      await gerarFormularioCemig();
+      try { await gerarPlantaSituacao(); } catch { /* já alertado dentro da própria função (depende de rede) */ }
+      await gerarExcel();
     } finally { setGerando(false); }
   }
 
@@ -2526,6 +2610,9 @@ function TabResultado({ onPrev }: { onPrev:()=>void }) {
               <Btn onClick={abrirGoogleMaps} variant="ghost">🗺️ Maps</Btn>
               <Btn onClick={abrirAldoSolar}  variant="ghost">☀️ Aldo Solar</Btn>
               <Btn onClick={abrirINMETRO}    variant="ghost">🏷️ INMETRO</Btn>
+              <Btn onClick={gerarDUB} disabled={gerando} variant="ghost">{gerando ? '⏳...' : '⚡ DUB'}</Btn>
+              <Btn onClick={gerarPlantaSituacao} disabled={gerando} variant="ghost">{gerando ? '⏳...' : '🛰️ Planta'}</Btn>
+              <Btn onClick={gerarPacoteCompleto} disabled={gerando}>{gerando ? '⏳...' : '📦 Pacote Completo'}</Btn>
             </div>
       </div>
 
@@ -2536,6 +2623,8 @@ function TabResultado({ onPrev }: { onPrev:()=>void }) {
         <KPI label="Economia mensal" val={fmtBRL(cr.economiaMensalRS)} sub={`${fmtBRL(cr.economiaMensalRS*12)}/ano`} color={D.success} />
         <KPI label="Preço à vista" val={fmtBRL(pre.precoVenda)} sub={`Payback: ${ind.paybackSimples}`} color={D.gold} />
       </div>
+
+      <ChecklistDocumentacaoCard checklist={s.checklistDocumentacao} />
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
 
