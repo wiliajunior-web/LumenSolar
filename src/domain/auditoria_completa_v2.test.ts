@@ -487,15 +487,20 @@ describe('CABO CA — NBR 5410 com correção de temperatura (slides 48–58)', 
     expect(r.fta).toBeCloseTo(1.0, 2);
   });
 
-  it('[CA-4] Queda de tensão CA — formula ΔU = α×ρ×I×L/(U×S)', () => {
-    // Ib=14A, L=15m, S=2.5mm², U=220V, α=2 (bifásico), ρ=0.018
-    // ΔU = 2 × 0.018 × 14 × 15 / (220 × 2.5) = 0.0545 / 550 = 0.00136 = 0.136%
+  it('[CA-4] Queda de tensão CA — formula ΔU(V) = α×ρ×Ib×L/S ; ΔU% = ΔU(V)/U×100', () => {
+    // Ib=14A, L=15m, S=r.secaoMm2 (selecionado pelo próprio cálculo), U=220V, α=2 (bifásico), ρ=0.018
+    //
+    // CORRIGIDO (ago/2026): a versão anterior desta verificação replicava o MESMO bug de
+    // dupla divisão por U que existia em calcularCaboCA.ts — dividia por 220 dentro de
+    // dU_calc (que deveria ser volts) e de novo ao converter para percentual — então o
+    // teste "passava" mesmo com a implementação errada (teste tautológico). A verificação
+    // correta calcula ΔU em Volts primeiro, e só então converte para percentual.
     const r = calcularCaboCA({
       corrMaxSaidaA: 14, tensaoSaidaV: 220, tipoLigacao: 'bifasica',
       temperaturaAmbienteC: 30, comprimentoCaboCAm: 15,
     });
-    const dU_calc = 2 * 0.018 * 14 * 15 / (220 * r.secaoMm2);
-    const dU_pct = (dU_calc / 220) * 100;
+    const dU_V = 2 * 0.018 * 14 * 15 / r.secaoMm2;
+    const dU_pct = (dU_V / 220) * 100;
     expect(r.quedaTensaoPct).toBeCloseTo(dU_pct, 2);
     expect(r.quedaTensaoOk).toBe(true); // < 4%
   });

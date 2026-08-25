@@ -1,3 +1,5 @@
+import type { TipoModuloPreset } from '@data/presetsModulo';
+
 /**
  * Composição completa de custos para precificação de um sistema fotovoltaico.
  *
@@ -16,21 +18,23 @@
 /**
  * Especificação do kit fotovoltaico conforme informado pelo fornecedor.
  *
- * ATENÇÃO — tipo desalinhado (não corrigido agora, ver relatório): este
- * campo só tem 3 dos 6 valores de PRESETS_MODULO (src/data/presetsModulo.ts
- * tem também bifacial_ntype, bifacial_ptype, hibrido, cdte). Isso NÃO causa
- * crash em runtime — PropostaPDF só exibe kit.tipoModulo como texto — mas é
- * uma inconsistência de tipos que se propaga por vários arquivos de teste
- * que usam o literal "bifacial" (que não é uma chave real de
- * PRESETS_MODULO). Alinhar isso exige também corrigir esses testes; deixado
- * como item separado para não misturar com as correções de bugs de runtime.
+ * CORRIGIDO (ago/2026): o tipo antigo só aceitava 3 dos 6 valores reais de
+ * PRESETS_MODULO (src/data/presetsModulo.ts tem também bifacial_ntype,
+ * bifacial_ptype, hibrido, cdte). Isso não causava crash em runtime (o valor
+ * real do store sempre foi um TipoModuloPreset válido — PropostaPDF, DUB e
+ * MemorialDescritivo já faziam `as keyof typeof PRESETS_MODULO` para
+ * compensar), mas fazia `npx tsc --noEmit` falhar em App.tsx ao atribuir
+ * `s.kit` (tipo TipoModuloPreset) a um campo tipado como EspecificacaoKit.
+ * O literal solto "bifacial" é mantido no union só porque vários arquivos de
+ * teste o usam como placeholder genérico — tipoModulo não afeta nenhum
+ * cálculo em calcularPrecificacao.ts, é campo só descritivo/exibição aqui.
  */
 export interface EspecificacaoKit {
   marcaModulo: string;
   modeloModulo: string;
   potenciaModuloWp: number;
   quantidade: number;
-  tipoModulo: 'monocristalino' | 'policristalino' | 'bifacial';
+  tipoModulo: TipoModuloPreset | 'bifacial';
   marcaInversor: string;
   modeloInversor: string;
   potenciaInversorKW: number;

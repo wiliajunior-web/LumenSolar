@@ -151,12 +151,21 @@ export function calcularCaboCA(params: ParamsCaboCA): ResultadoCaboCA {
     );
   }
 
-  // 7. Queda de tensão (NBR 5410): ΔU = α × ρ × Ib × L / (U × S)
+  // 7. Queda de tensão (NBR 5410): ΔU(V) = α × ρ × Ib × L / S ; ΔU% = ΔU(V) / U × 100
   // α: 2 para mono/bifásico, 1.73 para trifásico
   // ρ: 0,018 Ω·mm²/m (cobre)
+  //
+  // BUG CORRIGIDO (ago/2026): a versão anterior dividia por `tensaoSaidaV` DUAS vezes —
+  // uma vez dentro do que deveria ser dU_V (em Volts) e de novo ao converter para
+  // percentual — fazendo dU_pct sair ~220x/380x menor que o real. Na prática,
+  // `quedaTensaoOk` nunca dava false, e o Diagrama Unifilar Básico (documento entregue
+  // ao cliente/instalador) mostrava "0,00% (OK)" mesmo quando a queda real excedia os
+  // 4% da NBR 5410. Verificado manualmente: Ib=14A, L=15m, S=6mm², U=220V, α=2 →
+  // ΔU(V) = 2×0,018×14×15/6 = 1,26V → ΔU% = 1,26/220×100 = 0,573% (valor correto;
+  // o código antigo retornava 0,0026%, ~220x menor).
   const alpha = tipoLigacao === 'trifasica' ? 1.73 : 2;
   const rho = 0.018;
-  const dU_V = alpha * rho * Ib * comprimentoCaboCAm / (tensaoSaidaV * secaoMm2);
+  const dU_V = alpha * rho * Ib * comprimentoCaboCAm / secaoMm2;
   const dU_pct = parseFloat(((dU_V / tensaoSaidaV) * 100).toFixed(3));
   const quedaOk = dU_pct <= 4.0; // NBR 5410: 4% para circuitos terminais
 
