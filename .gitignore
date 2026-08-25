@@ -17,3 +17,8 @@ Thumbs.db
 # Variáveis de ambiente
 .env
 .env.local
+
+# Saídas geradas por script (fonte da verdade é o .ts que gera o arquivo,
+# não o binário — ex.: scripts/gerarTabelaReferenciaXlsx.ts)
+/TABELA_REFERENCIA_PRECOS_ATUALIZADA.xlsx
+Auditoria_*.xlsx
