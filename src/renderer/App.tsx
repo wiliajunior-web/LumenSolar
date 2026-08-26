@@ -12,6 +12,7 @@ import { latLonParaUTM } from '@domain/geografia/converterCoordenadas';
 import { calcularCaboCA } from '@domain/dimensionamento/calcularCaboCA';
 import { calcularDPSCA, calcularProtecaoCC } from '@domain/dimensionamento/calcularProtecaoCC';
 import { calcularFDI } from '@domain/dimensionamento/calcularFDI';
+import { calcularBancoBaterias, type TipoBateria, type TipoSistema } from '@domain/dimensionamento/calcularBateria';
 // Excel gerarExcel importado dinamicamente para não impactar o bundle inicial
 
 // ─── Sistema de Design ───────────────────────────────────────────────────────
@@ -2107,25 +2108,33 @@ function TabKit({ onPrev, onNext }: { onPrev:()=>void; onNext:()=>void }) {
 
       {/* ── Dimensionamento de Bateria (opcional) ── */}
       {mediaKWh > 0 && (() => {
+        // CORRIGIDO (ago/2026): este painel reimplementava as fórmulas de
+        // calcularBancoBaterias() (@domain/dimensionamento/calcularBateria.ts)
+        // inline, à parte do módulo de domínio testado — divergindo dele e
+        // perdendo alertas reais que o módulo já calcula (BMS obrigatório
+        // para lítio, degradação térmica do OPzV, correntes elevadas em
+        // 12V/24V, autonomia mínima de 2 dias no offgrid, e o alerta de
+        // pack de tensão sem correspondência exata que corrigiu um bug real
+        // nesta mesma sessão). Agora chama a função de domínio de verdade —
+        // um único lugar para a lógica, coberto pelos 5 testes de
+        // calcularBateria.test.ts.
         const DIAS_MES = 365 / 12; // 30.4167 — mesma convenção usada nos módulos de domínio
         const consumoDiario = mediaKWh / DIAS_MES;
-        const tipoBat = (s.kit as any).tipoBateria2 || 'estacionaria_comum';
-        const tipoSist = (s.kit as any).tipoSistemaBat || 'backup_hybrid';
+        const tipoBat: TipoBateria = (s.kit as any).tipoBateria2 || 'estacionaria_comum';
+        const tipoSist: TipoSistema = (s.kit as any).tipoSistemaBat || 'backup_hybrid';
         const autonomia = (s.kit as any).autonomiaBat || (tipoSist === 'backup_hybrid' ? 4 : 2);
         const tensaoSist = (s.kit as any).tensaoSistemaBat || 48;
         const capBatAh = (s.kit as any).capacidadeBateriaAh || 100;
-        const dods: Record<string,number> = { estacionaria_comum:0.40, ciclo_profundo_opzs:0.70, ciclo_profundo_opzv:0.70, litio_lifepo4:0.80 };
-        const dod = dods[tipoBat] || 0.60;
-        const energiaAut = tipoSist === 'backup_hybrid' ? (autonomia/24)*consumoDiario : consumoDiario*autonomia;
-        const cap_Wh = (energiaAut*1000)/dod;
-        const cap_Ah = cap_Wh/tensaoSist;
-        const tensaoCelula = tipoBat.includes('opzs')||tipoBat.includes('opzv') ? 2 : (tipoBat==='litio_lifepo4' ? tensaoSist : 12);
-        const nSerie = Math.ceil(tensaoSist/tensaoCelula);
-        const nParalelo = Math.ceil(cap_Ah/capBatAh);
-        const capReal_Ah = nParalelo*capBatAh;
-        const capReal_kWh = (capReal_Ah*tensaoSist)/1000;
-        const iscArranjo = s.kit.iscA * (s.kit.numStrings || 1);
-        const corrCtrl = parseFloat((1.25*iscArranjo).toFixed(1));
+        const r = calcularBancoBaterias({
+          consumoDiarioKWh: consumoDiario,
+          tipoBateria: tipoBat,
+          tipoSistema: tipoSist,
+          autonomia,
+          tensaoSistemaV: tensaoSist,
+          capacidadeBateriaAh: capBatAh,
+          iscArranjoA: s.kit.iscA,
+          nStringsParalelo: s.kit.numStrings || 1,
+        });
         const nomes: Record<string,string> = {
           estacionaria_comum:'Pb-ácido estacionária', ciclo_profundo_opzs:'OPzS ciclo profundo',
           ciclo_profundo_opzv:'OPzV ciclo profundo (gel)', litio_lifepo4:'Lítio LiFePO4'
@@ -2180,11 +2189,11 @@ function TabKit({ onPrev, onNext }: { onPrev:()=>void; onNext:()=>void }) {
             {/* Resultados */}
             <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:10, marginBottom:12 }}>
               {[
-                { label:'Capacidade mínima', valor:`${(cap_Wh/1000).toFixed(2)} kWh`, sub:`DOD ${(dod*100).toFixed(0)}% — ${nomes[tipoBat]}` },
-                { label:'Em Ah @ C/20', valor:`${Math.ceil(cap_Ah)} Ah`, sub:`sistema ${tensaoSist}V` },
-                { label:`Banco de baterias`, valor:`${nSerie}S × ${nParalelo}P`, sub:`${nSerie*nParalelo} unidades total` },
-                { label:'Capacidade real', valor:`${capReal_kWh.toFixed(2)} kWh`, sub:`${capReal_Ah} Ah @ ${tensaoSist}V` },
-                { label:'Controlador de carga', valor:`≥ ${corrCtrl} A`, sub:`Ic = 1.25 × Isc × ${s.kit.numStrings||1} strings` },
+                { label:'Capacidade mínima', valor:`${(r.capacidadeBruta_Wh/1000).toFixed(2)} kWh`, sub:`DOD ${(r.dodUsado*100).toFixed(0)}% — ${nomes[tipoBat]}` },
+                { label:'Em Ah @ C/20', valor:`${r.capacidadeBruta_Ah} Ah`, sub:`sistema ${tensaoSist}V` },
+                { label:`Banco de baterias`, valor:`${r.bateriasSerie}S × ${r.bateriasParalelo}P`, sub:`${r.bateriasTotal} unidades total` },
+                { label:'Capacidade real', valor:`${r.capacidadeRealKWh.toFixed(2)} kWh`, sub:`${r.capacidadeRealAh} Ah @ ${tensaoSist}V` },
+                { label:'Controlador de carga', valor:`≥ ${r.corrMaxControlador_A} A`, sub:`Ic = 1.25 × Isc × ${s.kit.numStrings||1} strings` },
                 { label:`Autonomia (${tipoSist==='backup_hybrid'?'horas':'dias'})`, valor:`${autonomia}${tipoSist==='backup_hybrid'?'h':'d'}`, sub:`${tipoSist==='backup_hybrid'?'sem rede elétrica':'sem geração solar'}` },
               ].map(({ label, valor, sub }) => (
                 <div key={label} style={{ background:'#f7f6f1', borderRadius:8, padding:'10px 12px' }}>
@@ -2195,11 +2204,11 @@ function TabKit({ onPrev, onNext }: { onPrev:()=>void; onNext:()=>void }) {
               ))}
             </div>
 
-            {nParalelo > 6 && (
-              <div style={{ padding:'6px 12px', background:'#3b0a0a', border:'1px solid #ef4444', borderRadius:8, fontSize:11, color:'#fca5a5', marginBottom:8 }}>
-                ⚠️ {nParalelo} fileiras em paralelo excede o máximo recomendado (4–6). Use bateria de maior capacidade ou aumente a tensão do sistema para 48V.
+            {r.alertas.map((a, i) => (
+              <div key={i} style={{ padding:'6px 12px', background:'#3b0a0a', border:'1px solid #ef4444', borderRadius:8, fontSize:11, color:'#fca5a5', marginBottom:8 }}>
+                ⚠️ {a}
               </div>
-            )}
+            ))}
             <div style={{ fontSize:10, color:D.textMuted }}>
               Fórmulas: CBC20 = Energia × Autonomia / DOD (Eq. 6.10) | CBIC20 = CBC20 / Vsist (Eq. 6.11) | Ic = 1.25 × Isc × N_strings (Eq. 6.18) — Manual Fotovoltaico CEPEL/INPE
             </div>

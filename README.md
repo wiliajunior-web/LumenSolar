@@ -421,8 +421,14 @@ cobertos por teste nesta sessão:
   empilhar (diferente dos perfis Pb-ácido/OPzS/OPzV, que têm uma única tensão e continuam
   empilhando em série livremente, como sempre foi correto). Corrigido para selecionar o pack que
   bate exatamente com a tensão do sistema quando há mais de uma opção no catálogo; sem
-  correspondência exata, cai no mais próximo e avisa o instalador. **Módulo permanece desconectado
-  da UI** (ver abaixo). `calcularBateria.test.ts` novo, 5 testes hand-verified.
+  correspondência exata, cai no mais próximo e avisa o instalador. `calcularBateria.test.ts` novo,
+  5 testes hand-verified. **Correção — a afirmação "módulo desconectado da UI" abaixo estava
+  ERRADA e foi revisada na rodada seguinte:** existe sim um painel "🔋 Dimensionamento de Banco de
+  Baterias" na aba Kit (linha ~2108 de `App.tsx`) — ele só não chamava esta função, reimplementava
+  as mesmas fórmulas inline, divergindo silenciosamente do módulo testado (perdendo os alertas de
+  BMS obrigatório do lítio, degradação térmica do OPzV, correntes elevadas em 12/24V, autonomia
+  mínima de 2 dias no offgrid, e o próprio alerta de pack de tensão sem correspondência corrigido
+  acima). Ver correção na rodada seguinte.
 - [x] **MÉDIO — `gerarCronograma.ts` (cronograma de obra em Excel): mesmo bug de fuso horário já
   corrigido em `calculoFioB.ts` numa sessão anterior, reaparecendo aqui.** `addWeeks()` fazia
   `new Date("YYYY-MM-DD")` (meia-noite UTC) e depois `.setDate()`/`.toLocaleDateString()` sem
@@ -492,13 +498,30 @@ objeto errado). Corrigido:
   bug em algo que já funciona); documentado aqui para decisão do usuário sobre se vale a pena
   terminar.
 
-**Ainda desconectados da UI (bug corrigido no código-fonte, sem tela própria no app):**
-`calcularBateria.ts` (dimensionamento de banco de baterias, sistemas híbridos/offgrid) e
-`calcularAgrupamento.ts` (agrupamento de UCs/SCEE) continuam sem nenhum painel na UI nem wiring em
-`calcularTudo()` — pior situação que o Grupo A antes da correção desta sessão, que ao menos tinha
-um painel. Ambos são exportados e cobertos por teste, prontos para conectar quando o app precisar
-dessas funcionalidades, mas hoje não afetam nenhum documento gerado porque não são chamados por
-nenhuma tela.
+**Ainda desconectado da UI (bug corrigido no código-fonte, sem tela própria no app):**
+`calcularAgrupamento.ts` (agrupamento de UCs/SCEE) continua sem nenhum painel na UI nem wiring em
+`calcularTudo()` — mesma situação do Grupo A antes da correção desta sessão. É exportado e coberto
+por teste, pronto para conectar quando o app precisar dessa funcionalidade, mas hoje não afeta
+nenhum documento gerado porque não é chamado por nenhuma tela. (`calcularBateria.ts` NÃO está
+mais nesta situação — ver quarta rodada abaixo: tinha painel próprio, só não chamava a função.)
+
+### Quarta rodada (ago/2026) — auditando App.tsx (2914 linhas, o maior arquivo do projeto)
+
+- [x] **ALTO — achado que corrige um erro desta própria auditoria: o painel "🔋 Dimensionamento
+  de Banco de Baterias" (aba Kit, `App.tsx` ~linha 2108) EXISTE e é renderizado — a afirmação nas
+  rodadas anteriores de que `calcularBateria.ts` "continua sem tela na UI" estava errada.** O
+  painel reimplementava as fórmulas de `calcularBancoBaterias()` inline, direto no JSX, em vez de
+  importar a função de domínio — as duas versões concordavam na maior parte da matemática, mas a
+  versão inline nunca tinha os alertas que só existem no módulo de domínio: BMS obrigatório para
+  lítio, degradação térmica do OPzV acima de 25°C, correntes elevadas em bancos 12V/24V, autonomia
+  mínima de 2 dias no offgrid, e — mais importante — o alerta de pack de tensão sem
+  correspondência exata que foi justamente o bug corrigido nesta sessão em `calcularBateria.ts`
+  (a versão inline usava sua própria lógica simplificada para a tensão do pack de lítio, que por
+  coincidência não exibia o mesmo bug porque o `<select>` da UI só oferece 12V/24V/48V — mas
+  também nunca alertava se um dia um pack customizado fosse permitido). Corrigido: o painel agora
+  chama `calcularBancoBaterias()` de verdade e exibe todos os alertas que a função retorna, não
+  só o de "paralelo > 6". Nenhum teste novo (é wiring de UI React, sem infraestrutura de teste de
+  componente no projeto) — a lógica em si já está coberta pelos 5 testes de `calcularBateria.test.ts`.
 
 **Não corrigido nesta auditoria — requer trabalho dedicado:**
 
