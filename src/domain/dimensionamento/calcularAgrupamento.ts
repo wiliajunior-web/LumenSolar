@@ -99,7 +99,24 @@ export function calcularAgrupamento(params: {
   const consumoTotal = mediasUC.reduce((a, b) => a + b, 0);
   const disponibilidades = unidades.map(uc => kWhMin[uc.tipoLigacao] || 50);
   const totalDisponibilidade = disponibilidades.reduce((a, b) => a + b, 0);
-  const consumoCompensavel = Math.max(consumoTotal - totalDisponibilidade, 0);
+  // CORRIGIDO (ago/2026): antes, o "custo de disponibilidade" agregado era
+  // subtraído do consumo agregado ANTES de qualquer clamp — max(ΣmediaUC -
+  // ΣdispUC, 0) — enquanto o consumo compensável de cada UC individual (usado
+  // logo abaixo, por UC, na distribuição de créditos) é clampado UC a UC —
+  // Σ max(mediaUC - dispUC, 0). Como max(a,0)+max(b,0) ≥ max(a+b,0) sempre que
+  // a ou b pode ser negativo, o agregado antigo ficava MENOR que a soma real
+  // do que cada UC precisa — sempre que alguma UC tem consumo médio abaixo da
+  // própria disponibilidade mínima (ex.: UC pouco usada, consumo 20kWh com
+  // disponibilidade trifásica de 100kWh: seu "déficit" de -80kWh era abatido
+  // do total agregado, mas nenhuma UC individual pode ter compensável
+  // negativo). Resultado: o sistema saía subdimensionado para a soma real das
+  // UCs. Agora a compensável agregada é a SOMA das compensáveis por UC (cada
+  // uma já clampada em max(0)), consistente com o que é usado na distribuição
+  // de créditos por UC logo abaixo.
+  const consumoCompensavel = mediasUC.reduce(
+    (soma, media, i) => soma + Math.max(media - disponibilidades[i], 0),
+    0
+  );
   const geracaoNecessaria = consumoCompensavel * percentualCompensacao;
 
   // ── Dimensionamento ────────────────────────────────────────────────────────

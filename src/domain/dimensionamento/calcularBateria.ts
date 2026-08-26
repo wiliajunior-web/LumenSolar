@@ -163,7 +163,35 @@ export function calcularBancoBaterias(p: ParamsBateria): ResultadoBateria {
 
   // ── 3. Configuração série × paralelo ────────────────────────────────────
   // Baterias em série: Vsist / Vtensao_bateria (Eq. 6.17)
-  const tensaoBateria = perfil.tensoesSerie[0]; // menor tensão disponível (ex: 12V para monobloco)
+  // CORRIGIDO (ago/2026): perfis de célula/monobloco único (Pb-ácido 12V,
+  // OPzS/OPzV 2V, `tensoesSerie.length === 1`) são projetados para serem
+  // empilhados em série até QUALQUER Vsist — isso é o comportamento correto e
+  // não muda aqui. O bug era só para litio_lifepo4, cujo `tensoesSerie` é
+  // [48, 24, 12] — as tensões de PACK PRONTO que o fabricante vende (não uma
+  // lista ordenada da menor para a maior, e não célula unitária para
+  // empilhar). O código pegava sempre o índice [0]=48V como "a tensão da
+  // bateria", inclusive quando o sistema configurado era 24V ou 12V — dando
+  // `bateriasSerie = ceil(Vsist/48) = 1` mesmo para Vsist=12V/24V, quando na
+  // prática existe um pack pronto de 12V ou 24V (não faz sentido "1 bateria
+  // de 48V em série" para montar banco de 12V). Agora, quando há mais de uma
+  // tensão de pack disponível no catálogo, seleciona a que bate exatamente
+  // com Vsist; sem correspondência exata, cai na mais próxima e avisa.
+  let tensaoBateria = perfil.tensoesSerie[0];
+  if (perfil.tensoesSerie.length > 1) {
+    const exata = perfil.tensoesSerie.find(v => v === p.tensaoSistemaV);
+    if (exata !== undefined) {
+      tensaoBateria = exata;
+    } else {
+      tensaoBateria = perfil.tensoesSerie.reduce((maisProxima, v) =>
+        Math.abs(v - p.tensaoSistemaV) < Math.abs(maisProxima - p.tensaoSistemaV) ? v : maisProxima
+      , perfil.tensoesSerie[0]);
+      alertas.push(
+        `Nenhum pack de ${p.tensaoSistemaV}V disponível para "${perfil.label}" ` +
+        `(opções: ${perfil.tensoesSerie.join('V, ')}V). Usando ${tensaoBateria}V como referência — ` +
+        'confirmar configuração série/paralelo com o fabricante.'
+      );
+    }
+  }
   const bateriasSerie = Math.ceil(p.tensaoSistemaV / tensaoBateria);
 
   // Baterias em paralelo: CBI / CBI_bat (Eq. 6.16)

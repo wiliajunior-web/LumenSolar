@@ -3,10 +3,17 @@
  * Fórmulas extraídas da planilha "Pre_dimensionamento_FDI.xlsx"
  * (Toolbox de Elite — Projetista de Elite, 2024)
  *
- * 3 critérios obrigatórios (IEC 61724-1 + fabricante):
+ * CORRIGIDO (ago/2026): a citação "IEC 61724-1" abaixo estava incorreta — essa
+ * norma trata de monitoramento de desempenho de sistemas FV, não de critérios
+ * de dimensionamento DC/AC. A faixa de overload 0,90–1,35 e os 3 critérios vêm
+ * da planilha comercial citada acima, não de uma norma IEC — removida a
+ * citação indevida.
+ *
+ * 3 critérios obrigatórios (planilha do fabricante/mercado — ver nota acima):
  *   1. Potência   — overload: 0,90 ≤ FDI ≤ 1,35
  *   2. Tensão     — N_série dentro da faixa MPPT do inversor
- *   3. Corrente   — strings por MPPT ≤ limite do inversor
+ *   3. Corrente   — strings por MPPT ≤ limite do inversor (requer Imax_MPPT do
+ *      datasheet — ver `criterio3Avaliado` quando esse dado não é informado)
  */
 
 export interface ParamsFDI {
@@ -47,6 +54,17 @@ export interface ResultadoFDI {
   stringsPerMppt: number;      // strings distribuídas por MPPT
   nStringsMaxMppt: number;     // ROUNDDOWN(Imax_mppt / Isc, 0)
   criterio3Ok: boolean;
+  /**
+   * false quando `corrMaxMpptA` não foi informado (≤0) — o Critério 3 não pôde
+   * ser calculado de verdade. ADICIONADO ago/2026: antes, App.tsx usava
+   * `corrMaxMpptA || corrMaxSaidaA || 99` como fallback quando o campo estava
+   * vazio — misturando corrente CC por MPPT com corrente CA de saída do
+   * inversor (grandezas diferentes) ou, no pior caso, aprovando silenciosamente
+   * qualquer configuração de strings com o valor arbitrário 99A. Agora, sem o
+   * dado real do datasheet, o Critério 3 fica marcado como não avaliado (não
+   * aprovado nem reprovado) em vez de aprovar às cegas.
+   */
+  criterio3Avaliado: boolean;
 
   // Geral
   aprovado: boolean;
@@ -124,11 +142,19 @@ export function calcularFDI(p: ParamsFDI): ResultadoFDI {
 
   // ── Critério 3 — Corrente ─────────────────────────────────────────────────
   const stringsPerMppt = Math.ceil(p.numStrings / p.numMppt);
+  const criterio3Avaliado = p.corrMaxMpptA > 0;
   // N_strings_max_mppt = ROUNDDOWN(Imax_mppt / Isc)
-  const nStringsMaxMppt = Math.floor(p.corrMaxMpptA / p.iscA);
-  const c3Ok = stringsPerMppt <= nStringsMaxMppt;
+  const nStringsMaxMppt = criterio3Avaliado ? Math.floor(p.corrMaxMpptA / p.iscA) : 0;
+  // Sem o dado real (corrMaxMpptA≤0), não há como avaliar — não conta nem a
+  // favor nem contra `aprovado` (ver criterio3Avaliado e sugestão abaixo).
+  const c3Ok = !criterio3Avaliado || stringsPerMppt <= nStringsMaxMppt;
 
-  if (!c3Ok) {
+  if (!criterio3Avaliado) {
+    sugestoes.push(
+      'Critério de corrente (Critério 3) não avaliado: preencha "Imax por MPPT (A)" ' +
+      'com o valor do datasheet do inversor para verificar strings por MPPT × Isc ≤ Imax_MPPT.'
+    );
+  } else if (!c3Ok) {
     alertas.push(
       `Critério de corrente: ${stringsPerMppt} strings por MPPT excede máximo ${nStringsMaxMppt}. ` +
       `Isc_arranjo=${(stringsPerMppt * p.iscA).toFixed(1)}A > Imax_MPPT=${p.corrMaxMpptA}A.`
@@ -149,6 +175,7 @@ export function calcularFDI(p: ParamsFDI): ResultadoFDI {
     criterio2Ok: c2Ok,
     stringsPerMppt, nStringsMaxMppt,
     criterio3Ok: c3Ok,
+    criterio3Avaliado,
     aprovado, alertas, sugestoes,
   };
 }

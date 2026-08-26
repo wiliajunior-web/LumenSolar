@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { dimensionarSistema } from '@domain/dimensionamento/dimensionar';
+import { dimensionarSistema, ajustarDimensionamentoParaQuantidadeReal } from '@domain/dimensionamento/dimensionar';
 import { calcularPerdas } from '@domain/dimensionamento/calcularPerdas';
 import { hspPorUF } from '@data/hspPorUF';
 import { classificarEnquadramento, percentualFioBPorAno } from '@domain/fioB/calculoFioB';
@@ -116,6 +116,14 @@ export interface EntradaKit {
   tensaoMaxEntradaV: number; // Tensão máxima de entrada CC
   tensaoSaidaV: number;     // Tensão nominal de saída CA (ex: 220)
   corrMaxSaidaA: number;    // Corrente máxima de saída CA
+  /**
+   * Corrente máxima por entrada MPPT (A) — datasheet do inversor. Usada pelo
+   * Critério 3 do FDI (calcularFDI.ts): N_strings_por_MPPT × Isc ≤ Imax_MPPT.
+   * Formalizado na interface em ago/2026: já existia no objeto de estado
+   * inicial (default 0) e tinha input próprio em App.tsx, mas só era acessado
+   * via `(kit as any).corrMaxMpptA` em todo o app — nunca esteve no tipo.
+   */
+  corrMaxMpptA: number;
   numMppt: number;          // Número de rastreadores MPPT
   ipGabinete: string;       // Grau de proteção (ex: IP65)
   fatorPotencia: string;    // Ex: ">0.99"
@@ -301,7 +309,21 @@ export const useProjetoStore = create<ProjetoState>((set, get) => ({
       {eficienciaMaximaPercent:kit.eficienciaInversorPercent},
       {temperaturaAmbienteMediaC:24,perdaSombreamentoPercent:2,perdaSujidadePercent:2}
     );
-    const dimensionamento = dimensionarSistema({consumoMedioMensalKWh:mediaKWh,hspLocal:hsp,perdasSistema:perdas.perdaTotalLiquida,potenciaModuloWp:kit.potenciaModuloWp,percentualCompensacaoDesejado:kit.percentualCompensacaoDesejado});
+    const dimensionamentoRecomendado = dimensionarSistema({consumoMedioMensalKWh:mediaKWh,hspLocal:hsp,perdasSistema:perdas.perdaTotalLiquida,potenciaModuloWp:kit.potenciaModuloWp,percentualCompensacaoDesejado:kit.percentualCompensacaoDesejado});
+    // CORRIGIDO (ago/2026): ver doc de ajustarDimensionamentoParaQuantidadeReal
+    // em @domain/dimensionamento/dimensionar.ts — `kit.quantidade` (o kit real
+    // configurado pelo instalador) raramente bate com `numeroModulos`
+    // (recomendado pelo algoritmo a partir do consumo). Sem este ajuste,
+    // documentos e indicadores financeiros usavam os dois números
+    // contraditoriamente. `dimensionamento` abaixo é o único valor usado pelo
+    // resto do app (enquadramento, custos, precificação, indicadores, PDFs/
+    // Excel) — quando kit.quantidade ainda não foi preenchido (=0), cai de
+    // volta na recomendação, preservando o comportamento anterior.
+    const dimensionamento = ajustarDimensionamentoParaQuantidadeReal(
+      dimensionamentoRecomendado,
+      kit.quantidade,
+      {potenciaModuloWp:kit.potenciaModuloWp, hspLocal:hsp, perdasSistema:perdas.perdaTotalLiquida, consumoMedioMensalKWh:mediaKWh}
+    );
     const enquadramento = classificarEnquadramento({dataProtocoloAcesso:kit.dataProtocoloAcesso,potenciaInstaladaKW:dimensionamento.potenciaInstaladaRealKWp,fonte:'fotovoltaica',modalidade:'autoconsumo_local'});
 
     // Grupo A (média tensão) — calculado à parte, com fórmula própria (fator de

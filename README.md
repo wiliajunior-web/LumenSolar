@@ -12,9 +12,9 @@ Desenvolvido pela Lumen Soluções Ltda — Araguari/MG.
 
 | Item | Estado |
 |------|--------|
-| Testes automatizados | **852 passando** (E2E, cálculos, persistência, precificação de serviços, proteção CC, UTM, checklist de documentação, mapa de células do Formulário CEMIG, dimensionamento Grupo A, wiring do store, geração dos PDFs de proposta) |
+| Testes automatizados | **883 passando** (E2E, cálculos, persistência, precificação de serviços, proteção CC, cabo CA/disjuntor, FDI, banco de baterias, agrupamento de UCs, cronograma de obra, UTM, checklist de documentação, mapa de células do Formulário CEMIG, dimensionamento Grupo A, wiring do store, geração dos PDFs de proposta) |
 | Build Windows | ✅ GitHub Actions → artifact `LumenSolar-Windows` |
-| Normas implementadas | IEC 61724-1, NBR 16690, NBR 5410, Lei 14.300/2022, REN ANEEL 1.000/2021 |
+| Normas implementadas | NBR 16690, NBR 5410, Lei 14.300/2022, REN ANEEL 1.000/2021 |
 | Tarifa CEMIG | R$1,1827/kWh (Res. ANEEL 3.589/2026) |
 
 ---
@@ -83,7 +83,7 @@ Desenvolvido pela Lumen Soluções Ltda — Araguari/MG.
 | Documento | Norma base | Formato |
 |-----------|-----------|---------|
 | Proposta Comercial | — | PDF |
-| Proposta Técnica | NBR 16690, IEC 61724-1 | PDF |
+| Proposta Técnica | NBR 16690 | PDF |
 | Memorial Descritivo | ND CEMIG 5.30 | PDF |
 | Procuração | REN ANEEL 1.000/2021 Art.9 | PDF |
 | DUB — Diagrama Unifilar Básico | NBR 5410, NBR 16690:2019 | PDF |
@@ -155,8 +155,8 @@ envio, em vez de fingir automatizar algo que não automatiza.
 
 | Bloco | Norma | Verificação |
 |-------|-------|-------------|
-| Perdas do sistema | IEC 61724-1 | Tcell, ΔT, composição encadeada, clamp frio, bifacial |
-| Dimensionamento | IEC 61724-1 | kWp = consumo/(HSP×30.4167×efic), DIAS_MES=365/12 |
+| Perdas do sistema | — (engenharia FV padrão, não é norma) | Tcell, ΔT, composição encadeada, clamp frio, bifacial |
+| Dimensionamento | — (fórmula padrão, não é norma) | kWp = consumo/(HSP×30.4167×efic), DIAS_MES=365/12 |
 | FioB | Lei 14.300/2022 | 8 percentuais Art.27, Art.26 até 2045, min(ger,cons) |
 | Custos CEMIG | Res. ANEEL 3.589/2026 | R$379,34 / R$59,14 / R$203,88 / R$157,27 (conta real) |
 | Precificação | — | Balanço erro = 0,00000000 |
@@ -333,7 +333,7 @@ neste processo). Corrigidos e cobertos por teste de regressão nesta sessão:
 - [x] **ALTO — `calcularGrupoA.ts` e `useProjetoStore.ts` (motor central `calcularTudo()`) tinham
   ZERO cobertura de teste.** A auditoria anterior chegou a descrever `calcularGrupoA.ts` como
   "pronto e testado" — afirmação incorreta, não havia nenhum teste. Adicionados
-  `calcularGrupoA.test.ts` (agora 17 testes, valores calculados manualmente antes de rodar,
+  `calcularGrupoA.test.ts` (agora 14 testes, valores calculados manualmente antes de rodar,
   incluindo regressão específica para detectar histórico Ponta/Fora-Ponta trocado) e
   `useProjetoStore.test.ts` (wiring do `resultadoGrupoA`, comparado contra chamada independente
   da função de domínio usando os mesmos hsp/perdas reais).
@@ -360,6 +360,107 @@ neste processo). Corrigidos e cobertos por teste de regressão nesta sessão:
   a montante) depende de dado que o app não tem (ajuste da proteção da distribuidora). Não
   implementado — não dá para fazer sem inventar norma.
 
+### Segunda rodada de revisão (ago/2026) — arquivos sem cobertura de teste
+
+Pedido explícito do usuário ("revise tudo") depois da rodada acima. 5 agentes independentes
+auditaram, cada um lendo o arquivo inteiro e recalculando à mão antes de confiar em qualquer
+"expected" pré-existente, os módulos que ainda não tinham arquivo de teste dedicado:
+`calcularCaboCA.ts`, `calcularBateria.ts`, `calcularAgrupamento.ts`, `calcularFDI.ts`,
+`gerarCronograma.ts`, além de reabrir a suspeita (não aprofundada na rodada anterior) de
+`kit.quantidade` vs `dimensionamento`. Todos os 5 retornaram achados reais, corrigidos e
+cobertos por teste nesta sessão:
+
+- [x] **CRÍTICO — `calcularCaboCA.ts` (cabo CA/disjuntor, NBR 5410 + NBR 16690 5.4), 4 problemas
+  na mesma função:** (1) tabela de seções por corrente estava rotulada "Método C" no comentário
+  mas os valores são de Método B1 (mais conservador — não é bug de segurança, é citação errada,
+  corrigido o rótulo); (2) fator de correção térmica FTA(25°C) estava tabelado como 1,04, mas a
+  fórmula documentada `sqrt((70-T)/(70-30))` dá 1,06 — única linha de 8 divergente da própria
+  fórmula do arquivo; (3) quando a corrente de projeto era grande o bastante para não haver
+  NENHUM disjuntor padrão IEC que satisfizesse `Ib≤In≤Iz'` em nenhuma bitola da tabela, o código
+  entregava o disjuntor default de 100A mesmo quando 100A < Ib — disjuntor subdimensionado para
+  a carga real, SEM alerta nenhum; (4) temperatura ambiente fora da faixa tabelada (25–60°C) era
+  silenciosamente clampada nos extremos, sem avisar que o valor usado não corresponde ao
+  informado. Todos corrigidos; `calcularCaboCA.test.ts` novo, 8 testes hand-verified.
+- [x] **ALTO — `App.tsx` e `DiagramaUnifilarBasico.tsx`: fator 1,25 da NBR 16690 §5.4 (corrente
+  de projeto/carga contínua) nunca chegava de fato em `calcularCaboCA`.** Em ambos os pontos de
+  chamada, `corrMaxSaidaA: kit.corrMaxSaidaA || icaProjeto / 1.25` — quando `corrMaxSaidaA` do
+  kit estava preenchido (o caso comum), o fator 1,25 era completamente ignorado; quando vazio,
+  o fallback DIVIDIA por 1,25 em vez de multiplicar, invertendo o sentido do fator de segurança.
+  Corrigido para `kit.corrMaxSaidaA > 0 ? kit.corrMaxSaidaA * 1.25 : icaProjeto` nos dois arquivos.
+- [x] **ALTO — `calcularFDI.ts` (Critério 3 do FDI, corrente por MPPT): App.tsx usava
+  `corrMaxMpptA: (kit as any).corrMaxMpptA || kit.corrMaxSaidaA || 99` como fallback.** Sem o dado
+  real do datasheet, isso aprovava silenciosamente qualquer configuração de strings usando a
+  corrente CA de saída do inversor (grandeza errada — CA em vez de CC por MPPT) ou, no pior caso,
+  o valor arbitrário 99A. Corrigido: sem o dado informado, `criterio3Avaliado=false` — o critério
+  fica marcado como não avaliado (nem aprova nem reprova às cegas) em vez de aprovar sem
+  fundamento; a UI mostra "N/AVALIADO" em vez de um "OK" verde enganoso. `corrMaxMpptA` também foi
+  formalizado na interface `EntradaKit` (removendo os `as any` espalhados pelo app).
+  `calcularFDI.test.ts` novo, 7 testes hand-verified (zero cobertura antes).
+- [x] **BAIXO — citação "IEC 61724-1" indevida em 3 lugares além do já corrigido no Grupo A:**
+  cabeçalho de `calcularFDI.ts` (a faixa de overload 0,90–1,35 e os 3 critérios vêm de uma
+  planilha comercial, não de norma IEC), cabeçalho de `calcularPerdas.ts` e a tabela "Cálculos
+  verificados" deste README (linhas Perdas do sistema/Dimensionamento) — IEC 61724-1 trata de
+  monitoramento de desempenho de sistema FV em operação, não define fórmulas de perdas ou de
+  dimensionamento. Citações removidas nos 4 lugares; os cálculos em si não mudam.
+- [x] **MÉDIO — `calcularAgrupamento.ts` (dimensionamento por agrupamento de UCs — SCEE, REN
+  1.000/2021 Art.6º VIII): ordem de clamp errada entre a compensável agregada e a compensável por
+  UC.** A compensável agregada usada para dimensionar a usina era `max(ΣmediaUC - ΣdispUC, 0)` —
+  subtração agregada, clampada uma única vez — enquanto a compensável de cada UC individual
+  (usada na distribuição de créditos, logo abaixo no mesmo arquivo) é `max(mediaUC - dispUC, 0)`
+  clampada UC a UC. Como `max(a,0)+max(b,0) ≥ max(a+b,0)` sempre que alguma UC tem consumo médio
+  abaixo da própria disponibilidade mínima (UC pouco usada), o agregado antigo subdimensionava o
+  sistema em relação ao que a soma real das UCs precisa. Corrigido para somar as compensáveis já
+  clampadas por UC. **Módulo permanece desconectado da UI** (ver abaixo) — o bug foi corrigido no
+  código-fonte mesmo sem tela própria, porque é exportado e pode ser reaproveitado.
+  `calcularAgrupamento.test.ts` novo, 3 testes hand-verified (demonstra a divergência 470 vs 390
+  entre o valor corrigido e o valor que o bug antigo produziria nos mesmos dados).
+- [x] **BAIXO — `calcularBateria.ts` (dimensionamento de banco de baterias): seleção de tensão de
+  pack do litio_lifepo4 sempre pegava o primeiro elemento do catálogo (48V), mesmo configurando
+  banco de 12V ou 24V.** `tensoesSerie` para litio_lifepo4 é `[48,24,12]` — as tensões de PACK
+  PRONTO do fabricante, não uma lista ordenada da menor para a maior nem uma célula unitária para
+  empilhar (diferente dos perfis Pb-ácido/OPzS/OPzV, que têm uma única tensão e continuam
+  empilhando em série livremente, como sempre foi correto). Corrigido para selecionar o pack que
+  bate exatamente com a tensão do sistema quando há mais de uma opção no catálogo; sem
+  correspondência exata, cai no mais próximo e avisa o instalador. **Módulo permanece desconectado
+  da UI** (ver abaixo). `calcularBateria.test.ts` novo, 5 testes hand-verified.
+- [x] **MÉDIO — `gerarCronograma.ts` (cronograma de obra em Excel): mesmo bug de fuso horário já
+  corrigido em `calculoFioB.ts` numa sessão anterior, reaparecendo aqui.** `addWeeks()` fazia
+  `new Date("YYYY-MM-DD")` (meia-noite UTC) e depois `.setDate()`/`.toLocaleDateString()` sem
+  `timeZone` explícito (fuso LOCAL da máquina) — no Brasil (UTC-3), meia-noite UTC cai às 21h do
+  dia ANTERIOR local, então toda data do cronograma (início, cada semana, início/término de cada
+  etapa) saía sistematicamente um dia adiantada. Corrigido mantendo tudo em UTC (parse, aritmética
+  e formatação), igual ao padrão de `calculoFioB.ts`. `gerarCronograma.test.ts` novo — o teste
+  força `TZ=America/Sao_Paulo` (o fuso onde o bug se manifestava) e lê de volta o `.xlsx` gerado
+  para confirmar as datas certas; teria falhado com o código antigo.
+- [x] **ALTO — confirmada a suspeita da rodada anterior: `kit.quantidade` (kit real configurado
+  pelo instalador) e `dimensionamento.numeroModulos` (recomendação do algoritmo a partir do
+  consumo) eram duas fontes de verdade independentes que nunca convergiam.** Confirmado com
+  citação de arquivo:linha que a contradição aparece na MESMA página em `PropostaPDF.tsx`,
+  `PropostaComercialPDF.tsx` e `MemorialDescritivo.tsx` (um bloco mostra o número recomendado,
+  outro mostra `kit.quantidade`), e que os indicadores financeiros (payback, TIR, economia mensal)
+  eram calculados com a GERAÇÃO do número recomendado enquanto o preço de venda vinha do CUSTO do
+  kit real — descasamento silencioso sempre que o instalador escolhe uma quantidade diferente da
+  sugerida (o caso comum, já que kits vêm em tamanhos discretos compatíveis com o inversor).
+  Corrigido em `calcularTudo()` (`useProjetoStore.ts`): nova função pura
+  `ajustarDimensionamentoParaQuantidadeReal` (`dimensionar.ts`) recalcula potência/geração/
+  percentual de compensação a partir de `kit.quantidade` quando preenchido e diferente do
+  recomendado, mantendo `potenciaSistemaKWp` (o alvo teórico pré-arredondamento) inalterado. O
+  resultado ajustado passa a ser o único `dimensionamento` armazenado e consumido por todo o
+  resto do app (enquadramento, custos recorrentes, precificação, indicadores, PDFs, Excel) — sem
+  precisar reescrever cada documento individualmente. O painel de sugestão de dimensionamento
+  (`StrategiaKwp` em App.tsx) não foi afetado: já calculava sua própria sugestão diretamente do
+  consumo/HSP, independente deste módulo. `dimensionar.test.ts` ganhou 4 testes novos para a
+  função de ajuste; `useProjetoStore.test.ts` ganhou 2 testes novos cobrindo o wiring completo
+  (com e sem `kit.quantidade` preenchido).
+
+**Ainda desconectados da UI (bug corrigido no código-fonte, sem tela própria no app):**
+`calcularBateria.ts` (dimensionamento de banco de baterias, sistemas híbridos/offgrid) e
+`calcularAgrupamento.ts` (agrupamento de UCs/SCEE) continuam sem nenhum painel na UI nem wiring em
+`calcularTudo()` — pior situação que o Grupo A antes da correção desta sessão, que ao menos tinha
+um painel. Ambos são exportados e cobertos por teste, prontos para conectar quando o app precisar
+dessas funcionalidades, mas hoje não afetam nenhum documento gerado porque não são chamados por
+nenhuma tela.
+
 **Não corrigido nesta auditoria — requer trabalho dedicado:**
 
 - [ ] **ALTO — Grupo A (Média Tensão): cálculo roda e é exibido no painel; os documentos gerados
@@ -382,11 +483,6 @@ neste processo). Corrigidos e cobertos por teste de regressão nesta sessão:
   (correção monetária da tabela de serviços) estão corretos e testados, mas não são chamados em
   lugar nenhum do app em produção — só existem via os próprios testes. Não é bug de cálculo, é
   funcionalidade que nunca foi conectada à UI.
-- [ ] Suspeita não totalmente confirmada: o dimensionamento e todos os indicadores financeiros
-  usam `dimensionamento.geracaoMensalEstimadaKWh` (geração teórica recomendada pelo algoritmo),
-  não a quantidade de módulos realmente configurada em `kit.quantidade` — se o instalador digitar
-  uma quantidade diferente da sugerida, os indicadores do PDF podem não refletir o sistema
-  vendido de fato. Não aprofundado nesta auditoria (fora do escopo de cálculo puro).
 - [ ] Observação de risco comercial, não de cálculo: o PDF "Doc Técnica"
   (`PropostaPDF.tsx`, botão "🔧 Técnica") exibe a composição completa de custos, incluindo o
   custo de compra do kit junto ao fornecedor — se esse documento for de fato entregue ao cliente

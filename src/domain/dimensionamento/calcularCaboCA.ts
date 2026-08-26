@@ -1,6 +1,6 @@
 /**
  * DIMENSIONAMENTO DE CONDUTORES CA E PROTEÇÃO
- * Baseado em: NBR 5410 (Tabela 36, Método C) + NBR 16690 5.4
+ * Baseado em: NBR 5410 (Tabela 36, Método B1 — ver nota em TABELA_SECAO_IZ) + NBR 16690 5.4
  * Fórmulas verificadas contra o curso "Processo Homologatório" (slides 48–58)
  *
  * PROCESSO (conforme curso):
@@ -12,7 +12,13 @@
  *  6. Verificar queda de tensão: ΔU = α × ρ × Ib × L / (U × S) ≤ 4%
  */
 
-// ── Tabela NBR 5410 Tabela 36 — Método C (condutor Cu, PVC 70°C, T_ref=30°C) ──
+// ── Tabela NBR 5410 Tabela 36 — Método B1 (condutor Cu, PVC 70°C, T_ref=30°C) ──
+// CORRIGIDO (ago/2026): rotulado como "Método C" desde a criação do arquivo, mas os
+// valores (17.5/24/32/41/57/76/101/125/151A) são os da coluna B1 da Tabela 36 — a
+// coluna C real da NBR 5410 é (19.5/27/36/46/63/85/112/138/168A). O erro de rótulo
+// vem do material de origem (curso "Processo Homologatório"); os VALORES em si são
+// mais conservadores que Método C real (subdimensiona a favor da segurança, não
+// contra), então não é um bug de segurança — só a citação normativa estava errada.
 // Formato: [mm², Iz_A]
 const TABELA_SECAO_IZ: Array<[number, number]> = [
   [1.5,  17.5],
@@ -30,7 +36,13 @@ const TABELA_SECAO_IZ: Array<[number, number]> = [
 // FTA = sqrt((70 - T_amb) / (70 - 30))
 // Valores tabelados para evitar raiz quadrada em tempo de execução
 const FTA_PVC_70: Array<[number, number]> = [
-  [25, 1.04],
+  // CORRIGIDO (ago/2026): era 1.04. A própria fórmula documentada acima
+  // (FTA = sqrt((70-T)/(70-30))) dá sqrt(45/40) = 1.0607 para T=25°C — todas
+  // as outras 7 linhas desta tabela batem com a fórmula (±0.01); só esta
+  // divergia. Afeta a interpolação de calcFTA() para instalações entre 25°C
+  // e 30°C (regiões mais frias/de altitude), subestimando levemente a
+  // ampacidade corrigida disponível nessa faixa (lado conservador, mas incorreto).
+  [25, 1.06],
   [30, 1.00],
   [35, 0.94],
   [40, 0.87],
@@ -117,6 +129,15 @@ export function calcularCaboCA(params: ParamsCaboCA): ResultadoCaboCA {
 
   // 2. Fator de correção temperatura (FTA)
   const fta = parseFloat(calcFTA(temperaturaAmbienteC).toFixed(4));
+  // ADICIONADO (ago/2026): calcFTA() satura silenciosamente fora de [25,60]°C — o
+  // alerta de "acima da tabela" já existe para Iz_req fora da faixa (linha abaixo),
+  // mas uma temperatura de instalação fora da faixa tabelada não tinha aviso nenhum.
+  if (temperaturaAmbienteC < 25 || temperaturaAmbienteC > 60) {
+    alertas.push(
+      `Temperatura ambiente ${temperaturaAmbienteC}°C fora da faixa tabelada (25–60°C) — ` +
+      `FTA calculado com o limite mais próximo (${temperaturaAmbienteC < 25 ? '25' : '60'}°C), verificar manualmente`
+    );
+  }
 
   // 3. Iz mínimo requerido (NBR 5410) — Iz ≥ Ib / (FTA × FRS × FAC)
   const FAC = 1; // fator tipo condutor — PVC padrão
@@ -129,6 +150,7 @@ export function calcularCaboCA(params: ParamsCaboCA): ResultadoCaboCA {
   let Iz_cabo  = TABELA_SECAO_IZ[TABELA_SECAO_IZ.length - 1][1];
   let Iz_corrigida = Iz_cabo * fta;
   let disjuntor = DISJUNTORES_IEC[DISJUNTORES_IEC.length - 1];
+  let disjuntorEncontrado = false;
 
   for (const [s, iz] of TABELA_SECAO_IZ) {
     if (iz < Iz_req) continue;                         // cabo insuficiente
@@ -136,13 +158,41 @@ export function calcularCaboCA(params: ParamsCaboCA): ResultadoCaboCA {
     const disj = DISJUNTORES_IEC.find(d => d >= Ib && d <= izCorr);
     if (disj) {
       secaoMm2 = s; Iz_cabo = iz; Iz_corrigida = izCorr; disjuntor = disj;
+      disjuntorEncontrado = true;
       break;
     }
     // Sem disjuntor adequado → tentar próximo tamanho de cabo
   }
 
+  // CORRIGIDO (ago/2026): quando NENHUMA bitola da tabela tem um disjuntor padrão que
+  // satisfaça Ib≤In≤Iz' (Ib grande o bastante para passar do maior disjuntor IEC padrão
+  // de 100A, mas Iz_req ainda dentro da faixa coberta pela maior bitola de 50mm² — faixa
+  // real para inversores comerciais/industriais maiores), o código antes mantinha os
+  // valores default definidos ANTES do loop (secaoMm2=50, disjuntor=100) sem verificar
+  // se esse disjuntor default sequer cobre Ib. Resultado: disjuntor abaixo da corrente
+  // de projeto (In < Ib — dispara em carga normal, violando o próprio critério citado
+  // no cabeçalho) entregue SEM nenhum alerta. Ex. hand-verified: Ib=110A, 40°C →
+  // fta=0.87 → Iz_req=126,4A (não dispara o alerta "acima da tabela", pois ≤151A) →
+  // nenhuma bitola tem disjuntor padrão entre 110A e Iz'_bitola → disjuntor default
+  // ficava 100A < 110A, zero alertas. Agora: usa a maior bitola (50mm²) e o MENOR
+  // disjuntor padrão que cubra Ib (mesmo que ultrapasse Iz' — o alerta de "excede Iz'"
+  // abaixo cobre esse caso), e emite alerta explícito se nem o maior disjuntor padrão
+  // (100A) cobrir Ib.
+  if (!disjuntorEncontrado && Iz_req <= TABELA_SECAO_IZ[TABELA_SECAO_IZ.length - 1][1]) {
+    secaoMm2 = TABELA_SECAO_IZ[TABELA_SECAO_IZ.length - 1][0];
+    Iz_cabo = TABELA_SECAO_IZ[TABELA_SECAO_IZ.length - 1][1];
+    Iz_corrigida = parseFloat((Iz_cabo * fta).toFixed(2));
+    disjuntor = DISJUNTORES_IEC.find(d => d >= Ib) ?? DISJUNTORES_IEC[DISJUNTORES_IEC.length - 1];
+  }
+
   if (Iz_req > TABELA_SECAO_IZ[TABELA_SECAO_IZ.length - 1][1]) {
     alertas.push('Corrente acima da tabela — consultar engenheiro especialista');
+  } else if (disjuntor < Ib) {
+    alertas.push(
+      `Nenhum disjuntor padrão (até ${DISJUNTORES_IEC[DISJUNTORES_IEC.length - 1]}A) cobre ` +
+      `Ib=${Ib.toFixed(1)}A com a bitola disponível — consultar engenheiro especialista ` +
+      `para disjuntor especial ou paralelismo de condutores`
+    );
   }
 
   if (disjuntor > Iz_corrigida) {

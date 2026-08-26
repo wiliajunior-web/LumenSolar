@@ -50,3 +50,57 @@ export function dimensionarSistema(params: ParametrosDimensionamento): Resultado
     percentualCompensacaoReal,
   };
 }
+
+/**
+ * Recalcula potência/geração do dimensionamento para o número REAL de
+ * módulos do kit escolhido pelo instalador (`kit.quantidade`), quando esse
+ * número diverge do recomendado por `dimensionarSistema()`. Mantém
+ * `potenciaSistemaKWp` (o alvo teórico pré-arredondamento, que não depende
+ * de qual kit discreto foi escolhido) inalterado.
+ *
+ * CORRIGIDO (ago/2026): antes, `dimensionamento.numeroModulos` (recomendado
+ * pelo algoritmo, a partir do consumo/HSP/perdas) e `kit.quantidade` (o que o
+ * instalador de fato configura no kit comercial — quantidade essa que raras
+ * vezes bate exatamente com a recomendação, já que kits vêm em tamanhos
+ * discretos compatíveis com o inversor escolhido) eram duas fontes de
+ * verdade independentes que nunca convergiam. Isso produzia duas falhas
+ * visíveis: (1) documentos gerados (PropostaPDF, PropostaComercialPDF,
+ * MemorialDescritivo) mostravam os DOIS números — recomendado e real — na
+ * mesma página quando divergiam, uma contradição para o cliente; (2) os
+ * indicadores financeiros (payback, TIR, economia mensal) eram calculados
+ * com a GERAÇÃO do número recomendado, enquanto o preço de venda vinha do
+ * CUSTO do kit real — descasamento silencioso entre "quanto o sistema
+ * gera" e "quanto o sistema custa" no mesmo cálculo de retorno.
+ *
+ * Uso: chamar logo após `dimensionarSistema(...)`, em `calcularTudo()` da
+ * store, passando `kit.quantidade` — o resultado ajustado é então o único
+ * `dimensionamento` armazenado e consumido por todo o resto do app
+ * (enquadramento, custosRecorrentes, precificação, indicadores, documentos).
+ * Não existe painel na UI que dependa do valor NÃO ajustado — o painel de
+ * sugestão de dimensionamento (`StrategiaKwp` em App.tsx) calcula sua própria
+ * sugestão diretamente do consumo/HSP, independente deste módulo.
+ */
+export function ajustarDimensionamentoParaQuantidadeReal(
+  resultado: ResultadoDimensionamento,
+  quantidadeReal: number,
+  params: Pick<ParametrosDimensionamento, 'potenciaModuloWp' | 'hspLocal' | 'perdasSistema' | 'consumoMedioMensalKWh'>
+): ResultadoDimensionamento {
+  if (quantidadeReal <= 0 || quantidadeReal === resultado.numeroModulos) return resultado;
+
+  const potenciaModuloKWp = params.potenciaModuloWp / 1000;
+  const fatorEficiencia = 1 - params.perdasSistema;
+  const potenciaInstaladaRealKWp = quantidadeReal * potenciaModuloKWp;
+  const geracaoMensalEstimadaKWh = potenciaInstaladaRealKWp * params.hspLocal * DIAS_MES * fatorEficiencia;
+  const geracaoAnualEstimadaKWh = geracaoMensalEstimadaKWh * 12;
+  const percentualCompensacaoReal =
+    params.consumoMedioMensalKWh > 0 ? geracaoMensalEstimadaKWh / params.consumoMedioMensalKWh : 0;
+
+  return {
+    potenciaSistemaKWp: resultado.potenciaSistemaKWp,
+    numeroModulos: quantidadeReal,
+    potenciaInstaladaRealKWp,
+    geracaoMensalEstimadaKWh,
+    geracaoAnualEstimadaKWh,
+    percentualCompensacaoReal,
+  };
+}

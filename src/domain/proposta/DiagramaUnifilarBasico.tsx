@@ -183,8 +183,11 @@ function montarDadosDiagrama(data: any) {
   // BUG CORRIGIDO (ago/2026): tipoLigacao estava hardcoded em 'bifasica', ignorando
   // o valor real (data.consumo.tipoLigacao) — mesmo bug corrigido em
   // ComponentesRecomendados (App.tsx). Para trifásico, α=1,73 em vez de 2.
+  // BUG CORRIGIDO (ago/2026): mesmo bug do ComponentesRecomendados em App.tsx —
+  // `kit.corrMaxSaidaA || icaProjeto/1.25` nunca aplicava o fator 1,25 (NBR 16690
+  // §5.4) em nenhum dos dois caminhos. Ver comentário completo em App.tsx.
   const caboCA = calcularCaboCA({
-    corrMaxSaidaA: kit.corrMaxSaidaA || icaProjeto / 1.25,
+    corrMaxSaidaA: kit.corrMaxSaidaA > 0 ? kit.corrMaxSaidaA * 1.25 : icaProjeto,
     tensaoSaidaV: tensaoCA,
     tipoLigacao: (data.consumo?.tipoLigacao as 'monofasica'|'bifasica'|'trifasica') || 'bifasica',
     temperaturaAmbienteC: kit.temperaturaInstalacaoC || 40,

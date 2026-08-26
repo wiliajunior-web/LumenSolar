@@ -2,7 +2,14 @@
  * Decomposição e cálculo das perdas do sistema fotovoltaico a partir das
  * especificações técnicas do kit (módulo + inversor).
  *
- * Referência: IEC 61724-1:2021, ABSOLAR Infomercado, INMET dados climáticos.
+ * CORRIGIDO (ago/2026): a referência abaixo citava "IEC 61724-1" — essa norma
+ * trata de monitoramento de desempenho de sistemas FV em operação (medição e
+ * relato de dados), não define as fórmulas de decomposição de perdas usadas
+ * aqui (Tcell/NOCT, derating térmico, clamp frio, ganho bifacial). São
+ * fórmulas de engenharia FV padrão (ver literatura Sandia/PVsyst/Duffie &
+ * Beckman), não uma norma específica. Citação incorreta removida; os
+ * cálculos em si não mudam.
+ * Referência: ABSOLAR Infomercado, INMET dados climáticos.
  *
  * NOTA SOBRE GANHO BIFACIAL:
  *   O valor declarado pelo fabricante no datasheet como "fator de bifacialidade"

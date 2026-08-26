@@ -33,10 +33,18 @@ interface Etapa {
   descricao: string;
 }
 
+// CORRIGIDO (ago/2026): `new Date("YYYY-MM-DD")` é interpretado como meia-noite
+// UTC, mas `.getDate()`/`.setDate()`/`.toLocaleDateString()` (sem `timeZone`
+// explícito) usam o fuso LOCAL da máquina. Para o Brasil (UTC-3), meia-noite
+// UTC de um dia cai às 21h do dia ANTERIOR no horário local — todas as datas
+// do cronograma (início, cada semana, início/término de cada etapa) saíam
+// sistematicamente um dia adiantadas em relação à data real informada.
+// Corrigido mantendo tudo em UTC (parse, aritmética e formatação), igual ao
+// padrão já usado em addMonths() de calculoFioB.ts.
 function addWeeks(dateStr: string, weeks: number): string {
-  const d = new Date(dateStr);
-  d.setDate(d.getDate() + weeks * 7);
-  return d.toLocaleDateString('pt-BR');
+  const d = new Date(dateStr + 'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate() + weeks * 7);
+  return d.toLocaleDateString('pt-BR', { timeZone: 'UTC' });
 }
 
 export function gerarCronograma(dados: ParamsCronograma): void {

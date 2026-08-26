@@ -1276,7 +1276,11 @@ function StrategiaKwp({ mediaKWh, uf, s }: { mediaKWh: number; uf: string; s: an
         <span style={{ fontSize: 11, color: '#6f6d63', fontWeight: 700, letterSpacing: '.05em', textTransform: 'uppercase' }}>Dimensionamento mínimo</span>
         <span style={{ color: D.gold, fontWeight: 900, fontSize: 22, fontVariantNumeric: 'tabular-nums' }}>{fmtNum(kWpMinimo, 2)} kWp</span>
         <span style={{ color: '#666666', fontSize: 12 }}>para {fmtNum(mediaKWh,0)} kWh/mês em {uf}</span>
-        <Tip text={`Fórmula IEC 61724-1: ${fmtNum(mediaKWh,0)} kWh ÷ (${fmtNum(hsp,1)} h/dia × 30,42 dias × 80% eficiência) = ${fmtNum(kWpMinimo,2)} kWp`} />
+        {/* CORRIGIDO (ago/2026): rotulava esta fórmula de dimensionamento básico (kWp =
+            consumo / (HSP × dias × eficiência)) como "Fórmula IEC 61724-1" — essa norma
+            trata de monitoramento de desempenho de sistemas FV, não define fórmula de
+            dimensionamento nenhuma. Citação removida; a fórmula em si não muda. */}
+        <Tip text={`${fmtNum(mediaKWh,0)} kWh ÷ (${fmtNum(hsp,1)} h/dia × 30,42 dias × 80% eficiência) = ${fmtNum(kWpMinimo,2)} kWp`} />
       </div>
 
       {/* Seletor de estratégia */}
@@ -1411,7 +1415,17 @@ function ComponentesRecomendados({ kit, tipoLigacao }: { kit: any; tipoLigacao?:
   const caboCAResult = (() => {
     try {
       return calcularCaboCA({
-        corrMaxSaidaA: kit.corrMaxSaidaA || icaProjeto / 1.25,
+        // BUG CORRIGIDO (ago/2026): passava `kit.corrMaxSaidaA` (corrente NOMINAL
+        // do datasheet, sem o fator 1,25) direto como Ib — o `|| icaProjeto/1.25`
+        // só entrava se corrMaxSaidaA fosse 0, e mesmo aí dividia icaProjeto por
+        // 1.25 de volta, cancelando o fator. Nos dois caminhos, o fator de carga
+        // contínua da NBR 16690 §5.4 (citado nos rótulos da UI logo abaixo, ex.:
+        // "Ib = In × 1.25") nunca chegava em calcularCaboCA — a seleção de
+        // cabo/disjuntor sempre rodava com a corrente nominal, não a de projeto.
+        // Agora: aplica ×1.25 sobre o valor real do datasheet quando informado
+        // (mais confiável que o nominal derivado de P/V/FP), com fallback para
+        // icaProjeto (que já embute o ×1.25) quando o campo não foi preenchido.
+        corrMaxSaidaA: kit.corrMaxSaidaA > 0 ? kit.corrMaxSaidaA * 1.25 : icaProjeto,
         tensaoSaidaV: kit.tensaoSaidaV || 220,
         // BUG CORRIGIDO (ago/2026): tipoLigacao estava hardcoded em 'bifasica',
         // ignorando o valor real escolhido pelo cliente (s.consumo.tipoLigacao).
@@ -1684,7 +1698,13 @@ function ComponentesRecomendados({ kit, tipoLigacao }: { kit: any; tipoLigacao?:
             faixaMpptMinV: kit.faixaMpptMinV,
             faixaMpptMaxV: kit.faixaMpptMaxV,
             tensaoMaxEntradaV: kit.tensaoMaxEntradaV,
-            corrMaxMpptA: (kit as any).corrMaxMpptA || kit.corrMaxSaidaA || 99,
+            // BUG CORRIGIDO (ago/2026): caía em `kit.corrMaxSaidaA` (corrente CA de
+            // saída do inversor — grandeza diferente de corrente CC por MPPT) e depois
+            // em `99` (aprova qualquer configuração de strings silenciosamente) quando o
+            // campo "Imax por MPPT" não era preenchido. Agora passa 0 nesse caso, e
+            // calcularFDI marca o Critério 3 como "não avaliado" (nem aprovado nem
+            // reprovado) em vez de aprovar às cegas — ver criterio3Avaliado.
+            corrMaxMpptA: kit.corrMaxMpptA || 0,
             numMppt: kit.numMppt || 1,
             numStrings: kit.numStrings || 1,
             modulosPorString: kit.modulosPorString || 1,
@@ -1720,10 +1740,15 @@ function ComponentesRecomendados({ kit, tipoLigacao }: { kit: any; tipoLigacao?:
                     badge:r.criterio2Ok?'OK':'AJUSTAR', cor:r.criterio2Ok?'#22c55e':'#ef4444',
                   },
                   {
-                    n:'③ Corrente', ok:r.criterio3Ok,
+                    // CORRIGIDO (ago/2026): quando Imax_MPPT não foi informado, o critério
+                    // fica "não avaliado" (cinza), não "OK" (verde) — antes um badge verde
+                    // aparecia mesmo sem o dado real do datasheet, por causa do fallback
+                    // que caía num valor de outra grandeza ou em 99A arbitrário.
+                    n:'③ Corrente', ok:!r.criterio3Avaliado || r.criterio3Ok,
                     val:`${r.stringsPerMppt} str/MPPT`,
-                    sub:`Máx: ${r.nStringsMaxMppt} strings por MPPT`,
-                    badge:r.criterio3Ok?'OK':'AJUSTAR', cor:r.criterio3Ok?'#22c55e':'#ef4444',
+                    sub: r.criterio3Avaliado ? `Máx: ${r.nStringsMaxMppt} strings por MPPT` : 'Preencha Imax por MPPT para avaliar',
+                    badge: !r.criterio3Avaliado ? 'N/AVALIADO' : (r.criterio3Ok?'OK':'AJUSTAR'),
+                    cor: !r.criterio3Avaliado ? '#888888' : (r.criterio3Ok?'#22c55e':'#ef4444'),
                   },
                 ].map(({ n, ok, val, sub, badge, cor }) => (
                   <div key={n} style={{ background:'#faf9f5', borderRadius:8, padding:'10px 12px',
@@ -2216,7 +2241,7 @@ function TabKit({ onPrev, onNext }: { onPrev:()=>void; onNext:()=>void }) {
             <Campo label="Tensão máx. entrada CC (V)" tip="Tensão máxima de entrada do inversor. O sistema deve ser projetado para ficar abaixo desse valor."><input className="inp inp-num" type="number" value={s.kit.tensaoMaxEntradaV || ''} onChange={e => s.atualizarKit({ tensaoMaxEntradaV: Number(e.target.value) })} /></Campo>
             <Campo label="Corrente máx. saída CA (A)"><input className="inp inp-num" type="number" step="0.1" value={s.kit.corrMaxSaidaA || ''} onChange={e => s.atualizarKit({ corrMaxSaidaA: Number(e.target.value) })} /></Campo>
             <Campo label="Número de MPPTs" hint="Rastreadores de ponto de máxima potência"><input className="inp inp-num" type="number" min="1" value={s.kit.numMppt} onChange={e => s.atualizarKit({ numMppt: Number(e.target.value) })} /></Campo>
-            <Campo label="Imax por MPPT (A)" tip="Corrente máxima por entrada MPPT — datasheet do inversor. Critério 3 do FDI: N_strings × Isc ≤ Imax_MPPT. Planilha: Pre_dimensionamento_FDI.xlsx"><input className="inp inp-num" type="number" step="0.1" value={(s.kit as any).corrMaxMpptA || ''} onChange={e => s.atualizarKit({ corrMaxMpptA: Number(e.target.value) } as any)} placeholder="Ex: 13.5" /></Campo>
+            <Campo label="Imax por MPPT (A)" tip="Corrente máxima por entrada MPPT — datasheet do inversor. Critério 3 do FDI: N_strings × Isc ≤ Imax_MPPT. Planilha: Pre_dimensionamento_FDI.xlsx"><input className="inp inp-num" type="number" step="0.1" value={s.kit.corrMaxMpptA || ''} onChange={e => s.atualizarKit({ corrMaxMpptA: Number(e.target.value) })} placeholder="Ex: 13.5" /></Campo>
             <Campo label="IP do gabinete" hint="Ex: IP65, IP67"><input className="inp" value={s.kit.ipGabinete} onChange={e => s.atualizarKit({ ipGabinete: e.target.value })} /></Campo>
             <Campo label="Comprimento cabo CA (m)" tip="Distância do inversor ao quadro de distribuição (QDG) — necessário para calcular queda de tensão (NBR 5410). Considere o trajeto real pelo eletroduto.">
               <input className="inp inp-num" type="number" min="1" max="500"
