@@ -12,7 +12,7 @@ Desenvolvido pela Lumen Soluções Ltda — Araguari/MG.
 
 | Item | Estado |
 |------|--------|
-| Testes automatizados | **883 passando** (E2E, cálculos, persistência, precificação de serviços, proteção CC, cabo CA/disjuntor, FDI, banco de baterias, agrupamento de UCs, cronograma de obra, UTM, checklist de documentação, mapa de células do Formulário CEMIG, dimensionamento Grupo A, wiring do store, geração dos PDFs de proposta) |
+| Testes automatizados | **891 passando** (E2E, cálculos, persistência de arquivo .lumensolar, precificação de serviços, proteção CC, cabo CA/disjuntor, FDI, banco de baterias, agrupamento de UCs, cronograma de obra, UTM, checklist de documentação, mapa de células do Formulário CEMIG, dimensionamento Grupo A, wiring do store, geração dos PDFs de proposta) |
 | Build Windows | ✅ GitHub Actions → artifact `LumenSolar-Windows` |
 | Normas implementadas | NBR 16690, NBR 5410, Lei 14.300/2022, REN ANEEL 1.000/2021 |
 | Tarifa CEMIG | R$1,1827/kWh (Res. ANEEL 3.589/2026) |
@@ -452,6 +452,45 @@ cobertos por teste nesta sessão:
   consumo/HSP, independente deste módulo. `dimensionar.test.ts` ganhou 4 testes novos para a
   função de ajuste; `useProjetoStore.test.ts` ganhou 2 testes novos cobrindo o wiring completo
   (com e sem `kit.quantidade` preenchido).
+
+### Terceira rodada (ago/2026) — persistência de arquivo e "Propostas" (tela inicial)
+
+Continuação do "vamos apurando, melhorando e consertando". `persistence.ts` (salvar/importar
+`.lumensolar`, checksum SHA-256) tinha 23 testes, mas nenhum deles chamava de fato
+`salvarArquivo()`/`importarArquivo()` — as duas únicas funções realmente usadas por `App.tsx`
+(`salvar()`/`abrirImportado()`). Os testes existentes reimplementavam a lógica de checksum em
+paralelo só para não depender de `document`/`Blob`, o que não protege contra um bug real dentro
+da função de produção (nome de campo trocado, condição invertida, checksum calculado sobre o
+objeto errado). Corrigido:
+
+- [x] **Cobertura adicionada — `salvarArquivo()`/`importarArquivo()` agora são chamadas de
+  verdade pelos testes**, com stub mínimo de `document`/`<input type=file>`/`<a>` (não precisou
+  trocar o ambiente do vitest para jsdom — `Blob`/`URL.createObjectURL` já funcionam nativamente
+  no Node 22). 8 testes novos em `arquivo_lumensolar.test.ts`: envelope correto do arquivo salvo
+  (formato/versão/checksum/dados, capturando o `Blob` real do download), importação íntegra,
+  seletor fechado sem escolher arquivo → resolve `null`, JSON corrompido/truncado, formato de
+  outro software, arquivo incompleto, checksum não bate após adulteração (com verificação de que
+  os recentes NÃO são atualizados nesse caso), compatibilidade com arquivo antigo sem `_checksum`.
+  Nenhum bug real encontrado dentro de `salvarArquivo`/`importarArquivo` em si — a lógica estava
+  correta, só não tinha teste de verdade em cima.
+- [ ] **Achado (não corrigido — funcionalidade inacabada, não bug em código funcionando):**
+  a tela "Propostas" (`TabHome`, botão inicial do app) tem DUAS peças de funcionalidade
+  construídas mas nunca conectadas: (1) `handleDuplicar(id)` lê
+  `localStorage.getItem('lumen:proposal:' + id)` — mas nada no app inteiro grava dado nessa
+  chave; o mecanismo real de persistência (`persistence.ts`) só grava METADADOS em
+  `lumen:recent:*`, os dados completos só existem no arquivo `.lumensolar` no disco do usuário
+  (design intencional, documentado no topo de `persistence.ts` — "zero risco de perda por
+  limpeza de cache"). `handleDuplicar` sempre cairia no `alert('Proposta não encontrada no
+  localStorage')` se fosse chamado; (2) não é chamado — não existe nenhum botão "Duplicar" no
+  card da lista de propostas, só o botão de excluir. (3) mesma situação com o rastreamento de
+  status: existe um componente `BadgeStatus` completo (dropdown com Rascunho/Enviada/Em
+  negociação/Aprovada/Perdida, grava em `lumen:status:<id>`) e a leitura desse status já existe
+  em `TabHome`, mas o componente nunca é renderizado em lugar nenhum — toda proposta aparece
+  eternamente como "Rascunho" porque não existe UI para mudar o status. Não fiz a chamada de
+  completar essas duas funcionalidades por conta própria (é decisão de produto — construir a
+  camada de cache local + o botão de duplicar, e conectar o dropdown de status — não corrigir um
+  bug em algo que já funciona); documentado aqui para decisão do usuário sobre se vale a pena
+  terminar.
 
 **Ainda desconectados da UI (bug corrigido no código-fonte, sem tela própria no app):**
 `calcularBateria.ts` (dimensionamento de banco de baterias, sistemas híbridos/offgrid) e

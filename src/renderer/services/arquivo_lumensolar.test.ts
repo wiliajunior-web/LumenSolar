@@ -4,7 +4,7 @@
  */
 
 import { describe, expect, it, beforeEach } from 'vitest';
-import { gerarId, nomeArquivo, listarRecentes, removerRecente } from './persistence';
+import { gerarId, nomeArquivo, listarRecentes, removerRecente, salvarArquivo, importarArquivo } from './persistence';
 
 // ── Utilitários de teste ──────────────────────────────────────────────────────
 
@@ -50,6 +50,36 @@ const localStorageMock = new Proxy(_lsStore, {
   getOwnPropertyDescriptor(target, key) { return Object.getOwnPropertyDescriptor(target, key); },
 });
 (globalThis as any).localStorage = localStorageMock;
+
+// ── Mock document/DOM para exercitar salvarArquivo()/importarArquivo() de
+// verdade (não uma reimplementação da lógica em paralelo) ────────────────────
+// CORRIGIDO/ADICIONADO (ago/2026): até esta sessão, `salvarArquivo` e
+// `importarArquivo` — as duas funções REALMENTE usadas pelo app (salvar() e
+// abrirImportado() em App.tsx) — nunca eram chamadas por nenhum teste; só
+// helpers puros (nomeArquivo, gerarId) e uma reimplementação paralela da
+// lógica de checksum eram testados. Um bug real dentro da função de
+// verdade (nome de campo trocado, condição invertida, checksum calculado
+// sobre o objeto errado) não seria pego. `Blob`/`URL.createObjectURL` já
+// funcionam nativamente no Node 22 (verificado); só `document` precisa de
+// stub mínimo — não dá para trocar o ambiente do vitest para jsdom (afetaria
+// os outros 37 arquivos de teste), então a interceptação do <input type=file>
+// é feita via um mock que devolve o "arquivo selecionado" configurado pelo
+// teste antes de chamar importarArquivo().
+let arquivoSelecionadoMock: { name: string; text: () => Promise<string> } | null = null;
+
+class FakeInputArquivo {
+  type = ''; accept = ''; onchange: (() => any) | null = null;
+  get files() { return arquivoSelecionadoMock ? [arquivoSelecionadoMock] : []; }
+  click() { this.onchange?.(); }
+}
+class FakeAncora {
+  href = ''; download = '';
+  click() { /* no-op — produção só dispara o download do navegador real */ }
+}
+(globalThis as any).document = {
+  createElement: (tag: string) => (tag === 'input' ? new FakeInputArquivo() : new FakeAncora()),
+  body: { appendChild: () => {}, removeChild: () => {} },
+};
 
 // ── Dados de teste ────────────────────────────────────────────────────────────
 const DADOS_VALIDOS = {
@@ -255,5 +285,108 @@ describe('Cenários de borda e segurança', () => {
     const parsed = JSON.parse(json);
     expect(parsed._formato).toBe('LumenSolar');
     expect(parsed._dados).toEqual(DADOS_VALIDOS);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// salvarArquivo()/importarArquivo() DE VERDADE — não a reimplementação acima.
+describe('salvarArquivo() — exercitando a função real de produção', () => {
+  beforeEach(() => {
+    Object.keys(_lsStore).forEach(k => delete _lsStore[k]);
+    arquivoSelecionadoMock = null;
+  });
+
+  it('gera o envelope correto (formato/versão/checksum) e grava nos recentes', async () => {
+    let blobCapturado: Blob | null = null;
+    const origCreateObjectURL = URL.createObjectURL.bind(URL);
+    (URL as any).createObjectURL = (b: Blob) => { blobCapturado = b; return origCreateObjectURL(b); };
+    try {
+      const dados = { ...DADOS_VALIDOS, id: 'proj-001', cliente: { nome: 'Rafael Ribeiro' },
+        dimensionamento: { potenciaInstaladaRealKWp: 5.5 }, precificacao: { precoVenda: 32000 } };
+      const nome = await salvarArquivo(dados);
+
+      expect(nome).toMatch(/^Rafael_Ribeiro_\d{4}-\d{2}-\d{2}\.lumensolar$/);
+      expect(blobCapturado).not.toBeNull();
+
+      const conteudo = JSON.parse(await (blobCapturado as unknown as Blob).text());
+      expect(conteudo._formato).toBe('LumenSolar');
+      expect(conteudo._versao).toBe('2.0');
+      expect(conteudo._dados).toEqual(dados);
+      const hashEsperado = `sha256:${await sha256(JSON.stringify(dados, null, 2))}`;
+      expect(conteudo._checksum).toBe(hashEsperado);
+
+      const recentes = listarRecentes();
+      expect(recentes).toHaveLength(1);
+      expect(recentes[0]).toMatchObject({
+        id: 'proj-001', nomeCliente: 'Rafael Ribeiro',
+        potenciaKWp: 5.5, precoVenda: 32000, nomeArquivo: nome,
+      });
+    } finally {
+      (URL as any).createObjectURL = origCreateObjectURL;
+    }
+  });
+});
+
+describe('importarArquivo() — exercitando a função real de produção', () => {
+  beforeEach(() => {
+    Object.keys(_lsStore).forEach(k => delete _lsStore[k]);
+    arquivoSelecionadoMock = null;
+  });
+
+  it('importa um arquivo íntegro com sucesso e atualiza os recentes', async () => {
+    const dados = { id: 'proj-002', cliente: { nome: 'Ana Souza' }, criadoEm: '2026-05-01T10:00:00.000Z',
+      dimensionamento: { potenciaInstaladaRealKWp: 8.25 }, precificacao: { precoVenda: 45000 } };
+    const arq = await criarArquivoTeste(dados);
+    arquivoSelecionadoMock = { name: 'Ana_Souza.lumensolar', text: async () => JSON.stringify(arq) };
+
+    const resultado = await importarArquivo();
+    expect(resultado).toEqual(dados);
+
+    const recentes = listarRecentes();
+    expect(recentes).toHaveLength(1);
+    expect(recentes[0]).toMatchObject({ id: 'proj-002', nomeCliente: 'Ana Souza', potenciaKWp: 8.25, precoVenda: 45000 });
+  });
+
+  it('resolve null quando o usuário fecha o seletor sem escolher arquivo', async () => {
+    arquivoSelecionadoMock = null; // input.files fica []
+    const resultado = await importarArquivo();
+    expect(resultado).toBeNull();
+    expect(listarRecentes()).toHaveLength(0);
+  });
+
+  it('rejeita com erro descritivo quando o JSON está corrompido/truncado', async () => {
+    arquivoSelecionadoMock = { name: 'quebrado.lumensolar', text: async () => '{"_formato":"LumenSolar","_dados":{trunc' };
+    await expect(importarArquivo()).rejects.toThrow(/JSON válido/);
+  });
+
+  it('rejeita arquivo de outro formato/software (_formato incorreto)', async () => {
+    arquivoSelecionadoMock = { name: 'outro.json', text: async () => JSON.stringify({ _formato: 'OutroApp', _dados: {} }) };
+    await expect(importarArquivo()).rejects.toThrow(/não é um arquivo LumenSolar/);
+  });
+
+  it('rejeita arquivo incompleto (sem _versao ou _dados)', async () => {
+    arquivoSelecionadoMock = { name: 'incompleto.lumensolar', text: async () => JSON.stringify({ _formato: 'LumenSolar' }) };
+    await expect(importarArquivo()).rejects.toThrow(/incompleto ou é de uma versão muito antiga/);
+  });
+
+  it('[REGRESSÃO] rejeita quando o checksum não bate — dados alterados após salvar', async () => {
+    const dados = { id: 'proj-003', cliente: { nome: 'Cliente Alterado' } };
+    const arq = await criarArquivoTeste(dados);
+    // Simula adulteração: o checksum gravado não muda, mas _dados sim —
+    // exatamente o cenário que a validação de checksum existe para pegar.
+    const arqAdulterado = { ...arq, _dados: { ...dados, cliente: { nome: 'Nome Trocado' } } };
+    arquivoSelecionadoMock = { name: 'adulterado.lumensolar', text: async () => JSON.stringify(arqAdulterado) };
+    await expect(importarArquivo()).rejects.toThrow(/corrompido ou modificado/);
+    // Corrompido: os recentes NÃO devem ser atualizados com dado não confiável
+    expect(listarRecentes()).toHaveLength(0);
+  });
+
+  it('aceita arquivo sem _checksum (compatibilidade com formato anterior à validação)', async () => {
+    const dados = { id: 'proj-004', cliente: { nome: 'Legado' } };
+    const arqSemChecksum = { _formato: 'LumenSolar', _versao: '2.0', _criado: '2026-01-01T00:00:00.000Z',
+      _salvo: '2026-01-01T00:00:00.000Z', _app: 'LumenSolar 2.0', _nomeArquivo: 'Legado.lumensolar', _dados: dados };
+    arquivoSelecionadoMock = { name: 'legado.lumensolar', text: async () => JSON.stringify(arqSemChecksum) };
+    const resultado = await importarArquivo();
+    expect(resultado).toEqual(dados);
   });
 });
