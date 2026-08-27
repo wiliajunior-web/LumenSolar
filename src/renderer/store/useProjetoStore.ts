@@ -36,7 +36,19 @@ export interface DadosCliente {
   rg: string;
   estadoCivil: 'solteiro' | 'casado' | 'divorciado' | 'viuvo' | 'outro';
   profissao: string;
-  endereco: string;   // rua, número, bairro, CEP
+  endereco: string;   // rua e número (logradouro) — bairro/CEP são campos próprios abaixo
+  /**
+   * CORRIGIDO (ago/2026): antes não existia — `gerarFormularioCemig.ts` já
+   * lia `cliente?.bairro` (célula obrigatória E22 do Formulário CEMIG
+   * MicroGD, Seção 1), mas o campo nunca existiu em `DadosCliente` nem tinha
+   * input na UI — a leitura sempre resolvia `undefined` e a célula do
+   * formulário oficial saía em branco para qualquer proposta gerada pelo
+   * app. Formalizado como campo próprio (não dá pra extrair de forma
+   * confiável a partir de `endereco` combinado).
+   */
+  bairro: string;
+  /** Ver comentário de `bairro` acima — mesmo bug, célula AS22 (CEP). */
+  cep: string;
   telefone: string;
   email: string;
   cidade: string;
@@ -197,7 +209,7 @@ export const MESES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out
 // estado inicial da store quanto por `novaProposta()` em App.tsx — agora é
 // impossível as duas divergirem de novo.
 export function clientePadrao(): DadosCliente {
-  return { nome:'', cpf:'', rg:'', estadoCivil:'solteiro', profissao:'', endereco:'', telefone:'', email:'', cidade:'', uf:'MG' };
+  return { nome:'', cpf:'', rg:'', estadoCivil:'solteiro', profissao:'', endereco:'', bairro:'', cep:'', telefone:'', email:'', cidade:'', uf:'MG' };
 }
 
 export function consumoPadrao(): EntradaConsumo {

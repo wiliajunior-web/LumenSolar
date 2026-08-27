@@ -90,17 +90,33 @@ export const MAPA_CELULAS = {
   sol_celular:      'O226',  // Celular do solicitante — rótulo L226, mesma linha
   sol_email:        'Y226',  // E-mail do solicitante — rótulo V226:X226, mesma linha
   sol_data:         'C236',  // Local e data — rótulo B234; caixa fica 2 linhas abaixo (B234 é só o rótulo)
+
+  // ── Campos Sim/Não com valor-padrão fixo ────────────────────────────────
+  // BUG CORRIGIDO (ago/2026): estas 5 células já tinham coordenada
+  // documentada em DEFAULTS_CEMIG (comentário `// <célula> — padrão`) desde
+  // que o mapa foi reverificado contra o arquivo oficial, mas nunca tinham
+  // sido adicionadas aqui em MAPA_CELULAS nem escritas por `escrever()` —
+  // DEFAULTS_CEMIG.grid_zero/fast_track/motor_gerador/armazenamento/
+  // telhado_arrendado existiam como valores "prontos para usar" que nenhum
+  // código de fato usava. As 5 células (todas obrigatórias no formulário
+  // oficial) saíam sempre em branco, não com "Não" como o código aparentava
+  // pretender.
+  grid_zero:         'O14',
+  fast_track:        'AL12',
+  motor_gerador:     'AD33',
+  armazenamento:     'R134',
+  telhado_arrendado: 'AF61',
 };
 
 /** Valores padrão para campos CEMIG que raramente mudam */
 const DEFAULTS_CEMIG = {
   tipo_solicitacao: 'Conexão de GD em Unidade Consumidora Existente SEM Alteração de Potência Disponibilizada',
   tipo_edificacao:  'Edificação Individual',
-  grid_zero:        'Não',    // O14 — padrão
-  fast_track:       'Não',    // AL12 — padrão
-  motor_gerador:    'Não',    // AD33 — padrão
-  armazenamento:    'Não',    // R134 — padrão
-  telhado_arrendado:'Não',    // AF61 — padrão
+  grid_zero:        'Não',
+  fast_track:        'Não',
+  motor_gerador:     'Não',
+  armazenamento:     'Não',
+  telhado_arrendado: 'Não',
 };
 
 export function gerarFormularioCemigMicroGD(dados: any): void {
@@ -151,6 +167,14 @@ export function gerarFormularioCemigMicroGD(dados: any): void {
   escrever(MAPA_CELULAS.tipo_solicitacao, DEFAULTS_CEMIG.tipo_solicitacao);
   escrever(MAPA_CELULAS.tipo_edificacao,  DEFAULTS_CEMIG.tipo_edificacao);
   escrever(MAPA_CELULAS.tensao_atend,     tensao);
+  // BUG CORRIGIDO (ago/2026): ver comentário em MAPA_CELULAS — estas 5
+  // células nunca eram escritas, mesmo com os valores-padrão já prontos em
+  // DEFAULTS_CEMIG.
+  escrever(MAPA_CELULAS.grid_zero,         DEFAULTS_CEMIG.grid_zero);
+  escrever(MAPA_CELULAS.fast_track,        DEFAULTS_CEMIG.fast_track);
+  escrever(MAPA_CELULAS.motor_gerador,     DEFAULTS_CEMIG.motor_gerador);
+  escrever(MAPA_CELULAS.armazenamento,     DEFAULTS_CEMIG.armazenamento);
+  escrever(MAPA_CELULAS.telhado_arrendado, DEFAULTS_CEMIG.telhado_arrendado);
 
   // ── Seção 4 — Módulos ────────────────────────────────────────────────
   escrever(MAPA_CELULAS.mod_modelo,       kit?.modeloModulo || '');

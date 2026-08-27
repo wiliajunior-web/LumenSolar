@@ -914,6 +914,28 @@ function TabCliente({ onNext }: { onNext: () => void }) {
             <Campo label="E-mail" hint="Opcional — para contato">
               <input className="inp" value={cliente.email} onChange={e => atualizarCliente({ email: e.target.value })} placeholder="email@exemplo.com" type="email" />
             </Campo>
+            {/*
+              CORRIGIDO (ago/2026): CPF/Endereço/Bairro/CEP nunca tinham input
+              nenhum nesta aba, mesmo já existindo em DadosCliente (cpf) ou
+              sendo lidos por gerarFormularioCemig.ts (bairro/cep, células
+              obrigatórias E22/AS22 do Formulário CEMIG MicroGD) — as células
+              saíam sempre em branco em qualquer formulário gerado pelo app,
+              porque não havia onde o usuário preencher esses dados. Campos
+              opcionais (não bloqueiam avançar) — só afetam o Formulário
+              CEMIG e a Procuração, não o dimensionamento/proposta comercial.
+            */}
+            <Campo label="CPF" hint="Obrigatório para o Formulário CEMIG e a Procuração">
+              <input className="inp" value={cliente.cpf} onChange={e => atualizarCliente({ cpf: formatarCPF(e.target.value) })} placeholder="000.000.000-00" maxLength={14} />
+            </Campo>
+            <Campo label="Endereço (rua e número)">
+              <input className="inp" value={cliente.endereco} onChange={e => atualizarCliente({ endereco: e.target.value })} placeholder="Ex: Rua Principal, 123" />
+            </Campo>
+            <Campo label="Bairro">
+              <input className="inp" value={cliente.bairro} onChange={e => atualizarCliente({ bairro: e.target.value })} />
+            </Campo>
+            <Campo label="CEP">
+              <input className="inp" value={cliente.cep} onChange={e => atualizarCliente({ cep: e.target.value })} placeholder="00000-000" maxLength={9} />
+            </Campo>
           </div>
         </div>
       </div>

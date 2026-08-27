@@ -1,6 +1,15 @@
-import { describe, it, expect } from 'vitest';
-import { checklistDocumentosCEMIG, MAPA_CELULAS } from './gerarFormularioCemig';
+import { describe, it, expect, afterEach } from 'vitest';
+import { readdirSync, unlinkSync } from 'node:fs';
+import { checklistDocumentosCEMIG, gerarFormularioCemigMicroGD, MAPA_CELULAS } from './gerarFormularioCemig';
 import { CHECKLIST_PADRAO_CEMIG_MICROGD, marcarItemGerado, marcarItemAnexado } from '../documentacaoCemig/checklist';
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const XLSX: typeof import('xlsx') = require('xlsx');
+
+function limparArquivosGerados() {
+  for (const f of readdirSync('.')) {
+    if (f.startsWith('FormularioCEMIG_MicroGD_') && f.endsWith('.xlsx')) unlinkSync(f);
+  }
+}
 
 describe('MAPA_CELULAS — posições de célula do Formulario-MicroGD_Rev_N4.xlsx oficial', () => {
   // REGRESSÃO (ago/2026): o mapa antigo tinha 28 das 31 células erradas —
@@ -31,11 +40,59 @@ describe('MAPA_CELULAS — posições de célula do Formulario-MicroGD_Rev_N4.xl
       inv_qtde: 'AI114', inv_pot_total_kw: 'AI116', inv_tensao: 'AI118',
       sol_nome: 'Q220', sol_endereco: 'O222', sol_celular: 'O226',
       sol_email: 'Y226', sol_data: 'C236',
+      // BUG CORRIGIDO (ago/2026): estas 5 células já tinham coordenada
+      // documentada em DEFAULTS_CEMIG mas nunca eram escritas — ver teste
+      // "preenche CPF/Bairro/CEP..." abaixo.
+      grid_zero: 'O14', fast_track: 'AL12', motor_gerador: 'AD33',
+      armazenamento: 'R134', telhado_arrendado: 'AF61',
     });
   });
 
   it('nenhuma célula mapeada aponta para B234 (era o rótulo "Local e data*:" no arquivo oficial, não uma célula em branco)', () => {
     expect(Object.values(MAPA_CELULAS)).not.toContain('B234');
+  });
+});
+
+describe('gerarFormularioCemigMicroGD — exercitando a função real de produção (round-trip .xlsx)', () => {
+  afterEach(() => limparArquivosGerados());
+
+  // BUG CORRIGIDO (ago/2026): `cliente?.bairro`/`cliente?.cep` liam campos
+  // que não existiam em `DadosCliente` (só existia `endereco` combinado) —
+  // as células E22 (Bairro) e AS22 (CEP), obrigatórias no formulário
+  // oficial CEMIG, sempre saíam em branco. `cliente?.cpf` (célula AC18,
+  // também obrigatória) existia no tipo mas não tinha input nenhum na UI, e
+  // por isso também sempre saía em branco na prática. Corrigido formalizando
+  // `bairro`/`cep` em `DadosCliente` e adicionando os 3 campos na aba
+  // Cliente (App.tsx). Este teste lê o .xlsx gerado de volta (não só
+  // `expect(...).not.toThrow()`) para provar que as células realmente saem
+  // preenchidas a partir do formato real de `dados.cliente`.
+  it('preenche CPF/Bairro/CEP e os 5 campos Sim/Não com valor-padrão (antes saíam sempre em branco)', () => {
+    const dados = {
+      cliente: {
+        nome: 'Maria Oliveira', cpf: '123.456.789-00',
+        endereco: 'Rua das Flores, 100', bairro: 'Centro', cep: '38440-000',
+        cidade: 'Araguari', uf: 'MG',
+      },
+      consumo: { tipoLigacao: 'trifasica' },
+      localizacao: {},
+      kit: { potenciaModuloWp: 550, quantidade: 10 },
+      empresa: {},
+    };
+    gerarFormularioCemigMicroGD(dados);
+
+    const gerados = readdirSync('.').filter(f => f.startsWith('FormularioCEMIG_MicroGD_') && f.endsWith('.xlsx'));
+    expect(gerados.length).toBeGreaterThan(0);
+    const wb = XLSX.readFile(gerados[0]);
+    const ws = wb.Sheets['Formulario_Preenchido'];
+
+    expect(ws[MAPA_CELULAS.uc_cpf]?.v).toBe('123.456.789-00');
+    expect(ws[MAPA_CELULAS.uc_bairro]?.v).toBe('Centro');
+    expect(ws[MAPA_CELULAS.uc_cep]?.v).toBe('38440-000');
+    expect(ws[MAPA_CELULAS.grid_zero]?.v).toBe('Não');
+    expect(ws[MAPA_CELULAS.fast_track]?.v).toBe('Não');
+    expect(ws[MAPA_CELULAS.motor_gerador]?.v).toBe('Não');
+    expect(ws[MAPA_CELULAS.armazenamento]?.v).toBe('Não');
+    expect(ws[MAPA_CELULAS.telhado_arrendado]?.v).toBe('Não');
   });
 });
 

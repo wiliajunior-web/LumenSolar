@@ -12,7 +12,7 @@ Desenvolvido pela Lumen Soluções Ltda — Araguari/MG.
 
 | Item | Estado |
 |------|--------|
-| Testes automatizados | **910 passando** (E2E, cálculos, persistência de arquivo .lumensolar, precificação de serviços, proteção CC, cabo CA/disjuntor, FDI, banco de baterias, agrupamento de UCs, cronograma de obra, UTM, checklist de documentação, mapa de células do Formulário CEMIG, dimensionamento Grupo A, wiring do store, geração dos PDFs de proposta, geração do Excel de auditoria, simulação de financiamento/payback, validação de formulário, detecção de cálculo desatualizado, fábricas de estado padrão, paginação da capa do PDF comercial, fórmula NOCT de temperatura de célula, metadados de "recentes" e cancelamento do diálogo de importação) |
+| Testes automatizados | **911 passando** (E2E, cálculos, persistência de arquivo .lumensolar, precificação de serviços, proteção CC, cabo CA/disjuntor, FDI, banco de baterias, agrupamento de UCs, cronograma de obra, UTM, checklist de documentação, mapa de células do Formulário CEMIG, dimensionamento Grupo A, wiring do store, geração dos PDFs de proposta, geração do Excel de auditoria, simulação de financiamento/payback, validação de formulário, detecção de cálculo desatualizado, fábricas de estado padrão, paginação da capa do PDF comercial, fórmula NOCT de temperatura de célula, metadados de "recentes" e cancelamento do diálogo de importação) |
 | Build Windows | ✅ GitHub Actions → artifact `LumenSolar-Windows` |
 | Normas implementadas | NBR 16690, NBR 5410, Lei 14.300/2022, REN ANEEL 1.000/2021 |
 | Tarifa CEMIG | R$1,1827/kWh (Res. ANEEL 3.589/2026) |
@@ -819,6 +819,24 @@ de Situação), dimensionamento (agrupamento/bateria/FDI/perdas), geração de E
   também passa `hspMinimo` (via `HSP_MEDIO_POR_UF[cliente.uf]`, mesma tabela usada por
   `calcularTudo()`), então a autonomia empírica também passa a aparecer na UI, não só o alerta.
 
+- [x] **ALTO — `gerarFormularioCemig.ts`: 3 campos obrigatórios do formulário oficial CEMIG (CPF,
+  Bairro, CEP) sempre saíam em branco; 5 campos Sim/Não nunca eram escritos — corrigido nesta rodada.**
+  `cliente?.bairro`/`cliente?.cep` liam campos que nunca existiram em `DadosCliente` (só existia
+  `endereco` combinado) — as células E22/AS22, obrigatórias no formulário oficial, saíam sempre em
+  branco. `cliente?.cpf` (célula AC18, também obrigatória) existia no tipo mas não tinha input nenhum
+  na aba Cliente da UI (que só coletava nome/cidade/UF/telefone/e-mail), então também sempre saía em
+  branco na prática. Corrigido formalizando `bairro`/`cep` em `DadosCliente` e adicionando 4 novos
+  campos na aba Cliente (CPF — com máscara via `formatarCPF`, já importado mas nunca usado antes;
+  Endereço; Bairro; CEP), todos opcionais (não bloqueiam avançar — só afetam o Formulário CEMIG e a
+  Procuração). Separadamente, `DEFAULTS_CEMIG.grid_zero/fast_track/motor_gerador/armazenamento/
+  telhado_arrendado` já tinham coordenada de célula documentada em comentário (`// O14 — padrão`, etc.
+  — da mesma verificação linha-a-linha contra o arquivo oficial que corrigiu o resto do mapa numa
+  rodada anterior), mas nunca tinham sido adicionadas a `MAPA_CELULAS` nem escritas por `escrever()` —
+  5 células obrigatórias saíam sempre em branco, não com "Não" como o código aparentava pretender.
+  Novo teste lê o `.xlsx` gerado de volta (não só `expect(...).not.toThrow()`) e confirma que as 8
+  células saem preenchidas a partir do formato real de `dados.cliente`; confirmado manualmente que o
+  teste falha contra o código original (as 5 células Sim/Não) antes do fix.
+
 **Achados desta rodada NÃO corrigidos ainda — na fila para a próxima rodada:**
 
 - [ ] **ALTO — `Procuracao.tsx`: campo "estado civil" do outorgante sempre sai como "solteiro(a)"
@@ -833,12 +851,6 @@ de Situação), dimensionamento (agrupamento/bateria/FDI/perdas), geração de E
 - [ ] **ALTO — `DiagramaUnifilarBasico.tsx`: rótulo "REDE CEMIG" fixo no diagrama, para qualquer
   cliente de qualquer uma das 18 distribuidoras cadastradas** (`src/data/distribuidoras.ts`) — o
   arquivo não lê `codigoDistribuidora`. Documento técnico enviado à distribuidora com o nome errado.
-- [ ] **ALTO — `gerarFormularioCemig.ts`: 3 campos obrigatórios do formulário oficial CEMIG (CPF,
-  Bairro, CEP) sempre saem em branco** — `cliente.bairro`/`cliente.cep` não existem em `DadosCliente`
-  (só existe `endereco` combinado) e `cliente.cpf` nunca é preenchido pela UI (aba Cliente só coleta
-  nome/cidade/UF/telefone/e-mail). Mais 5 campos obrigatórios (Grid Zero, Fast Track, Motor Gerador,
-  Armazenamento, Telhado Arrendado) têm valores-padrão `DEFAULTS_CEMIG` declarados mas NUNCA escritos
-  em nenhuma célula — código morto que aparenta preencher o formulário mas não preenche.
 - [ ] **BAIXO — `PlantaDeSituacao.tsx`: UTM digitada manualmente aparece sem separador de milhar**,
   inconsistente com a UTM geocodificada na mesma tabela — `localizacao.utmE`/`utmN` são `string`, e
   `String.prototype.toLocaleString` (herdado de `Object.prototype`) ignora o locale e não formata nada.
