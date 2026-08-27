@@ -29,10 +29,16 @@ export function validarCliente(cliente: any): ResultadoValidacao {
 export function validarConsumo(consumo: any): ResultadoValidacao {
   const erros: ErroValidacao[] = [];
   const mesesValidos = (consumo.contas ?? []).filter((c: any) => c.kWh > 0).length;
+  // BUG CORRIGIDO (ago/2026): havia DOIS `if` checando exatamente a mesma
+  // condição (cipMensalRS < 0) e empurrando o mesmo erro — quando o usuário
+  // digitava um CIP negativo, `erros` acumulava a mensagem "CIP/COSIP não
+  // pode ser negativo" duas vezes. App.tsx renderiza `erros` diretamente
+  // (lista numerada + alerta \n-separado), então o usuário via o mesmo erro
+  // listado 1. e 2. — cosmético, mas real (não pego pelo teste existente,
+  // que só checava `erros.some(...)`, indiferente a duplicatas).
   if ((consumo.cipMensalRS ?? 0) < 0) erros.push({ campo: 'cip', mensagem: 'CIP/COSIP não pode ser negativo' });
   if (mesesValidos < 3) erros.push({ campo: 'contas', mensagem: `Preencha pelo menos 3 meses de consumo (${mesesValidos}/3 preenchidos)` });
   if (!consumo.tarifaRealKWhComICMS || consumo.tarifaRealKWhComICMS <= 0) erros.push({ campo: 'tarifa', mensagem: 'Tarifa (R$/kWh) obrigatória — veja a coluna Preço Unit. da conta' });
-  if (consumo.cipMensalRS < 0) erros.push({ campo: 'cip', mensagem: 'CIP/COSIP não pode ser negativo' });
 
   const status: StatusPasso = erros.length === 0 ? 'completo'
     : mesesValidos > 0 ? 'parcial' : 'vazio';

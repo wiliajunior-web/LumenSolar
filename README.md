@@ -12,7 +12,7 @@ Desenvolvido pela Lumen Soluções Ltda — Araguari/MG.
 
 | Item | Estado |
 |------|--------|
-| Testes automatizados | **895 passando** (E2E, cálculos, persistência de arquivo .lumensolar, precificação de serviços, proteção CC, cabo CA/disjuntor, FDI, banco de baterias, agrupamento de UCs, cronograma de obra, UTM, checklist de documentação, mapa de células do Formulário CEMIG, dimensionamento Grupo A, wiring do store, geração dos PDFs de proposta, geração do Excel de auditoria, simulação de financiamento/payback) |
+| Testes automatizados | **896 passando** (E2E, cálculos, persistência de arquivo .lumensolar, precificação de serviços, proteção CC, cabo CA/disjuntor, FDI, banco de baterias, agrupamento de UCs, cronograma de obra, UTM, checklist de documentação, mapa de células do Formulário CEMIG, dimensionamento Grupo A, wiring do store, geração dos PDFs de proposta, geração do Excel de auditoria, simulação de financiamento/payback, validação de formulário) |
 | Build Windows | ✅ GitHub Actions → artifact `LumenSolar-Windows` |
 | Normas implementadas | NBR 16690, NBR 5410, Lei 14.300/2022, REN ANEEL 1.000/2021 |
 | Tarifa CEMIG | R$1,1827/kWh (Res. ANEEL 3.589/2026) |
@@ -637,6 +637,24 @@ divergente foi encontrado no restante do arquivo.
   caso "não cobre no ano 1, cobre depois" continua funcionando normalmente (`paybackAnos > 0`).
   Encontrado por subagente dedicado a `indicadores.ts`/`fluxoCaixa.ts`, confirmado manualmente antes
   da correção.
+- [x] Auditados em paralelo por 4 subagentes dedicados, cada um lendo os arquivos por inteiro e
+  verificando as fórmulas à mão (não só conferindo autoconsistência com os testes): `price.ts` +
+  `fluxoCaixa.ts` (payback do fluxo à vista confirmado estruturalmente imune ao bug de
+  `simularFinanciamento` acima — `investimentoInicial` é validado `> 0` na entrada, então o saldo
+  sempre começa negativo) + `gerarCronograma.ts`; `calcularCustos.ts` + `calcularAgrupamento.ts` +
+  `calcularBateria.ts`; `calculoFioB.ts` (confirmado como a fonte canônica de enquadramento/
+  escalonamento realmente usada por `useProjetoStore.ts` — não é código morto) + `calcularPrecificacao.ts`
+  + `calcularTabelaAtualizada.ts`/`indiceCorrecao.ts`; `converterCoordenadas.ts` + `tileMercator.ts` +
+  `persistence.ts` + `utils.ts`. Nenhum bug de cálculo novo encontrado nesses arquivos.
+- [x] **BAIXO — `validarConsumo()` (`renderer/services/validation.ts`) tinha DOIS `if` idênticos
+  checando `cipMensalRS < 0` e empurrando o mesmo erro duas vezes.** Encontrado pelo mesmo subagente
+  que auditou `validation.ts`. Quando o usuário digitava um valor de CIP/COSIP negativo, a lista de
+  erros continha "CIP/COSIP não pode ser negativo" duplicada — `App.tsx` renderiza essa lista
+  diretamente (numerada + alerta `\n`-separado), então o usuário via o mesmo erro nas posições 1. e
+  2. Cosmético (não bloqueava nem alterava nenhum cálculo), mas real — o teste existente (V11) usava
+  `.some(...)`, que não detecta duplicatas. Corrigido: removida a segunda checagem redundante. Novo
+  teste de regressão (V11b) exige exatamente 1 erro de campo `'cip'`, não `.some()` — esse teste
+  falharia com o código antigo.
 
 **Não corrigido nesta auditoria — requer trabalho dedicado:**
 

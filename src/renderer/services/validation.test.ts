@@ -97,6 +97,16 @@ describe('Validação — Consumo', () => {
     expect(r.erros.some(e => e.campo === 'cip')).toBe(true);
   });
 
+  // [REGRESSÃO ago/2026] Havia dois `if` idênticos checando `cipMensalRS < 0`
+  // em `validarConsumo`, empurrando o MESMO erro duas vezes — o usuário via
+  // "CIP/COSIP não pode ser negativo" listado 1. e 2. no alerta. O teste V11
+  // acima usa `.some(...)`, que não detecta duplicatas; este exige exatamente
+  // UM erro de campo 'cip'.
+  it('[V11b] CIP negativo → exatamente UM erro de campo "cip" (não duplicado)', () => {
+    const r = validarConsumo({ ...consumoCompleto, cipMensalRS: -10 });
+    expect(r.erros.filter(e => e.campo === 'cip').length).toBe(1);
+  });
+
   it('[V12] CIP = 0 → válido (município pode não cobrar)', () => {
     const r = validarConsumo({ ...consumoCompleto, cipMensalRS: 0 });
     expect(r.erros.some(e => e.campo === 'cip')).toBe(false);
