@@ -12,7 +12,7 @@ Desenvolvido pela Lumen Soluções Ltda — Araguari/MG.
 
 | Item | Estado |
 |------|--------|
-| Testes automatizados | **909 passando** (E2E, cálculos, persistência de arquivo .lumensolar, precificação de serviços, proteção CC, cabo CA/disjuntor, FDI, banco de baterias, agrupamento de UCs, cronograma de obra, UTM, checklist de documentação, mapa de células do Formulário CEMIG, dimensionamento Grupo A, wiring do store, geração dos PDFs de proposta, geração do Excel de auditoria, simulação de financiamento/payback, validação de formulário, detecção de cálculo desatualizado, fábricas de estado padrão, paginação da capa do PDF comercial, fórmula NOCT de temperatura de célula, metadados de "recentes" e cancelamento do diálogo de importação) |
+| Testes automatizados | **910 passando** (E2E, cálculos, persistência de arquivo .lumensolar, precificação de serviços, proteção CC, cabo CA/disjuntor, FDI, banco de baterias, agrupamento de UCs, cronograma de obra, UTM, checklist de documentação, mapa de células do Formulário CEMIG, dimensionamento Grupo A, wiring do store, geração dos PDFs de proposta, geração do Excel de auditoria, simulação de financiamento/payback, validação de formulário, detecção de cálculo desatualizado, fábricas de estado padrão, paginação da capa do PDF comercial, fórmula NOCT de temperatura de célula, metadados de "recentes" e cancelamento do diálogo de importação) |
 | Build Windows | ✅ GitHub Actions → artifact `LumenSolar-Windows` |
 | Normas implementadas | NBR 16690, NBR 5410, Lei 14.300/2022, REN ANEEL 1.000/2021 |
 | Tarifa CEMIG | R$1,1827/kWh (Res. ANEEL 3.589/2026) |
@@ -808,6 +808,17 @@ de Situação), dimensionamento (agrupamento/bateria/FDI/perdas), geração de E
   Corrigido com `input.oncancel = () => resolve(null)`. Novo teste no mock simula a decisão real do
   navegador (dispara `oncancel`, não `onchange`, quando o usuário cancela).
 
+- [x] **MÉDIO — `calcularBateria.ts`: alerta de segurança "autonomia mínima recomendada: 2 dias"
+  nunca disparava em produção — corrigido nesta rodada.** O `if (autonomiaDias < 2)` estava aninhado
+  dentro de `if (p.hspMinimo)`, e o único call site real (`App.tsx`, painel "Dimensionamento de Banco
+  de Baterias") nunca passava `hspMinimo` — um sistema offgrid configurado com autonomia insuficiente
+  (inclusive 0 dias) nunca recebia aviso nenhum na UI. O teste que cobria esse alerta só passava porque
+  passava `hspMinimo` manualmente, cenário que a produção nunca reproduzia. Corrigido desacoplando o
+  check de autonomia mínima (que não depende de HSP — é regra de segurança independente, curso slide
+  1016) do cálculo de autonomia empírica (Eq. 6.13, que sim depende de HSP). De brinde, `App.tsx` agora
+  também passa `hspMinimo` (via `HSP_MEDIO_POR_UF[cliente.uf]`, mesma tabela usada por
+  `calcularTudo()`), então a autonomia empírica também passa a aparecer na UI, não só o alerta.
+
 **Achados desta rodada NÃO corrigidos ainda — na fila para a próxima rodada:**
 
 - [ ] **ALTO — `Procuracao.tsx`: campo "estado civil" do outorgante sempre sai como "solteiro(a)"
@@ -828,10 +839,6 @@ de Situação), dimensionamento (agrupamento/bateria/FDI/perdas), geração de E
   nome/cidade/UF/telefone/e-mail). Mais 5 campos obrigatórios (Grid Zero, Fast Track, Motor Gerador,
   Armazenamento, Telhado Arrendado) têm valores-padrão `DEFAULTS_CEMIG` declarados mas NUNCA escritos
   em nenhuma célula — código morto que aparenta preencher o formulário mas não preenche.
-- [ ] **MÉDIO — `calcularBateria.ts`: alerta de segurança "autonomia mínima recomendada: 2 dias"
-  nunca dispara em produção** — só é calculado dentro de `if (p.hspMinimo)`, e o único call site real
-  (`App.tsx`) nunca passa esse parâmetro (embora o valor já exista na store). Um sistema offgrid
-  configurado com autonomia insuficiente nunca recebe aviso nenhum na UI.
 - [ ] **BAIXO — `PlantaDeSituacao.tsx`: UTM digitada manualmente aparece sem separador de milhar**,
   inconsistente com a UTM geocodificada na mesma tabela — `localizacao.utmE`/`utmN` são `string`, e
   `String.prototype.toLocaleString` (herdado de `Object.prototype`) ignora o locale e não formata nada.

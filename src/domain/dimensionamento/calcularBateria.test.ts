@@ -141,4 +141,37 @@ describe('calcularBancoBaterias — autonomia empírica (offgrid) abaixo do mín
     expect(r.autonomiaEmpirica).toBeCloseTo(5.5, 1);
     expect(r.alertas.some(a => a.includes('Autonomia mínima recomendada'))).toBe(true);
   });
+
+  // BUG CORRIGIDO (ago/2026): o alerta acima só era calculado DENTRO do
+  // `if (p.hspMinimo)` — um parâmetro opcional que o único call site real do
+  // app (App.tsx, painel "Dimensionamento de Banco de Baterias") NUNCA
+  // passava (confirmado por grep em App.tsx antes do fix). Resultado: em
+  // produção, um sistema offgrid configurado com autonomia insuficiente
+  // nunca disparava alerta nenhum — o teste acima só passava porque passa
+  // `hspMinimo` manualmente, cenário que a produção jamais reproduzia. Este
+  // teste reproduz exatamente a chamada real (sem `hspMinimo`), incluindo o
+  // caso extremo de autonomia=0 dias citado na auditoria.
+  it('[REGRESSÃO] autonomia insuficiente dispara alerta MESMO SEM hspMinimo (chamada real de App.tsx)', () => {
+    const r1dia = calcularBancoBaterias({
+      consumoDiarioKWh: 5,
+      tipoBateria: 'estacionaria_comum',
+      tipoSistema: 'offgrid_sfi',
+      autonomia: 1,
+      tensaoSistemaV: 12,
+      capacidadeBateriaAh: 100,
+      // sem hspMinimo — é assim que App.tsx chama
+    });
+    expect(r1dia.autonomiaEmpirica).toBeUndefined(); // não dá pra calcular sem HSP
+    expect(r1dia.alertas.some(a => a.includes('Autonomia mínima recomendada'))).toBe(true);
+
+    const r0dias = calcularBancoBaterias({
+      consumoDiarioKWh: 5,
+      tipoBateria: 'estacionaria_comum',
+      tipoSistema: 'offgrid_sfi',
+      autonomia: 0,
+      tensaoSistemaV: 12,
+      capacidadeBateriaAh: 100,
+    });
+    expect(r0dias.alertas.some(a => a.includes('Autonomia mínima recomendada'))).toBe(true);
+  });
 });

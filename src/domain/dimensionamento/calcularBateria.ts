@@ -146,9 +146,21 @@ export function calcularBancoBaterias(p: ParamsBateria): ResultadoBateria {
         `Autonomia empírica (Eq. 6.13): N = 0.48×${p.hspMinimo} + 4.58 = ${autonomiaEmpirica} dias. ` +
         `Valor informado: ${autonomiaDias} dias.`
       );
-      if (autonomiaDias < 2) {
-        alertas.push('Autonomia mínima recomendada: 2 dias (curso slide 1016).');
-      }
+    }
+    // BUG CORRIGIDO (ago/2026): este alerta de segurança estava dentro do
+    // `if (p.hspMinimo)` acima, então só disparava quando o chamador
+    // informava HSP mínimo do local — um parâmetro opcional que o único
+    // call site real do app (App.tsx, painel "Dimensionamento de Banco de
+    // Baterias") nunca passava. Resultado: um sistema offgrid configurado
+    // com autonomia insuficiente (inclusive 0 dias) nunca recebia nenhum
+    // alerta na UI — o alerta só era testado em `calcularBateria.test.ts`,
+    // que passa `hspMinimo` manualmente, cenário que a produção nunca
+    // reproduzia. A recomendação de autonomia mínima (curso slide 1016) não
+    // depende de HSP — é uma regra de segurança independente — então o
+    // check precisa rodar sempre que `autonomiaDias` existir, não só quando
+    // a autonomia empírica (que sim depende de HSP) também é calculada.
+    if (autonomiaDias !== undefined && autonomiaDias < 2) {
+      alertas.push('Autonomia mínima recomendada: 2 dias (curso slide 1016).');
     }
   }
 

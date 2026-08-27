@@ -2162,6 +2162,16 @@ function TabKit({ onPrev, onNext }: { onPrev:()=>void; onNext:()=>void }) {
           capacidadeBateriaAh: capBatAh,
           iscArranjoA: s.kit.iscA,
           nStringsParalelo: s.kit.numStrings || 1,
+          // CORRIGIDO (ago/2026): faltava esse parâmetro — sem ele, o alerta
+          // de autonomia empírica (Eq. 6.13) nunca era calculado aqui (o
+          // alerta de "autonomia mínima 2 dias" agora é independente disso,
+          // ver calcularBateria.ts, mas a autonomia EMPÍRICA continua
+          // precisando de HSP para aparecer). Mesma tabela usada por
+          // `calcularTudo()` (useProjetoStore.ts) para o dimensionamento
+          // principal — `HSP_MEDIO_POR_UF` indexado direto (não `hspPorUF()`,
+          // que lança exceção para UF vazia/desconhecida; aqui precisa ser
+          // silenciosamente `undefined` até o usuário preencher a UF).
+          hspMinimo: s.cliente.uf ? HSP_MEDIO_POR_UF[s.cliente.uf.toUpperCase()] : undefined,
         });
         const nomes: Record<string,string> = {
           estacionaria_comum:'Pb-ácido estacionária', ciclo_profundo_opzs:'OPzS ciclo profundo',
