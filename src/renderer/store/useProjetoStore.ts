@@ -131,6 +131,22 @@ export interface EntradaKit {
   // Estratégia de dimensionamento
   percentualCompensacaoDesejado?: number; // 1.0 = cobrir 100% do consumo; >1 = superdimensionar
   motivoSuperdimensionamento?: string;    // justificativa quando percentual > 1.0
+  /**
+   * Formalizados na interface em ago/2026 (mesmo padrão de `corrMaxMpptA`
+   * acima): já existiam no objeto de estado inicial e tinham input próprio
+   * em App.tsx, mas eram acessados via `(kit as any).campo` em todo o app —
+   * nunca estiveram no tipo. Isso é o que permitiu `novaProposta()` (App.tsx)
+   * resetar o kit com um literal parcial sem que o TypeScript acusasse os
+   * campos faltando — ver BUG CORRIGIDO no reset de `novaProposta()`.
+   */
+  /** Comprimento do cabo CA: inversor → QDG (m) — usado por calcularCaboCA/DUB. */
+  comprimentoCaboCAm: number;
+  /** Temperatura ambiente/telhado (°C) — usada por calcularCaboCA e calcularProtecaoCC. */
+  temperaturaInstalacaoC: number;
+  /** Potência atual (kWp) já instalada — só relevante em expansão de usina existente (GD com alteração de potência). */
+  potenciaAtualKWp: number;
+  /** Data do protocolo de acesso ORIGINAL — só relevante em expansão de usina existente. */
+  dataProtocoloOriginal: string;
 }
 
 export interface EntradaPrecificacao {
@@ -155,6 +171,103 @@ export interface IndicadoresFinanceiros {
 }
 
 export const MESES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+
+// ─── Estado padrão ("nova proposta") — FÁBRICAS, não constantes congeladas ──
+// BUG CORRIGIDO (ago/2026): `novaProposta()` em App.tsx montava seu próprio
+// literal parcial de `cliente`/`consumo`/`kit`/`preco` para resetar o store,
+// em vez de reusar o mesmo default do estado inicial da store — exatamente o
+// padrão "mesma lógica reimplementada em dois lugares diverge" encontrado
+// repetidamente nesta auditoria (Fio B em App.tsx/gerarExcel.ts, etc.). O
+// literal de `novaProposta()` estava desatualizado: faltavam por completo
+// `grupoTensao/agrupamentoAtivo/unidadesConsumidoras/historicoFP/historicoP/
+// tePontaKWh/teForaPontaKWh/tusdPontaKWh/tusdForaPontaKWh/tarifaDemandaKW/
+// demandaContratadaKW/demandaMedidaFPkW` em `consumo`, e `corrMaxMpptA/
+// percentualCompensacaoDesejado/motivoSuperdimensionamento/comprimentoCaboCAm/
+// temperaturaInstalacaoC/potenciaAtualKWp/dataProtocoloOriginal` em `kit` — o
+// `as any` no `setState(...)` escondia isso do TypeScript. Resultado prático:
+// ao clicar "+ Nova Proposta" depois de uma proposta Grupo A, `grupoTensao`
+// ficava `undefined` (não voltava a `'B'`) — o toggle Grupo A/B (painel
+// Consumo) ficava sem nenhum botão selecionado, e o `<select>` de
+// `motivoSuperdimensionamento` virava um controlled→uncontrolled input.
+//
+// Fábricas (funções, não objetos) porque `kit.dataProtocoloAcesso` usa
+// `new Date()` — um objeto congelado no topo do módulo travaria essa data no
+// momento em que o app foi ABERTO, não no momento em que "Nova Proposta" foi
+// clicada (app Electron pode ficar aberto por dias). Usadas tanto pelo
+// estado inicial da store quanto por `novaProposta()` em App.tsx — agora é
+// impossível as duas divergirem de novo.
+export function clientePadrao(): DadosCliente {
+  return { nome:'', cpf:'', rg:'', estadoCivil:'solteiro', profissao:'', endereco:'', telefone:'', email:'', cidade:'', uf:'MG' };
+}
+
+export function consumoPadrao(): EntradaConsumo {
+  return {
+    contas: MESES.map(mes => ({ mes, kWh:0, valorRS:0 })),
+    codigoDistribuidora: 'CEMIG',
+    tipoLigacao: 'monofasica',
+    cipMensalRS: 18,
+    tarifaRealKWhComICMS: 0,
+    // Grupo A — Média Tensão
+    grupoTensao: 'B',
+    agrupamentoAtivo: false,
+    unidadesConsumidoras: [],
+    historicoFP: [],
+    historicoP: [],
+    tePontaKWh: 0,
+    teForaPontaKWh: 0,
+    tusdPontaKWh: 0,
+    tusdForaPontaKWh: 0,
+    tarifaDemandaKW: 0,
+    demandaContratadaKW: 0,
+    demandaMedidaFPkW: 0,
+  };
+}
+
+export function kitPadrao(): EntradaKit {
+  return {
+    tipoModulo: 'bifacial_ntype',
+    marcaModulo:'', modeloModulo:'',
+    potenciaModuloWp:550, quantidade:0,
+    marcaInversor:'', modeloInversor:'',
+    potenciaInversorKW:0, eficienciaInversorPercent:98.4,
+    custoKitRS:0,
+    dataProtocoloAcesso: new Date().toISOString().slice(0,10),
+    // Specs módulo
+    vmppV:0, imppA:0, vocV:0, iscA:0,
+    comprimentoMm:0, larguraMm:0, pesoKgModulo:0,
+    certificacoes:'INMETRO, IEC 61215, IEC 61730',
+    garantiaProdutoAnos:12, garantiaPotenciaAnos:25, potenciaGarantidaPercent:80,
+    // Strings
+    numStrings:1, modulosPorString:1,
+    // Specs inversor
+    faixaMpptMinV:0, faixaMpptMaxV:0, tensaoMaxEntradaV:0,
+    tensaoSaidaV:220, corrMaxSaidaA:0, numMppt:1, corrMaxMpptA:0,
+    ipGabinete:'IP65', fatorPotencia:'>0.99', thd:'<3%',
+    percentualCompensacaoDesejado:1.0, motivoSuperdimensionamento:'',
+    // Cabo CA e proteção (NBR 5410)
+    comprimentoCaboCAm:10, temperaturaInstalacaoC:40,
+    // Expansão de usina existente (GD Existente COM Alteração de Potência)
+    potenciaAtualKWp:0, dataProtocoloOriginal:'',
+  };
+}
+
+export function precoPadrao(empresa: DadosEmpresa): EntradaPrecificacao {
+  return {
+    estruturaRS:0, materiaisEletricosRS:0, maoDeObraRS:0,
+    projetoArtRS: empresa.valorProjetoArt, outrosCustosRS:0,
+    aliquotaImpostos: empresa.aliquotaImpostos, margemDesejada: empresa.margemPadrao,
+  };
+}
+
+/**
+ * "Assinatura" das entradas que alimentam `calcularTudo()` — usada para
+ * detectar quando os resultados calculados (dimensionamento/indicadores/
+ * documentos) ficaram DESATUALIZADOS em relação aos dados atuais do projeto.
+ * Ver BUG CORRIGIDO no comentário de `ultimoCalculoAssinatura` abaixo.
+ */
+export function assinaturaEntradasCalculo(s: Pick<ProjetoState, 'cliente'|'consumo'|'kit'|'empresa'|'preco'>): string {
+  return JSON.stringify({ cliente: s.cliente, consumo: s.consumo, kit: s.kit, empresa: s.empresa, preco: s.preco });
+}
 
 interface ProjetoState {
   empresa: DadosEmpresa;
@@ -183,6 +296,25 @@ interface ProjetoState {
    */
   resultadoGrupoA: ResultadoGrupoA | null;
   checklistDocumentacao: ItemChecklistDocumentacao[];
+  /**
+   * BUG CORRIGIDO (ago/2026): `calcularTudo()` só roda quando o usuário clica
+   * "Calcular resultado completo" (aba Preço) — por desenho, não recalcula a
+   * cada tecla digitada. Mas nada impedia o usuário de, DEPOIS de calcular,
+   * voltar para Consumo/Kit/Preço, editar um valor (distribuidora, tarifa,
+   * quantidade de módulos, margem...) e ir direto para a aba Resultado (ou
+   * gerar um PDF/Excel) sem recalcular — a navegação lateral não é bloqueada
+   * por etapa. `dimensionamento`/`indicadores`/etc. continuavam com os
+   * números do cálculo ANTERIOR, e o guard existente em TabResultado
+   * (`!s.dimensionamento`) só protege contra "nunca calculou", não contra
+   * "calculou, mas os dados mudaram depois" — resultado: proposta entregue
+   * ao cliente com economia/payback/TIR calculados a partir de uma tarifa ou
+   * quantidade de módulos que já não é a que aparece no resto do mesmo
+   * documento. Guarda a assinatura (`assinaturaEntradasCalculo`) das
+   * entradas no momento do último cálculo bem-sucedido; comparada contra a
+   * assinatura atual em App.tsx (`calculoDesatualizado`) para avisar o
+   * usuário e bloquear a geração de documentos até recalcular.
+   */
+  ultimoCalculoAssinatura: string | null;
 
   atualizarEmpresa: (p: Partial<DadosEmpresa>) => void;
   atualizarCliente: (p: Partial<DadosCliente>) => void;
@@ -202,65 +334,18 @@ interface ProjetoState {
 
 export const useProjetoStore = create<ProjetoState>((set, get) => ({
   empresa: DADOS_EMPRESA_PADRAO,
-  cliente: { nome:'', cpf:'', rg:'', estadoCivil:'solteiro', profissao:'', endereco:'', telefone:'', email:'', cidade:'', uf:'MG' },
-  consumo: {
-    contas: MESES.map(mes => ({ mes, kWh:0, valorRS:0 })),
-    codigoDistribuidora: 'CEMIG',
-    tipoLigacao: 'monofasica',
-    cipMensalRS: 18,
-    tarifaRealKWhComICMS: 0,
-    // Grupo A — Média Tensão
-    grupoTensao: 'B' as 'B' | 'A',
-    agrupamentoAtivo: false,
-    unidadesConsumidoras: [] as Array<{id:string;historico:number[];tipoLigacao:string;percentualCredito:number}>,
-
-    historicoFP: [] as number[],
-    historicoP: [] as number[],
-    tePontaKWh: 0,
-    teForaPontaKWh: 0,
-    tusdPontaKWh: 0,
-    tusdForaPontaKWh: 0,
-    tarifaDemandaKW: 0,
-    demandaContratadaKW: 0,
-    demandaMedidaFPkW: 0,
-  },
+  cliente: clientePadrao(),
+  consumo: consumoPadrao(),
   localizacao: LOCALIZACAO_PADRAO,
-  kit: {
-    tipoModulo: 'bifacial_ntype',
-    marcaModulo:'', modeloModulo:'',
-    potenciaModuloWp:550, quantidade:0,
-    marcaInversor:'', modeloInversor:'',
-    potenciaInversorKW:0, eficienciaInversorPercent:98.4,
-    custoKitRS:0,
-    dataProtocoloAcesso: new Date().toISOString().slice(0,10),
-    // Specs módulo
-    vmppV:0, imppA:0, vocV:0, iscA:0,
-    comprimentoMm:0, larguraMm:0, pesoKgModulo:0,
-    certificacoes:'INMETRO, IEC 61215, IEC 61730',
-    garantiaProdutoAnos:12, garantiaPotenciaAnos:25, potenciaGarantidaPercent:80,
-    // Strings
-    numStrings:1, modulosPorString:1,
-    // Specs inversor
-    faixaMpptMinV:0, faixaMpptMaxV:0, tensaoMaxEntradaV:0,
-    tensaoSaidaV:220, corrMaxSaidaA:0, numMppt:1, corrMaxMpptA:0,
-    ipGabinete:'IP65', fatorPotencia:'>0.99', thd:'<3%',
-    percentualCompensacaoDesejado:1.0, motivoSuperdimensionamento:'',
-    // Cabo CA e proteção (NBR 5410)
-    comprimentoCaboCAm:10, temperaturaInstalacaoC:40,
-    // Expansão de usina existente (GD Existente COM Alteração de Potência)
-    potenciaAtualKWp:0, dataProtocoloOriginal:'',
-  },
-  preco: {
-    estruturaRS:0, materiaisEletricosRS:0, maoDeObraRS:0,
-    projetoArtRS:500, outrosCustosRS:0,
-    aliquotaImpostos:0.06, margemDesejada:0.15,
-  },
+  kit: kitPadrao(),
+  preco: precoPadrao(DADOS_EMPRESA_PADRAO),
   consumoMedioMensalKWh:null, valorMedioMensalRS:null,
   dimensionamento:null, enquadramento:null,
   custosRecorrentes:null, precificacao:null,
   percentuaisFioBPorAno:{}, detalhamentoPerdas:[], indicadores:null,
   resultadoGrupoA:null,
   checklistDocumentacao: CHECKLIST_PADRAO_CEMIG_MICROGD,
+  ultimoCalculoAssinatura: null,
 
   atualizarEmpresa: p => set(s => ({ empresa:{...s.empresa,...p} })),
   atualizarCliente: p => set(s => ({ cliente:{...s.cliente,...p} })),
@@ -419,6 +504,14 @@ export const useProjetoStore = create<ProjetoState>((set, get) => ({
       geracaoMensalKWh:gen12,
       simulacoesFinanciamento:simulacoes,
     };
-    set({consumoMedioMensalKWh:mediaKWh,valorMedioMensalRS:mediaRS,dimensionamento,enquadramento,custosRecorrentes,precificacao,percentuaisFioBPorAno:pfb,detalhamentoPerdas:perdas.detalhamento,indicadores,resultadoGrupoA});
+    // Assinatura calculada com o estado FINAL (get() de novo, não as variáveis
+    // desestruturadas no topo da função): `preco` pode ter sido auto-preenchido
+    // pelo `set({preco:prc})` alguns passos acima quando estruturaRS/maoDeObraRS
+    // ainda estavam zerados — precisa refletir o valor que efetivamente ficou
+    // salvo, senão a assinatura ficaria "desatualizada" na hora em que acabou
+    // de calcular.
+    const estadoFinal = get();
+    const assinatura = assinaturaEntradasCalculo(estadoFinal);
+    set({consumoMedioMensalKWh:mediaKWh,valorMedioMensalRS:mediaRS,dimensionamento,enquadramento,custosRecorrentes,precificacao,percentuaisFioBPorAno:pfb,detalhamentoPerdas:perdas.detalhamento,indicadores,resultadoGrupoA,ultimoCalculoAssinatura:assinatura});
   },
 }));

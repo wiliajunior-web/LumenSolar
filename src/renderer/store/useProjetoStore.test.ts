@@ -1,10 +1,14 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { useProjetoStore } from './useProjetoStore';
+import {
+  useProjetoStore, clientePadrao, consumoPadrao, kitPadrao, precoPadrao,
+  assinaturaEntradasCalculo,
+} from './useProjetoStore';
 import { calcularDimensionamentoGrupoA } from '@domain/dimensionamento/calcularGrupoA';
 import { calcularPerdas } from '@domain/dimensionamento/calcularPerdas';
 import { dimensionarSistema, ajustarDimensionamentoParaQuantidadeReal } from '@domain/dimensionamento/dimensionar';
 import { hspPorUF } from '@data/hspPorUF';
 import { PRESETS_MODULO } from '@data/presetsModulo';
+import { DADOS_EMPRESA_PADRAO } from '@data/empresa';
 
 // useProjetoStore.ts (o motor de cálculo central do app — calcularTudo())
 // tinha ZERO cobertura de teste antes da auditoria de ago/2026. Isto é
@@ -15,28 +19,18 @@ import { PRESETS_MODULO } from '@data/presetsModulo';
 // não quebra o build nem o tsc, só produz números errados silenciosamente.
 
 function resetStore() {
+  // Usa a MESMA fábrica que a store e App.tsx (novaProposta()) usam — não
+  // mais uma cópia própria do default, que é exatamente o padrão de bug
+  // ("mesma lógica duplicada diverge") corrigido nesta rodada. `contas` aqui
+  // difere do default (mês 1 com consumo real) porque os testes de Grupo B
+  // abaixo precisam de consumo médio > 0 para calcularTudo() não lançar.
   useProjetoStore.setState({
-    cliente: { nome:'', cpf:'', rg:'', estadoCivil:'solteiro', profissao:'', endereco:'', telefone:'', email:'', cidade:'', uf:'MG' },
+    cliente: clientePadrao(),
     consumo: {
+      ...consumoPadrao(),
       contas: Array.from({length:12},(_,i)=>({mes:`M${i+1}`,kWh: i===0?500:0, valorRS: i===0?400:0})),
-      codigoDistribuidora: 'CEMIG',
-      tipoLigacao: 'monofasica',
-      cipMensalRS: 18,
-      tarifaRealKWhComICMS: 0,
-      grupoTensao: 'B',
-      agrupamentoAtivo: false,
-      unidadesConsumidoras: [],
-      historicoFP: [],
-      historicoP: [],
-      tePontaKWh: 0,
-      teForaPontaKWh: 0,
-      tusdPontaKWh: 0,
-      tusdForaPontaKWh: 0,
-      tarifaDemandaKW: 0,
-      demandaContratadaKW: 0,
-      demandaMedidaFPkW: 0,
     },
-  } as any);
+  });
 }
 
 describe('useProjetoStore.calcularTudo() — resultadoGrupoA', () => {
@@ -170,5 +164,91 @@ describe('useProjetoStore.calcularTudo() — [REGRESSÃO ago/2026] dimensionamen
     // A geração/indicadores agora batem com o kit real, não mais com a
     // recomendação — a raiz do bug corrigido nesta auditoria.
     expect(s2.dimensionamento!.geracaoMensalEstimadaKWh).not.toBeCloseTo(recomendado.geracaoMensalEstimadaKWh, 1);
+  });
+});
+
+// [REGRESSÃO ago/2026] `novaProposta()` (App.tsx) resetava cliente/consumo/kit
+// com um literal próprio (via `as any`) que divergia do default real da
+// store — faltavam por completo `grupoTensao`/`agrupamentoAtivo`/
+// `unidadesConsumidoras`/histórico Grupo A em `consumo`, e `corrMaxMpptA`/
+// `comprimentoCaboCAm`/`temperaturaInstalacaoC`/`potenciaAtualKWp`/
+// `dataProtocoloOriginal` em `kit`. Corrigido: `novaProposta()` agora usa as
+// MESMAS fábricas testadas abaixo — impossível divergir de novo sem quebrar
+// estes testes.
+describe('Fábricas de estado padrão — clientePadrao/consumoPadrao/kitPadrao/precoPadrao', () => {
+  it('consumoPadrao() sempre volta com grupoTensao "B" e todos os campos de Grupo A zerados', () => {
+    const c = consumoPadrao();
+    expect(c.grupoTensao).toBe('B');
+    expect(c.agrupamentoAtivo).toBe(false);
+    expect(c.unidadesConsumidoras).toEqual([]);
+    expect(c.historicoFP).toEqual([]);
+    expect(c.historicoP).toEqual([]);
+    expect(c.demandaContratadaKW).toBe(0);
+    expect(c.demandaMedidaFPkW).toBe(0);
+  });
+
+  it('kitPadrao() inclui os campos formalizados em ago/2026 (antes só existiam via "as any")', () => {
+    const k = kitPadrao();
+    expect(k.comprimentoCaboCAm).toBe(10);
+    expect(k.temperaturaInstalacaoC).toBe(40);
+    expect(k.potenciaAtualKWp).toBe(0);
+    expect(k.dataProtocoloOriginal).toBe('');
+    expect(k.corrMaxMpptA).toBe(0);
+  });
+
+  it('duas chamadas da mesma fábrica retornam objetos/arrays independentes (sem referência compartilhada)', () => {
+    const c1 = consumoPadrao();
+    const c2 = consumoPadrao();
+    expect(c1).not.toBe(c2);
+    expect(c1.contas).not.toBe(c2.contas);
+    expect(c1.historicoFP).not.toBe(c2.historicoFP);
+    c1.contas[0].kWh = 999;
+    expect(c2.contas[0].kWh).toBe(0); // não deve vazar mutação entre propostas
+  });
+
+  it('precoPadrao(empresa) usa os valores-base da empresa (projetoArt/impostos/margem), não um literal fixo', () => {
+    const empresaCustom = { ...DADOS_EMPRESA_PADRAO, valorProjetoArt: 777, aliquotaImpostos: 0.09, margemPadrao: 0.22 };
+    const p = precoPadrao(empresaCustom);
+    expect(p.projetoArtRS).toBe(777);
+    expect(p.aliquotaImpostos).toBe(0.09);
+    expect(p.margemDesejada).toBe(0.22);
+  });
+});
+
+// [REGRESSÃO ago/2026] calcularTudo() só roda no clique de "Calcular
+// resultado completo" — nada detectava quando o usuário editava
+// Cliente/Consumo/Kit/Empresa/Preço DEPOIS de calcular e ia direto gerar um
+// documento com dimensionamento/indicadores desatualizados. Ver comentário
+// de `ultimoCalculoAssinatura` em useProjetoStore.ts.
+describe('assinaturaEntradasCalculo / ultimoCalculoAssinatura — detecção de cálculo desatualizado', () => {
+  beforeEach(() => resetStore());
+
+  it('logo após calcularTudo(), a assinatura atual bate com ultimoCalculoAssinatura (não desatualizado)', () => {
+    useProjetoStore.getState().calcularTudo();
+    const s = useProjetoStore.getState();
+    expect(s.ultimoCalculoAssinatura).not.toBeNull();
+    expect(assinaturaEntradasCalculo(s)).toBe(s.ultimoCalculoAssinatura);
+  });
+
+  it('editar consumo DEPOIS de calcular faz a assinatura atual divergir de ultimoCalculoAssinatura', () => {
+    useProjetoStore.getState().calcularTudo();
+    useProjetoStore.getState().atualizarConsumo({ tarifaRealKWhComICMS: 1.5 });
+    const s = useProjetoStore.getState();
+    expect(assinaturaEntradasCalculo(s)).not.toBe(s.ultimoCalculoAssinatura);
+  });
+
+  it('editar kit.quantidade DEPOIS de calcular faz a assinatura divergir', () => {
+    useProjetoStore.getState().calcularTudo();
+    useProjetoStore.getState().atualizarKit({ quantidade: 30 });
+    const s = useProjetoStore.getState();
+    expect(assinaturaEntradasCalculo(s)).not.toBe(s.ultimoCalculoAssinatura);
+  });
+
+  it('recalcular depois de editar sincroniza a assinatura de novo', () => {
+    useProjetoStore.getState().calcularTudo();
+    useProjetoStore.getState().atualizarKit({ quantidade: 30 });
+    useProjetoStore.getState().calcularTudo();
+    const s = useProjetoStore.getState();
+    expect(assinaturaEntradasCalculo(s)).toBe(s.ultimoCalculoAssinatura);
   });
 });

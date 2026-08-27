@@ -12,7 +12,7 @@ Desenvolvido pela Lumen Soluções Ltda — Araguari/MG.
 
 | Item | Estado |
 |------|--------|
-| Testes automatizados | **896 passando** (E2E, cálculos, persistência de arquivo .lumensolar, precificação de serviços, proteção CC, cabo CA/disjuntor, FDI, banco de baterias, agrupamento de UCs, cronograma de obra, UTM, checklist de documentação, mapa de células do Formulário CEMIG, dimensionamento Grupo A, wiring do store, geração dos PDFs de proposta, geração do Excel de auditoria, simulação de financiamento/payback, validação de formulário) |
+| Testes automatizados | **904 passando** (E2E, cálculos, persistência de arquivo .lumensolar, precificação de serviços, proteção CC, cabo CA/disjuntor, FDI, banco de baterias, agrupamento de UCs, cronograma de obra, UTM, checklist de documentação, mapa de células do Formulário CEMIG, dimensionamento Grupo A, wiring do store, geração dos PDFs de proposta, geração do Excel de auditoria, simulação de financiamento/payback, validação de formulário, detecção de cálculo desatualizado, fábricas de estado padrão) |
 | Build Windows | ✅ GitHub Actions → artifact `LumenSolar-Windows` |
 | Normas implementadas | NBR 16690, NBR 5410, Lei 14.300/2022, REN ANEEL 1.000/2021 |
 | Tarifa CEMIG | R$1,1827/kWh (Res. ANEEL 3.589/2026) |
@@ -656,6 +656,68 @@ divergente foi encontrado no restante do arquivo.
   teste de regressão (V11b) exige exatamente 1 erro de campo `'cip'`, não `.some()` — esse teste
   falharia com o código antigo.
 
+### Sétima rodada (ago/2026) — bugs de state management do React (App.tsx / useProjetoStore.ts)
+
+Até aqui a auditoria tinha mirado bugs de cálculo/fórmula. Esta rodada mudou de ângulo: um subagente
+dedicado releu `App.tsx` (2956 linhas) e `useProjetoStore.ts` inteiros procurando uma classe de bug
+diferente — closures obsoletas, condições de corrida, campos derivados que não re-sincronizam quando
+a entrada muda. Confirmei os dois achados manualmente antes de corrigir.
+
+- [x] **ALTO — nada detectava quando o usuário editava Cliente/Consumo/Kit/Preço DEPOIS de clicar em
+  "Calcular resultado completo", deixando o resultado exibido (e qualquer documento gerado) com
+  números que não batem com os dados atuais do projeto.** `calcularTudo()` só roda nesse clique — por
+  desenho, não recalcula a cada tecla digitada (correto: seria caro e a validação de campos obrigatórios
+  também só roda ali). O problema é que a navegação lateral entre etapas não é bloqueada — o usuário
+  calcula, volta para Consumo (troca a distribuidora, corrige a tarifa real da conta, ajusta
+  `kit.quantidade`, muda a margem em Preço) e vai direto para Resultado, ou clica em qualquer botão de
+  documento. O único guard existente (`!s.dimensionamento`) só cobre "nunca calculou" — uma vez
+  calculado, fica `true` para sempre, mesmo com os dados desatualizados por baixo. Resultado prático:
+  o PDF entregue ao cliente mostra a tarifa/distribuidora/quantidade de módulos NOVA nas seções que
+  leem a store ao vivo, mas economia/payback/TIR da tarifa/quantidade ANTIGA — uma proposta
+  internamente inconsistente sem nenhum aviso.
+  Corrigido com uma "assinatura" das entradas de `calcularTudo()` (`assinaturaEntradasCalculo()` em
+  `useProjetoStore.ts`, `JSON.stringify` de `cliente+consumo+kit+empresa+preco`), gravada em
+  `ultimoCalculoAssinatura` ao final de cada cálculo bem-sucedido. `calculoDesatualizado()` (App.tsx)
+  compara a assinatura atual contra a gravada: se `dimensionamento` já existe mas a assinatura mudou,
+  (a) um banner vermelho aparece no topo de `TabResultado` com um botão "🔄 Recalcular agora", e (b)
+  `buildData()` — usada por 8 dos 9 geradores de documento — e `gerarExcel()` (o único que não passa
+  por `buildData()`) lançam erro e bloqueiam a geração até o usuário recalcular. 4 novos testes de
+  regressão em `useProjetoStore.test.ts` provam que a assinatura bate logo após calcular, diverge ao
+  editar `consumo`/`kit`, e volta a bater depois de recalcular.
+- [x] **MÉDIO — `novaProposta()` (App.tsx) resetava o store com um literal parcial próprio (via
+  `as any`), que já estava desatualizado em relação ao formato real de `consumo`/`kit`.** Faltavam por
+  completo, em `consumo`: `grupoTensao`, `agrupamentoAtivo`, `unidadesConsumidoras`, `historicoFP`,
+  `historicoP`, `tePontaKWh`, `teForaPontaKWh`, `tusdPontaKWh`, `tusdForaPontaKWh`, `tarifaDemandaKW`,
+  `demandaContratadaKW`, `demandaMedidaFPkW`; em `kit`: `corrMaxMpptA`, `percentualCompensacaoDesejado`,
+  `motivoSuperdimensionamento`, `comprimentoCaboCAm`, `temperaturaInstalacaoC`, `potenciaAtualKWp`,
+  `dataProtocoloOriginal`. O `as any` no `setState(...)` escondia isso do TypeScript. Repro: terminar
+  uma proposta Grupo A (média tensão), clicar "+ Nova Proposta" — `consumo.grupoTensao` ficava
+  `undefined` em vez de voltar para `'B'`, e o toggle Grupo A/B no painel Consumo ficava sem nenhum
+  botão selecionado até o usuário clicar em um manualmente. `resultadoGrupoA` e `localizacao`
+  (telhado/UTM/nº de UC/medidor) também não eram resetados — a nova proposta herdava coordenadas UTM e
+  número de UC do CLIENTE ANTERIOR, um erro que só aparece depois que o Memorial Descritivo/Formulário
+  CEMIG já foi protocolado com o endereço errado.
+  Corrigido com fábricas de estado padrão (`clientePadrao()`, `consumoPadrao()`, `kitPadrao()`,
+  `precoPadrao(empresa)`) em `useProjetoStore.ts`, usadas TANTO pelo estado inicial da store QUANTO por
+  `novaProposta()` — os dois nunca mais podem divergir. São funções (não objetos congelados) porque
+  `kit.dataProtocoloAcesso` usa `new Date()`: um objeto congelado no topo do módulo travaria essa data
+  no momento em que o app foi aberto, não no momento em que "Nova Proposta" foi clicada (app Electron
+  pode ficar aberto por dias). `novaProposta()` agora também reseta `resultadoGrupoA`, `localizacao` e
+  `ultimoCalculoAssinatura`, sem nenhum `as any`. 4 novos testes de regressão provam que as fábricas
+  retornam o formato completo e objetos/arrays independentes entre chamadas (sem vazar mutação de uma
+  proposta para a próxima).
+- [x] **Efeito colateral saudável do fix acima**: os 4 campos de `kit` (`comprimentoCaboCAm`,
+  `temperaturaInstalacaoC`, `potenciaAtualKWp`, `dataProtocoloOriginal`) que causaram o bug do reset
+  incompleto nunca tinham sido formalizados na interface `EntradaKit` — existiam só no objeto de
+  estado inicial e eram acessados via `(kit as any).campo`/`(s.kit as any).campo` em 8 pontos de
+  App.tsx (mesmo padrão já corrigido para `corrMaxMpptA` numa rodada anterior). Formalizados na
+  interface; todos os `as any` removidos.
+- [x] Descartado (não é bug): closures obsoletas em `useEffect`/`useMemo`/`useCallback` — App.tsx não
+  usa nenhum dos três; condição de corrida em handlers assíncronos (import de datasheet via IA,
+  geocodificação UTM) — os dois já travam o botão de disparo pelo próprio estado de "carregando", e
+  além disso nenhum dos dois componentes está de fato montado em nenhuma aba (funcionalidade
+  inacabada/não conectada — já documentado como pendência separada, não é um bug de state).
+
 **Não corrigido nesta auditoria — requer trabalho dedicado:**
 
 - [ ] **ALTO — Grupo A (Média Tensão): cálculo roda e é exibido no painel; os documentos gerados
@@ -683,3 +745,12 @@ divergente foi encontrado no restante do arquivo.
   custo de compra do kit junto ao fornecedor — se esse documento for de fato entregue ao cliente
   (e não só uso interno/engenharia), o cliente consegue calcular a margem exata da empresa.
   Confirmar com quem usa o app qual é o uso real desse PDF.
+- [ ] **Descoberto na 7ª rodada (auditoria de state management): `ImportarDatasheet` (App.tsx:1813 —
+  extração de specs de módulo/inversor via IA a partir de um datasheet) e `BuscadorCoordenadas`
+  (App.tsx:1968 — geocodificação de endereço para UTM) estão implementados, com seu próprio
+  loading-state e tratamento de erro, mas NENHUM dos dois é renderizado em nenhuma aba — não há
+  `<ImportarDatasheet .../>` nem `<BuscadorCoordenadas .../>` em lugar nenhum do JSX.** Não é um bug
+  de state (os dois travam corretamente o próprio botão enquanto "carregando", sem condição de
+  corrida), é funcionalidade pronta mas nunca conectada à UI — o usuário preenche specs de
+  módulo/inversor e UTM manualmente hoje, sem saber que esse atalho existe no código. Se o plano é
+  usar essas duas funcionalidades, falta só montá-las em algum lugar da aba Kit/Localização.

@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { pdf } from '@react-pdf/renderer';
-import { useProjetoStore, PRESETS_MODULO, MESES, type TipoModuloPreset } from './store/useProjetoStore';
+import { useProjetoStore, PRESETS_MODULO, MESES, type TipoModuloPreset, clientePadrao, consumoPadrao, kitPadrao, precoPadrao, assinaturaEntradasCalculo } from './store/useProjetoStore';
 import { salvarArquivo, importarArquivo, listarRecentes, removerRecente, carregarEmpresa, salvarEmpresa, gerarId, type MetadataProposta } from './services/persistence';
 import { validarCliente, validarConsumo, validarKit, validarPreco, validarProjetoCompleto, validarCPF, validarCNPJ, formatarCPF, type StatusPasso } from './services/validation';
 import { DISTRIBUIDORAS } from '@data/distribuidoras';
-import { TIPO_TELHADO_LABELS, ORIENTACOES, type TipoTelhado } from '@data/localizacao';
+import { TIPO_TELHADO_LABELS, ORIENTACOES, type TipoTelhado, LOCALIZACAO_PADRAO } from '@data/localizacao';
 import { HSP_MEDIO_POR_UF } from '@data/hspPorUF';
 import { PropostaPDF } from '@domain/proposta/PropostaPDF';
 import { CHECKLIST_PADRAO_CEMIG_MICROGD, resumoChecklist, type ItemChecklistDocumentacao } from '@domain/documentacaoCemig/checklist';
@@ -448,21 +448,34 @@ export default function App() {
   React.useEffect(() => { setStepStatus(calcStepStatus()); }, [aba, showEmpresa]);
 
   function novaProposta() {
-    // Limpa o store para uma nova proposta
+    // Limpa o store para uma nova proposta.
+    // BUG CORRIGIDO (ago/2026): este reset usava um literal parcial próprio
+    // (com `as any` escondendo do TypeScript os campos que faltavam) em vez
+    // das fábricas de estado padrão da store — ver comentário de
+    // `assinaturaEntradasCalculo`/`kitPadrao` em useProjetoStore.ts para o
+    // histórico completo. Reusar as MESMAS fábricas usadas pelo estado
+    // inicial da store garante que os dois nunca mais divergem, e permite
+    // tipagem completa (sem `as any`).
+    const empresaAtual = useProjetoStore.getState().empresa;
     useProjetoStore.setState({
-      cliente: { nome:'', cpf:'', rg:'', estadoCivil:'solteiro', profissao:'', endereco:'', telefone:'', email:'', cidade:'', uf:'MG' },
-      consumo: { contas: MESES.map(mes => ({ mes, kWh: 0, valorRS: 0 })), codigoDistribuidora:'CEMIG', tipoLigacao:'monofasica', cipMensalRS:18, tarifaRealKWhComICMS:0 },
-      kit: { tipoModulo:'bifacial_ntype' as const, marcaModulo:'', modeloModulo:'', potenciaModuloWp:550, quantidade:0, marcaInversor:'', modeloInversor:'', potenciaInversorKW:0, eficienciaInversorPercent:98.4, custoKitRS:0, dataProtocoloAcesso: new Date().toISOString().slice(0,10), vmppV:0, imppA:0, vocV:0, iscA:0, comprimentoMm:0, larguraMm:0, pesoKgModulo:0, certificacoes:'INMETRO, IEC 61215, IEC 61730', garantiaProdutoAnos:12, garantiaPotenciaAnos:25, potenciaGarantidaPercent:80, numStrings:1, modulosPorString:1, faixaMpptMinV:0, faixaMpptMaxV:0, tensaoMaxEntradaV:0, tensaoSaidaV:220, corrMaxSaidaA:0, numMppt:1, ipGabinete:'IP65', fatorPotencia:'>0.99', thd:'<3%' },
-      preco: {
-        estruturaRS: 0, materiaisEletricosRS: 0, maoDeObraRS: 0,
-        projetoArtRS: useProjetoStore.getState().empresa.valorProjetoArt,
-        outrosCustosRS: 0,
-        aliquotaImpostos: useProjetoStore.getState().empresa.aliquotaImpostos,
-        margemDesejada: useProjetoStore.getState().empresa.margemPadrao,
-      },
+      cliente: clientePadrao(),
+      consumo: consumoPadrao(),
+      // BUG CORRIGIDO (ago/2026): `localizacao` também não era resetada — a
+      // nova proposta começava com telhado/UTM/nº de UC/medidor do CLIENTE
+      // ANTERIOR ainda preenchidos. Coordenadas UTM erradas ou um número de
+      // UC de outro cliente são o tipo de erro que só aparece quando o
+      // Memorial Descritivo/Formulário CEMIG já foi protocolado.
+      localizacao: LOCALIZACAO_PADRAO,
+      kit: kitPadrao(),
+      preco: precoPadrao(empresaAtual),
       dimensionamento: null, enquadramento: null, custosRecorrentes: null, precificacao: null, indicadores: null,
+      // resultadoGrupoA também faltava no reset antigo — uma proposta Grupo A
+      // seguida de "Nova Proposta" deixava o resultado do cliente ANTERIOR no
+      // store até o primeiro cálculo da nova proposta.
+      resultadoGrupoA: null,
       percentuaisFioBPorAno: {}, detalhamentoPerdas: [],
-    } as any);
+      ultimoCalculoAssinatura: null,
+    });
     useProjetoStore.getState().resetarChecklistDocumentacao();
     const newId = gerarId();
     setProposalId(newId);
@@ -1448,8 +1461,8 @@ function ComponentesRecomendados({ kit, tipoLigacao }: { kit: any; tipoLigacao?:
         // Para trifásico, α=1,73 em vez de 2 — o hardcode superestimava a queda de
         // tensão CA em ~15,6% para todo sistema trifásico.
         tipoLigacao: tipoLigacao || 'bifasica',
-        temperaturaAmbienteC: (kit as any).temperaturaInstalacaoC || 40,
-        comprimentoCaboCAm: (kit as any).comprimentoCaboCAm || 10,
+        temperaturaAmbienteC: kit.temperaturaInstalacaoC || 40,
+        comprimentoCaboCAm: kit.comprimentoCaboCAm || 10,
       });
     } catch { return null; }
   })();
@@ -1466,7 +1479,7 @@ function ComponentesRecomendados({ kit, tipoLigacao }: { kit: any; tipoLigacao?:
   // ── Lado CC (string) ──────────────────────────────────────────────────────
   const isc = kit.iscA || 0;
   const nStrings = kit.numStrings || 1;
-  const tempTelhado = (kit as any).temperaturaInstalacaoC || 40; // reutiliza campo do cabo CA
+  const tempTelhado = kit.temperaturaInstalacaoC || 40; // reutiliza campo do cabo CA
   const vocMod = kit.vocV || 0;
   const nModStr = kit.modulosPorString || 1;
   // O datasheet do kit hoje só guarda o coeficiente de temperatura de Pmax
@@ -2097,21 +2110,21 @@ function TabKit({ onPrev, onNext }: { onPrev:()=>void; onNext:()=>void }) {
           <div className="g2" style={{ rowGap:14 }}>
             <Campo label="Potência atual instalada (kWp)" tip="Preencher SOMENTE se o cliente já tem sistema solar e quer aumentar. Deixar 0 para instalação nova. Tipo de solicitação CEMIG: GD Existente COM Alteração de Potência (REN 1.000/2021).">
               <input className="inp inp-num" type="number" min="0" step="0.1"
-                value={(s.kit as any).potenciaAtualKWp || ''}
-                onChange={e => s.atualizarKit({ potenciaAtualKWp: Number(e.target.value) } as any)}
+                value={s.kit.potenciaAtualKWp || ''}
+                onChange={e => s.atualizarKit({ potenciaAtualKWp: Number(e.target.value) })}
                 placeholder="0 — instalação nova" />
             </Campo>
             <Campo label="Data do protocolo original" tip="Data do protocolo do sistema atual. Define o FioB da potência já instalada. A potência ADICIONAL receberá o FioB da data do protocolo novo — pode ter percentual diferente.">
               <input className="inp" type="date"
-                value={(s.kit as any).dataProtocoloOriginal || ''}
-                onChange={e => s.atualizarKit({ dataProtocoloOriginal: e.target.value } as any)} />
+                value={s.kit.dataProtocoloOriginal || ''}
+                onChange={e => s.atualizarKit({ dataProtocoloOriginal: e.target.value })} />
             </Campo>
           </div>
-          {(s.kit as any).potenciaAtualKWp > 0 && (
+          {s.kit.potenciaAtualKWp > 0 && (
             <div style={{ marginTop:10, padding:'8px 12px', background:'#251f0a',
               border:'1px solid #c9a22766', borderRadius:8, fontSize:12, color:'#fcd34d', lineHeight:1.6 }}>
               ⚠️ <strong>Expansão detectada</strong> — potência adicional:{' '}
-              <strong>{((s.kit.potenciaModuloWp * s.kit.quantidade / 1000) - (s.kit as any).potenciaAtualKWp).toFixed(2)} kWp</strong>.{' '}
+              <strong>{((s.kit.potenciaModuloWp * s.kit.quantidade / 1000) - s.kit.potenciaAtualKWp).toFixed(2)} kWp</strong>.{' '}
               O formulário CEMIG usará tipo "GD Existente COM Alteração de Potência".
               A potência adicional recebe FioB da data do NOVO protocolo.
             </div>
@@ -2269,14 +2282,14 @@ function TabKit({ onPrev, onNext }: { onPrev:()=>void; onNext:()=>void }) {
             <Campo label="IP do gabinete" hint="Ex: IP65, IP67"><input className="inp" value={s.kit.ipGabinete} onChange={e => s.atualizarKit({ ipGabinete: e.target.value })} /></Campo>
             <Campo label="Comprimento cabo CA (m)" tip="Distância do inversor ao quadro de distribuição (QDG) — necessário para calcular queda de tensão (NBR 5410). Considere o trajeto real pelo eletroduto.">
               <input className="inp inp-num" type="number" min="1" max="500"
-                value={(s.kit as any).comprimentoCaboCAm || ''}
-                onChange={e => s.atualizarKit({ comprimentoCaboCAm: Number(e.target.value) } as any)}
+                value={s.kit.comprimentoCaboCAm || ''}
+                onChange={e => s.atualizarKit({ comprimentoCaboCAm: Number(e.target.value) })}
                 placeholder="10" />
             </Campo>
             <Campo label="Temperatura máx. instalação (°C)" tip="Temperatura ambiente máxima no local de instalação do cabo CA. Afeta o fator de correção FTA (NBR 5410 Tabela 40). Telhados podem atingir 50–60°C no verão.">
               <input className="inp inp-num" type="number" min="25" max="60"
-                value={(s.kit as any).temperaturaInstalacaoC || ''}
-                onChange={e => s.atualizarKit({ temperaturaInstalacaoC: Number(e.target.value) } as any)}
+                value={s.kit.temperaturaInstalacaoC || ''}
+                onChange={e => s.atualizarKit({ temperaturaInstalacaoC: Number(e.target.value) })}
                 placeholder="40" />
             </Campo>
           </div>
@@ -2383,15 +2396,39 @@ function TabPreco({ onPrev, onCalc }: { onPrev:()=>void; onCalc:()=>void }) {
   );
 }
 
+// BUG CORRIGIDO (ago/2026): calcularTudo() só roda no clique de "Calcular
+// resultado completo" — nada impedia o usuário de editar Cliente/Consumo/
+// Kit/Preço DEPOIS de calcular e ir direto para Resultado ou gerar um
+// documento, deixando dimensionamento/indicadores desatualizados em relação
+// aos dados agora exibidos no resto do mesmo documento. Ver comentário de
+// `ultimoCalculoAssinatura` em useProjetoStore.ts para o histórico completo.
+// Só é "desatualizado" se já existe UM cálculo — antes do primeiro cálculo
+// `s.dimensionamento` é null e o guard antigo (`!s.dimensionamento`) já cobre
+// esse caso.
+function calculoDesatualizado(s: Pick<ReturnType<typeof useProjetoStore.getState>, 'cliente'|'consumo'|'kit'|'empresa'|'preco'|'dimensionamento'|'ultimoCalculoAssinatura'>): boolean {
+  return s.dimensionamento !== null && assinaturaEntradasCalculo(s) !== s.ultimoCalculoAssinatura;
+}
+
 // ─── Tab Resultado ────────────────────────────────────────────────────────────
 function TabResultado({ onPrev }: { onPrev:()=>void }) {
   const s = useProjetoStore();
   const [gerando, setGerando] = React.useState(false);
+  const desatualizado = calculoDesatualizado(s);
 
   function buildData() {
     const { empresa, cliente, consumo, kit, dimensionamento, custosRecorrentes,
       precificacao, enquadramento, percentuaisFioBPorAno, consumoMedioMensalKWh,
       valorMedioMensalRS, preco, indicadores, resultadoGrupoA } = s;
+    if (!dimensionamento || !custosRecorrentes || !precificacao || !enquadramento || !indicadores) {
+      throw new Error('Calcule o projeto (aba Preço → "Calcular resultado completo") antes de gerar documentos.');
+    }
+    if (calculoDesatualizado(s)) {
+      throw new Error(
+        'Os dados de Cliente/Consumo/Kit/Empresa/Preço foram alterados depois do último cálculo. ' +
+        'Volte à aba Preço e clique em "Calcular resultado completo" novamente antes de gerar este ' +
+        'documento — do contrário ele pode mostrar números que não batem com os dados atuais do projeto.'
+      );
+    }
     const distribuidoraObj = DISTRIBUIDORAS.find(d => d.codigo === consumo.codigoDistribuidora) ?? DISTRIBUIDORAS[0];
     return {
       empresa, cliente,
@@ -2407,13 +2444,13 @@ function TabResultado({ onPrev }: { onPrev:()=>void }) {
       localizacao: s.localizacao,
       // Kit completo (Memorial usa vocV, iscA, garantias, etc.)
       kit,
-      // Dimensionamento e financeiro
-      dimensionamento: dimensionamento!, custosRecorrentes: custosRecorrentes!,
-      precificacao: precificacao!, enquadramento: enquadramento!,
+      // Dimensionamento e financeiro (não-nulos: verificado no guard acima)
+      dimensionamento, custosRecorrentes,
+      precificacao, enquadramento,
       percentuaisFioBPorAno, consumoMedioMensalKWh: consumoMedioMensalKWh ?? 0,
       valorMedioMensalRS: valorMedioMensalRS ?? 0,
       aliquotaImpostos: preco.aliquotaImpostos, margemDesejada: preco.margemDesejada,
-      indicadores: indicadores!, contas: consumo.contas,
+      indicadores, contas: consumo.contas,
       // Perdas detalhadas (Memorial)
       detalhamentoPerdas: s.detalhamentoPerdas,
       // Checklist de documentação CEMIG (para o checklist real e o pacote completo)
@@ -2624,6 +2661,16 @@ function TabResultado({ onPrev }: { onPrev:()=>void }) {
     try {
       const { gerarExcelAuditoria } = await import('@domain/excel/gerarExcel');
       const st = useProjetoStore.getState();
+      // BUG CORRIGIDO (ago/2026): único gerador de documento que não passa por
+      // buildData() (que já ganhou este mesmo guard) — monta o payload direto
+      // de useProjetoStore.getState(). Precisa do mesmo guard de desatualização,
+      // senão o Excel escapava da proteção que todo o resto dos documentos tem.
+      if (calculoDesatualizado(st)) {
+        throw new Error(
+          'Os dados de Cliente/Consumo/Kit/Empresa/Preço foram alterados depois do último cálculo. ' +
+          'Volte à aba Preço e clique em "Calcular resultado completo" novamente antes de gerar o Excel.'
+        );
+      }
       gerarExcelAuditoria({
         empresa: st.empresa, cliente: st.cliente, consumo: st.consumo,
         localizacao: st.localizacao, kit: st.kit, preco: st.preco,
@@ -2740,6 +2787,27 @@ function TabResultado({ onPrev }: { onPrev:()=>void }) {
 
   return (
     <div>
+      {/* BUG CORRIGIDO (ago/2026): aviso de dados desatualizados — ver
+          `calculoDesatualizado`/`ultimoCalculoAssinatura`. Mostrado assim que
+          Cliente/Consumo/Kit/Empresa/Preço mudam depois do último cálculo;
+          os botões de documento abaixo também bloqueiam (buildData()/
+          gerarExcel() lançam erro) até recalcular. */}
+      {desatualizado && (
+        <div style={{
+          marginBottom: 18, padding: '12px 16px', background: '#3a1414',
+          border: '1px solid #dc2626', borderRadius: 8, color: '#fca5a5',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap',
+        }}>
+          <span style={{ fontSize: 13, lineHeight: 1.5 }}>
+            ⚠️ <strong>Dados desatualizados</strong> — Cliente/Consumo/Kit/Empresa/Preço foram alterados
+            depois do último cálculo. Os números abaixo (e qualquer documento gerado agora) não refletem
+            os dados atuais do projeto.
+          </span>
+          <Btn onClick={() => { try { useProjetoStore.getState().calcularTudo(); } catch (e) { alert('Erro ao recalcular: ' + (e instanceof Error ? e.message : String(e))); } }}>
+            🔄 Recalcular agora
+          </Btn>
+        </div>
+      )}
       {/* Cabeçalho */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 22 }}>
         <div>
