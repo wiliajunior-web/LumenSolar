@@ -12,7 +12,7 @@ Desenvolvido pela Lumen Soluções Ltda — Araguari/MG.
 
 | Item | Estado |
 |------|--------|
-| Testes automatizados | **893 passando** (E2E, cálculos, persistência de arquivo .lumensolar, precificação de serviços, proteção CC, cabo CA/disjuntor, FDI, banco de baterias, agrupamento de UCs, cronograma de obra, UTM, checklist de documentação, mapa de células do Formulário CEMIG, dimensionamento Grupo A, wiring do store, geração dos PDFs de proposta, geração do Excel de auditoria) |
+| Testes automatizados | **895 passando** (E2E, cálculos, persistência de arquivo .lumensolar, precificação de serviços, proteção CC, cabo CA/disjuntor, FDI, banco de baterias, agrupamento de UCs, cronograma de obra, UTM, checklist de documentação, mapa de células do Formulário CEMIG, dimensionamento Grupo A, wiring do store, geração dos PDFs de proposta, geração do Excel de auditoria, simulação de financiamento/payback) |
 | Build Windows | ✅ GitHub Actions → artifact `LumenSolar-Windows` |
 | Normas implementadas | NBR 16690, NBR 5410, Lei 14.300/2022, REN ANEEL 1.000/2021 |
 | Tarifa CEMIG | R$1,1827/kWh (Res. ANEEL 3.589/2026) |
@@ -610,6 +610,33 @@ divergente foi encontrado no restante do arquivo.
   dentro do `.xlsx` entregue ao usuário, não só comentário de código) e `dimensionar.ts`
   (`DIAS_MES = 30.4167`, que é só 365/12 — aritmética básica, sem norma nenhuma por trás). Não muda
   nenhum cálculo, só remove citações normativas falsas.
+
+### Sexta rodada (ago/2026) — auditoria via subagentes paralelos (`calcularGrupoA.ts`, `indicadores.ts`/`fluxoCaixa.ts`)
+
+- [x] Auditado por inteiro (fórmulas verificadas à mão, sem bug encontrado): `calcularGrupoA.ts` —
+  `calcularCustoDemanda`, o cenário principal de dimensionamento e a álgebra do multiplicador ×3 para
+  ultrapassagem de demanda (REN ANEEL 1.000/2021) todos conferem com os valores esperados calculados
+  manualmente.
+- [x] **ALTO — `simularFinanciamento()` (`financeiro/indicadores.ts`) reportava o MELHOR cenário de
+  financiamento possível como o PIOR resultado exibível ao cliente.** A detecção de payback dependia
+  de `saldoAcumulado` cruzar de negativo para não-negativo (`saldoAnterior < 0 && saldoAcumulado >= 0`).
+  Mas `saldoAcumulado` começa em **0**, não negativo — é uma simulação de financiamento, sem
+  investimento inicial à vista (diferente do fluxo de caixa à vista em `fluxoCaixa.ts`, onde o saldo
+  de fato começa negativo pelo valor do investimento). Quando a economia mensal já cobre a parcela
+  mensal desde o ano 1 — o cenário mais favorável ao cliente — o saldo nunca fica negativo em nenhum
+  momento do horizonte, a condição `saldoAnterior < 0` nunca dispara, e `paybackAnos` permanece `null`
+  para sempre. `App.tsx` e `PropostaComercialPDF.tsx` tratam `paybackAnos === null` como "> 25 anos"
+  (via `formatarPayback`) — ou seja, o financiamento que se paga sozinho desde o primeiro mês aparecia
+  para o cliente como se nunca se pagasse. Verificado à mão: `simularFinanciamento(10000, 1000, 0.01,
+  12, 0, 0, 5, ...)` → parcela Price (10.000, 1%a.m., 12x) ≈ R$888,49/mês → parcelasAnual ≈
+  R$10.661,84 < economiaAnual (R$12.000) já no ano 1. Corrigido: quando `saldoAcumulado >= 0` já no
+  ano 1, `paybackAnos = 0` (paga-se a si mesmo desde o início); o caso em que o cruzamento acontece
+  depois do ano 1 continua usando a interpolação original, inalterada. 2 testes novos de regressão em
+  `indicadores.test.ts`: um reproduz exatamente o cenário do bug (economia cobrindo a parcela já no
+  ano 1 → `paybackAnos` deve ser `0`, não `null`) e falharia com o código antigo; outro confirma que o
+  caso "não cobre no ano 1, cobre depois" continua funcionando normalmente (`paybackAnos > 0`).
+  Encontrado por subagente dedicado a `indicadores.ts`/`fluxoCaixa.ts`, confirmado manualmente antes
+  da correção.
 
 **Não corrigido nesta auditoria — requer trabalho dedicado:**
 

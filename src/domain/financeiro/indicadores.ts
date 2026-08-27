@@ -143,8 +143,27 @@ export function simularFinanciamento(
     const saldoAnterior = saldoAcumulado;
     saldoAcumulado += saldoLiquido;
     economiaTotalLiquida += economiaAnual;
-    if (paybackAnos === null && saldoAcumulado >= 0 && saldoAnterior < 0) {
-      paybackAnos = ano - 1 + (saldoAnterior < 0 ? Math.abs(saldoAnterior) / Math.max(saldoLiquido, 0.01) : 0);
+    // BUG CORRIGIDO (ago/2026): `saldoAcumulado` começa em 0 (não negativo — é
+    // financiamento, sem investimento inicial à vista), então a checagem
+    // original `saldoAnterior < 0` NUNCA disparava quando a economia mensal já
+    // cobre a parcela mensal desde o primeiro mês (economiaAnual ≥ parcelasNoAno
+    // já no ano 1, o melhor cenário possível). `saldoAnterior` ficava travado em
+    // 0 (nunca < 0) em todo o horizonte, e `paybackAnos` permanecia `null` para
+    // sempre — App.tsx e PropostaComercialPDF.tsx tratam `null` como "> 25 anos",
+    // ou seja, o MELHOR cenário de financiamento (paga-se sozinho desde o
+    // primeiro mês) aparecia para o cliente como o PIOR resultado possível.
+    // Verificado manualmente: valorFinanciado=10000, economiaMensalAno1=1000,
+    // taxaJurosMensal=0.01, numeroParcelas=12 → parcela≈R$888,74/mês,
+    // economiaAnual(12000) > parcelasAnual(≈10664,9) já no ano 1 → payback
+    // correto é ~imediato (0), não null/">25 anos".
+    if (paybackAnos === null && saldoAcumulado >= 0) {
+      if (ano === 1) {
+        // Nasceu positivo já no primeiro ano: economia mensal cobre a parcela
+        // mensal desde o início — paga-se a si mesmo, payback ~ imediato.
+        paybackAnos = 0;
+      } else if (saldoAnterior < 0) {
+        paybackAnos = ano - 1 + Math.abs(saldoAnterior) / Math.max(saldoLiquido, 0.01);
+      }
     }
   }
 

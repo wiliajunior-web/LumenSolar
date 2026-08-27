@@ -97,4 +97,27 @@ describe('simularFinanciamento', () => {
     const sim60 = simularFinanciamento(18000, 400, 0.018, 60, 0.005, 0.06, 25, '60x');
     expect(sim60.totalPago).toBeGreaterThan(sim48.totalPago);
   });
+
+  // [REGRESSÃO ago/2026] `saldoAcumulado` começa em 0 (financiamento, sem
+  // investimento à vista) — quando a economia mensal já cobre a parcela
+  // mensal desde o ano 1 (o MELHOR cenário possível), `saldoAnterior` nunca
+  // ficava < 0, e a checagem antiga de payback nunca disparava:
+  // `paybackAnos` ficava `null` para sempre. App.tsx e PropostaComercialPDF.tsx
+  // tratam `null` como "> 25 anos" — ou seja, o melhor cenário aparecia para
+  // o cliente como o pior resultado possível. Valores abaixo verificados à
+  // mão: parcela Price(10000, 1%a.m., 12x) ≈ R$888,49/mês → parcelasAnual
+  // ≈ R$10.661,84 < economiaAnual(R$12.000) já no ano 1.
+  it('economia mensal cobrindo a parcela já no ano 1: payback deve ser ~imediato, não null', () => {
+    const sim = simularFinanciamento(10000, 1000, 0.01, 12, 0, 0, 5, 'Cenário ótimo');
+    expect(sim.paybackAnos).not.toBeNull();
+    expect(sim.paybackAnos).toBe(0);
+  });
+
+  it('cenário que NÃO cobre a parcela no ano 1 mas se recupera depois: continua calculando payback > 0 normalmente', () => {
+    // parcela alta o bastante para que a economia anual não cubra no ano 1,
+    // mas cubra a partir do ano 2 em diante (degradação 0, reajuste alto).
+    const sim = simularFinanciamento(10000, 400, 0.03, 24, 0, 0.5, 10, 'Cenário parcial');
+    expect(sim.paybackAnos).not.toBeNull();
+    expect(sim.paybackAnos as number).toBeGreaterThan(0);
+  });
 });
