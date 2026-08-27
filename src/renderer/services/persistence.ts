@@ -107,6 +107,18 @@ export async function salvarArquivo(dados: any): Promise<string> {
   URL.revokeObjectURL(url);
 
   // Guardar metadados no localStorage para exibir na lista de recentes
+  //
+  // BUG CORRIGIDO (ago/2026): lia `dados.dimensionamento?.potenciaInstaladaRealKWp`
+  // e `dados.precificacao?.precoVenda` — campos aninhados que este arquivo
+  // esperava, mas que o único chamador real (`App.tsx`, função `salvar()`)
+  // NUNCA envia: ele monta `data` com `potenciaKWp`/`precoVenda` já resolvidos
+  // na RAIZ do objeto (`data.potenciaKWp`, `data.precoVenda`), sem nenhum
+  // `data.dimensionamento`/`data.precificacao`. Como `salvarArquivo(dados: any)`
+  // não é tipado, o tsc nunca acusou essa dessincronia de contrato. Resultado:
+  // toda proposta salva pelo fluxo real do app tinha `potenciaKWp`/`precoVenda`
+  // gravados como `undefined` nos metadados de "recentes", e a Home nunca
+  // mostrava potência/preço em nenhum card de proposta salva (a renderização
+  // é condicional em `App.tsx`: `{p.potenciaKWp && (...)}`).
   _salvarMetadata({
     id:           dados.id || gerarId(),
     nomeCliente:  dados.cliente?.nome  || 'Sem nome',
@@ -114,8 +126,8 @@ export async function salvarArquivo(dados: any): Promise<string> {
     uf:           dados.cliente?.uf,
     criadoEm:     dados.criadoEm || agora,
     atualizadoEm: agora,
-    potenciaKWp:  dados.dimensionamento?.potenciaInstaladaRealKWp,
-    precoVenda:   dados.precificacao?.precoVenda,
+    potenciaKWp:  dados.potenciaKWp ?? dados.dimensionamento?.potenciaInstaladaRealKWp,
+    precoVenda:   dados.precoVenda ?? dados.precificacao?.precoVenda,
     nomeArquivo:  nome,
   });
 
@@ -134,6 +146,18 @@ export function importarArquivo(): Promise<any | null> {
     const input = document.createElement('input');
     input.type   = 'file';
     input.accept = '.lumensolar,application/json';
+
+    // BUG CORRIGIDO (ago/2026): só havia listener em `onchange` — em
+    // navegadores Chromium/Electron, quando o usuário abre o diálogo nativo
+    // e clica em "Cancelar" sem escolher arquivo, o evento `change` NÃO
+    // dispara (só dispara quando um arquivo é de fato selecionado). Sem um
+    // handler de `cancel`, a Promise retornada nunca era resolvida nem
+    // rejeitada nesse caso — ficava pendurada para sempre (o teste que
+    // afirmava cobrir "usuário fecha o seletor sem escolher arquivo" usava um
+    // mock que sempre disparava `onchange`, então não reproduzia o
+    // comportamento real do DOM). Resolver com `null` no cancelamento, igual
+    // ao "nenhum arquivo selecionado" dentro de `onchange`.
+    input.oncancel = () => resolve(null);
 
     input.onchange = async () => {
       const file = input.files?.[0];
@@ -184,6 +208,10 @@ export function importarArquivo(): Promise<any | null> {
         }
 
         // 5. Atualizar metadados de recentes
+        // BUG CORRIGIDO (ago/2026): mesmo bug de `salvarArquivo()` acima —
+        // `d.dimensionamento`/`d.precificacao` nunca existem no formato real
+        // salvo por `App.tsx` (campos ficam em `d.potenciaKWp`/`d.precoVenda`
+        // na raiz). Ver comentário completo em `salvarArquivo()`.
         const d = arquivo._dados;
         _salvarMetadata({
           id:           d.id || gerarId(),
@@ -192,8 +220,8 @@ export function importarArquivo(): Promise<any | null> {
           uf:           d.cliente?.uf,
           criadoEm:     d.criadoEm || arquivo._criado,
           atualizadoEm: arquivo._salvo  || new Date().toISOString(),
-          potenciaKWp:  d.dimensionamento?.potenciaInstaladaRealKWp,
-          precoVenda:   d.precificacao?.precoVenda,
+          potenciaKWp:  d.potenciaKWp ?? d.dimensionamento?.potenciaInstaladaRealKWp,
+          precoVenda:   d.precoVenda ?? d.precificacao?.precoVenda,
           nomeArquivo:  arquivo._nomeArquivo || file.name,
         });
 

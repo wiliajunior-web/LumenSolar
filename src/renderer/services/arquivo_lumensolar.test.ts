@@ -66,11 +66,22 @@ const localStorageMock = new Proxy(_lsStore, {
 // é feita via um mock que devolve o "arquivo selecionado" configurado pelo
 // teste antes de chamar importarArquivo().
 let arquivoSelecionadoMock: { name: string; text: () => Promise<string> } | null = null;
+// BUG CORRIGIDO (ago/2026): a produção chama sempre `input.click()` — quem
+// decide se o navegador dispara `change` ou `cancel` é o próprio diálogo
+// nativo, dependendo da escolha do usuário. Esta flag simula essa decisão do
+// navegador dentro do mock (antes, `click()` disparava `onchange` sempre,
+// mesmo simulando "cancelar" via `files=[]` — o que testava só o caminho
+// "onchange com lista vazia", nunca o cancelamento real do diálogo, onde
+// `change` simplesmente não dispara).
+let simularCancelamentoMock = false;
 
 class FakeInputArquivo {
-  type = ''; accept = ''; onchange: (() => any) | null = null;
+  type = ''; accept = ''; onchange: (() => any) | null = null; oncancel: (() => any) | null = null;
   get files() { return arquivoSelecionadoMock ? [arquivoSelecionadoMock] : []; }
-  click() { this.onchange?.(); }
+  click() {
+    if (simularCancelamentoMock) { this.oncancel?.(); return; }
+    this.onchange?.();
+  }
 }
 class FakeAncora {
   href = ''; download = '';
@@ -325,12 +336,43 @@ describe('salvarArquivo() — exercitando a função real de produção', () => 
       (URL as any).createObjectURL = origCreateObjectURL;
     }
   });
+
+  // BUG CORRIGIDO (ago/2026): o teste acima usa `dados.dimensionamento`/
+  // `dados.precificacao` (formato aninhado) — formato que `salvarArquivo()`
+  // sabia ler, mas que o único chamador real (`App.tsx`, função `salvar()`)
+  // NUNCA envia. `salvar()` monta `data.potenciaKWp`/`data.precoVenda` já
+  // resolvidos na RAIZ do objeto, sem nenhum `data.dimensionamento`/
+  // `data.precificacao`. Antes do fix, toda proposta salva pelo fluxo real
+  // do app gravava `potenciaKWp: undefined, precoVenda: undefined` nos
+  // metadados de "recentes" — a Home nunca mostrava potência/preço em
+  // nenhum card de proposta salva de verdade. Este teste usa o formato REAL.
+  it('grava potenciaKWp/precoVenda nos recentes a partir do formato REAL enviado por App.tsx (campos na raiz, sem dimensionamento/precificacao)', async () => {
+    const origCreateObjectURL = URL.createObjectURL.bind(URL);
+    (URL as any).createObjectURL = (b: Blob) => origCreateObjectURL(b);
+    try {
+      const dados = {
+        id: 'proj-004', cliente: { nome: 'Fernanda Lima' }, criadoEm: '2026-08-01T10:00:00.000Z',
+        potenciaKWp: 11.2, precoVenda: 58900,
+        empresa: {}, consumo: {}, localizacao: {}, kit: {}, preco: {},
+      };
+      await salvarArquivo(dados);
+      const recentes = listarRecentes();
+      expect(recentes).toHaveLength(1);
+      expect(recentes[0]).toMatchObject({
+        id: 'proj-004', nomeCliente: 'Fernanda Lima',
+        potenciaKWp: 11.2, precoVenda: 58900,
+      });
+    } finally {
+      (URL as any).createObjectURL = origCreateObjectURL;
+    }
+  });
 });
 
 describe('importarArquivo() — exercitando a função real de produção', () => {
   beforeEach(() => {
     Object.keys(_lsStore).forEach(k => delete _lsStore[k]);
     arquivoSelecionadoMock = null;
+    simularCancelamentoMock = false;
   });
 
   it('importa um arquivo íntegro com sucesso e atualiza os recentes', async () => {
@@ -347,11 +389,49 @@ describe('importarArquivo() — exercitando a função real de produção', () =
     expect(recentes[0]).toMatchObject({ id: 'proj-002', nomeCliente: 'Ana Souza', potenciaKWp: 8.25, precoVenda: 45000 });
   });
 
-  it('resolve null quando o usuário fecha o seletor sem escolher arquivo', async () => {
+  it('resolve null quando o navegador dispara change com lista de arquivos vazia', async () => {
     arquivoSelecionadoMock = null; // input.files fica []
     const resultado = await importarArquivo();
     expect(resultado).toBeNull();
     expect(listarRecentes()).toHaveLength(0);
+  });
+
+  // BUG CORRIGIDO (ago/2026): faltava handler de `cancel` — quando o usuário
+  // clica em "Cancelar" no diálogo nativo (Chromium/Electron), o evento
+  // `change` NÃO dispara (diferente do teste acima, que testa o caso de
+  // `change` disparar com lista vazia — cenário distinto). Sem
+  // `input.oncancel`, a Promise nunca era resolvida nem rejeitada — ficava
+  // pendurada para sempre. `simularCancelamentoMock=true` faz o mock disparar
+  // `oncancel` (não `onchange`) em `click()`, reproduzindo o comportamento
+  // real do DOM.
+  it('resolve null quando o usuário clica em "Cancelar" no diálogo nativo (change nunca dispara)', async () => {
+    simularCancelamentoMock = true;
+    const resultado = await importarArquivo();
+    expect(resultado).toBeNull();
+    expect(listarRecentes()).toHaveLength(0);
+  });
+
+  // BUG CORRIGIDO (ago/2026): `d.dimensionamento?.potenciaInstaladaRealKWp` e
+  // `d.precificacao?.precoVenda` nunca existem no formato REAL que App.tsx
+  // salva (campos ficam em `d.potenciaKWp`/`d.precoVenda`, na raiz — ver
+  // `salvar()` em App.tsx). O teste acima ("importa um arquivo íntegro...")
+  // usa o formato aninhado antigo, que nunca é o formato real — dava falsa
+  // confiança. Este teste usa o formato de verdade.
+  it('importa um arquivo no formato REAL salvo por App.tsx (potenciaKWp/precoVenda na raiz, sem dimensionamento/precificacao)', async () => {
+    const dados = {
+      id: 'proj-003', cliente: { nome: 'Carlos Mendes' }, criadoEm: '2026-06-01T10:00:00.000Z',
+      potenciaKWp: 6.6, precoVenda: 38500,
+      empresa: {}, consumo: {}, localizacao: {}, kit: {}, preco: {},
+    };
+    const arq = await criarArquivoTeste(dados);
+    arquivoSelecionadoMock = { name: 'Carlos_Mendes.lumensolar', text: async () => JSON.stringify(arq) };
+
+    const resultado = await importarArquivo();
+    expect(resultado).toEqual(dados);
+
+    const recentes = listarRecentes();
+    expect(recentes).toHaveLength(1);
+    expect(recentes[0]).toMatchObject({ id: 'proj-003', nomeCliente: 'Carlos Mendes', potenciaKWp: 6.6, precoVenda: 38500 });
   });
 
   it('rejeita com erro descritivo quando o JSON está corrompido/truncado', async () => {
