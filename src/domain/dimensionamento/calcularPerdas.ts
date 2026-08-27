@@ -79,9 +79,27 @@ const PERDA_CABEAMENTO_PADRAO = 0.02;
 
 /**
  * Calcula a fração de perdas do sistema.
- * A temperatura de operação da célula em condição típica anual é estimada como:
- *   Tcélula ≈ Tamb + (NOCT - 20) × (800/1000)
- * sendo 800 W/m² a irradiância média anual representativa (< 1000 W/m² de STC).
+ *
+ * BUG CORRIGIDO (ago/2026): a temperatura de operação da célula usava o fator
+ * 0.8, que é (800/1000) — a razão entre a irradiância média anual
+ * representativa (800 W/m², citada no comentário original) e a irradiância de
+ * STC (1000 W/m²). Isso está fisicamente errado: a fórmula padrão de NOCT
+ * (Sandia PVPMC; Duffie & Beckman, "Solar Engineering of Thermal Processes")
+ * é
+ *   Tcélula = Tamb + (NOCT - 20) × (G / 800)
+ * onde 800 W/m² é a irradiância do próprio ENSAIO NOCT (referência da
+ * fórmula), não a de STC — os 1000 W/m² de STC não entram nessa fórmula em
+ * nenhum ponto. Como este código já escolhe G = 800 W/m² (irradiância média
+ * anual representativa, o mesmo valor do comentário original), o fator
+ * correto é G/800 = 800/800 = 1 — ou seja, ΔT = NOCT − 20 diretamente, sem
+ * nenhum fator de escala.
+ * Divergência numérica concreta (módulo padrão: NOCT=45°C, Tamb=24°C):
+ *   Fórmula com bug:     Tcél = 24+(45-20)×0.8 = 44°C → ΔT=19°C
+ *   Fórmula corrigida:   Tcél = 24+(45-20)      = 49°C → ΔT=24°C
+ * A perda por temperatura era subestimada (6.46% em vez dos 8.16% corretos
+ * para o módulo Leapton do teste), o que subestima a perda total do sistema
+ * e pode levar a um dimensionamento (potência instalada) menor do que o
+ * necessário para entregar a compensação de energia contratada.
  */
 export function calcularPerdas(
   modulo: EspecificacoesModulo,
@@ -90,8 +108,9 @@ export function calcularPerdas(
 ): ResultadoPerdas {
   const perdaInversor = 1 - inversor.eficienciaMaximaPercent / 100;
 
-  // Temperatura de operação típica anual
-  const tempCelula = site.temperaturaAmbienteMediaC + (modulo.noct - 20) * 0.8;
+  // Temperatura de operação típica anual: Tcél = Tamb + (NOCT-20) × (G/800),
+  // com G=800 W/m² (irradiância média anual representativa) ⇒ fator = 1.
+  const tempCelula = site.temperaturaAmbienteMediaC + (modulo.noct - 20);
   const deltaTemp = tempCelula - 25; // diferença em relação ao STC
   const perdaTemperatura = Math.max(0, (Math.abs(modulo.coeficienteTemperaturaPmax) / 100) * deltaTemp);
 

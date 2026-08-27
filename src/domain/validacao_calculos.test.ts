@@ -40,52 +40,60 @@ const ENQ_ART27 = classificarEnquadramento({
 // ═══════════════════════════════════════════════════════════════════════════════
 describe('CÁLCULO 1 — Perdas do sistema (IEC 61724-1)', () => {
 
-  it('[P1.1] Monocristalino Araguari/MG: perdas = 14.60%', () => {
-    // Manual: Tcell=44°C, ΔT=19°C, perdaTemp=0.34×19/100=6.46%
-    // fator=(1-0.03)(1-0.0646)(1-0.02)(1-0.02)(1-0.02)=0.85398
-    // perdas = 1-0.85398 = 14.602%
+  // BUG CORRIGIDO em calcularPerdas.ts (ago/2026): Tcélula usava o fator 0.8
+  // (=800/1000 — mistura errada entre a irradiância do ensaio NOCT [800 W/m²]
+  // e a de STC [1000 W/m²]). Fórmula correta (Sandia PVPMC / Duffie &
+  // Beckman): Tcélula = Tamb + (NOCT-20) × (G/800), com G=800 (irradiância
+  // média anual já escolhida por este módulo) ⇒ fator=1, ΔT = NOCT-20
+  // diretamente. Valores abaixo (P1.1 a P1.5) recalculados manualmente.
+  it('[P1.1] Monocristalino Araguari/MG: perdas = 16.15%', () => {
+    // Manual: Tcell=24+(45-20)=49°C, ΔT=24°C, perdaTemp=0.34×24/100=8.16%
+    // fator=(1-0.03)(1-0.0816)(1-0.02)(1-0.02)(1-0.02)=0.83846
+    // perdas = 1-0.83846 = 16.154%
     const r = calcularPerdas(
       { coeficienteTemperaturaPmax:-0.34, noct:45, toleranciaPercent:0, bifacial:false },
       { eficienciaMaximaPercent:97 },
       { temperaturaAmbienteMediaC:24, perdaSombreamentoPercent:2, perdaSujidadePercent:2 }
     );
-    expect(r.perdaTotalLiquida).toBeCloseTo(0.14602, 4);
-    expect(r.perdaTemperatura).toBeCloseTo(0.06460, 4);
+    expect(r.perdaTotalLiquida).toBeCloseTo(0.16154, 4);
+    expect(r.perdaTemperatura).toBeCloseTo(0.08160, 4);
     expect(r.perdaInversor).toBeCloseTo(0.03000, 4);
     expect(r.perdaCabeamento).toBeCloseTo(0.02000, 4);
   });
 
-  it('[P1.2] Tcell = Tamb + (NOCT-20)×0.8 (irrad. ref. 800W/m²)', () => {
-    // Tamb=24, NOCT=45: Tcell = 24+(45-20)×0.8 = 24+20 = 44°C
-    // ΔT = 44-25 = 19°C → perdaTemp = 0.34/100×19 = 6.46%
+  it('[P1.2] Tcell = Tamb + (NOCT-20) (fator G/800=1, G=800 = irrad. média anual)', () => {
+    // Tamb=24, NOCT=45: Tcell = 24+(45-20) = 49°C
+    // ΔT = 49-25 = 24°C → perdaTemp = 0.34/100×24 = 8.16%
     const r = calcularPerdas(
       { coeficienteTemperaturaPmax:-0.34, noct:45, toleranciaPercent:0, bifacial:false },
       { eficienciaMaximaPercent:100 },
       { temperaturaAmbienteMediaC:24, perdaSombreamentoPercent:0, perdaSujidadePercent:0 }
     );
-    expect(r.perdaTemperatura).toBeCloseTo(0.0646, 4); // 0.34 × 19 / 100
+    expect(r.perdaTemperatura).toBeCloseTo(0.0816, 4); // 0.34 × 24 / 100
   });
 
-  it('[P1.3] Bifacial N-TYPE (ganho 5%): perdas = 8.11%', () => {
-    // fator = (1-0.016)(1-0.0522)(1-0.02)(1-0.02)(1-0.02)(1+0.05)
-    // Tcell = 24+25×0.8=44°C, ΔT=19, perdaTemp=0.29×19/100=5.51%
-    // fator=(0.984)(0.9449)(0.98)(0.98)(0.98)(1.05)=0.9189
-    // perdas = 8.11%
+  it('[P1.3] Bifacial N-TYPE (ganho 5%): perdas = 9.52%', () => {
+    // fator = (1-0.016)(1-0.0696)(1-0.02)(1-0.02)(1-0.02)(1+0.05)
+    // Tcell = 24+25=49°C, ΔT=24, perdaTemp=0.29×24/100=6.96%
+    // fator=(0.984)(0.9304)(0.98)(0.98)(0.98)(1.05)=0.90476
+    // perdas = 9.524%
     const r = calcularPerdas(
       { coeficienteTemperaturaPmax:-0.29, noct:45, toleranciaPercent:0, bifacial:true, ganhoBifacialPercent:5 },
       { eficienciaMaximaPercent:98.4 },
       { temperaturaAmbienteMediaC:24, perdaSombreamentoPercent:2, perdaSujidadePercent:2 }
     );
-    expect(r.perdaTotalLiquida).toBeCloseTo(0.0811, 3);
+    expect(r.perdaTotalLiquida).toBeCloseTo(0.09524, 4);
     expect(r.ganhoBifacial).toBeCloseTo(0.05, 4);
   });
 
   it('[P1.4] Temperatura abaixo de STC (Tcell < 25°C): perdaTemp = 0', () => {
-    // Tamb=5°C, NOCT=45: Tcell=5+20=25°C → ΔT=0 → perdaTemp=0
+    // Tamb=0°C, NOCT=45: Tcell=0+(45-20)=25°C → ΔT=0 → perdaTemp=0
+    // (com a fórmula corrigida, Tamb=5°C já dá Tcell=30°C — acima de STC —
+    // então o cenário de "abaixo/na fronteira de STC" precisou de Tamb=0°C)
     const r = calcularPerdas(
       { coeficienteTemperaturaPmax:-0.34, noct:45, toleranciaPercent:0, bifacial:false },
       { eficienciaMaximaPercent:97 },
-      { temperaturaAmbienteMediaC:5, perdaSombreamentoPercent:0, perdaSujidadePercent:0 }
+      { temperaturaAmbienteMediaC:0, perdaSombreamentoPercent:0, perdaSujidadePercent:0 }
     );
     expect(r.perdaTemperatura).toBe(0);
   });
@@ -102,18 +110,26 @@ describe('CÁLCULO 1 — Perdas do sistema (IEC 61724-1)', () => {
       { temperaturaAmbienteMediaC:29, perdaSombreamentoPercent:3, perdaSujidadePercent:3 }
     );
     expect(rNE.perdaTotalLiquida).toBeGreaterThan(rMG.perdaTotalLiquida);
-    expect(rNE.perdaTotalLiquida).toBeCloseTo(0.17857, 4);
+    // Manual: Tcell=29+25=54°C, ΔT=29, perdaTemp=0.34×29/100=9.86%
+    // fator=(0.97)(0.9014)(0.97)(0.97)(0.98)=0.80623 → perdas=19.377%
+    expect(rNE.perdaTotalLiquida).toBeCloseTo(0.19377, 4);
   });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
 describe('CÁLCULO 2 — Dimensionamento (IEC 61724-1)', () => {
 
+  // BUG CORRIGIDO em calcularPerdas.ts (ago/2026): perdaTotalLiquida para
+  // este cenário (mesmos parâmetros de [P1.1]) subiu de 14.602% para
+  // 16.154% com a fórmula de Tcélula corrigida — ver comentário completo em
+  // [P1.1]. Isso reduz a geração estimada e a % de compensação (mas não o
+  // número de módulos: 4 módulos continua sendo o resultado do ceil()).
   it('[P2.1] Ana Maria: 281.5 kWh → 4 módulos 550Wp = 2.2 kWp', () => {
-    // Manual: kWpMin = 281.5/(5.4×30.4167×0.85398) = 2.0069 kWp
-    // ceil(2.0069/0.55) = 4 módulos
+    // Manual: kWpMin = 281.5/(5.4×30.4167×0.83846) = 2.0440 kWp
+    // ceil(2.0440/0.55) = 4 módulos (inalterado)
     // kWpReal = 4×0.55 = 2.2 kWp
-    // Geração = 2.2×5.4×30.4167×0.85398 = 308.59 kWh/mês
+    // Geração = 2.2×5.4×30.4167×0.83846 = 302.98 kWh/mês
+    // Compensação = 302.98/281.5 = 107.63% (era 109.6% com o bug)
     const perdas = calcularPerdas(
       { coeficienteTemperaturaPmax:-0.34, noct:45, toleranciaPercent:0, bifacial:false },
       { eficienciaMaximaPercent:97 },
@@ -127,9 +143,10 @@ describe('CÁLCULO 2 — Dimensionamento (IEC 61724-1)', () => {
     });
     expect(dim.numeroModulos).toBe(4);
     expect(dim.potenciaInstaladaRealKWp).toBeCloseTo(2.2, 6);
-    expect(dim.geracaoMensalEstimadaKWh).toBeCloseTo(308.59, 1);
-    expect(dim.geracaoAnualEstimadaKWh).toBeCloseTo(308.59 * 12, 0); // 3703.03 vs 3703.08 — diferença de arredondamento
-    expect(dim.percentualCompensacaoReal).toBeGreaterThan(1.09); // 109.6%
+    expect(dim.geracaoMensalEstimadaKWh).toBeCloseTo(302.98, 1);
+    expect(dim.geracaoAnualEstimadaKWh).toBeCloseTo(302.98 * 12, 0);
+    expect(dim.percentualCompensacaoReal).toBeGreaterThan(1.07); // 107.6%
+    expect(dim.percentualCompensacaoReal).toBeLessThan(1.08);
     expect(dim.geracaoMensalEstimadaKWh).toBeGreaterThanOrEqual(281.5);
   });
 

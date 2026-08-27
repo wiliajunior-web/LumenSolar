@@ -121,11 +121,15 @@ describe('🔬 PENTE-FINO 2 — Dimensionamento: precisão numérica e edge case
 // ══════════════════════════════════════════════════════════════════════════════
 describe('🔬 PENTE-FINO 3 — Perdas: física e limites', () => {
 
+  // BUG CORRIGIDO em calcularPerdas.ts (ago/2026): Tcélula = Tamb+(NOCT-20)
+  // — o fator 0.8 (=800/1000, mistura errada NOCT/STC) foi removido. Ver
+  // comentário completo em calcularPerdas.ts e validacao_calculos.test.ts
+  // [P1.1]. Tamb ajustado para continuar batendo Tcell=25°C exatos.
   it('[P14] Temperatura STC (25°C exato): perda de temperatura = 0', () => {
-    // Tcell = Tamb + (NOCT-20)×0.8 = 25 quando Tamb = 25 - (NOCT-20)×0.8
-    // Para NOCT=45: Tamb = 25 - 25×0.8 = 25 - 20 = 5°C
-    const r = calcularPerdas({coeficienteTemperaturaPmax:-0.34, noct:45, toleranciaPercent:0, bifacial:false},{eficienciaMaximaPercent:100},{temperaturaAmbienteMediaC:5, perdaSombreamentoPercent:0, perdaSujidadePercent:0});
-    expect(r.perdaTemperatura).toBe(0); // Tcell = 5 + 25×0.8 = 25°C = STC
+    // Tcell = Tamb + (NOCT-20) = 25 quando Tamb = 25 - (NOCT-20)
+    // Para NOCT=45: Tamb = 25 - 25 = 0°C
+    const r = calcularPerdas({coeficienteTemperaturaPmax:-0.34, noct:45, toleranciaPercent:0, bifacial:false},{eficienciaMaximaPercent:100},{temperaturaAmbienteMediaC:0, perdaSombreamentoPercent:0, perdaSujidadePercent:0});
+    expect(r.perdaTemperatura).toBe(0); // Tcell = 0 + 25 = 25°C = STC
   });
 
   it('[P15] Temperatura abaixo de STC: perda = 0 (ganho ignorado — conservador)', () => {

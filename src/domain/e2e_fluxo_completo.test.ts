@@ -107,9 +107,13 @@ describe('E2E-1 — Fluxo completo: dados reais Ana Maria', () => {
     expect(MEDIA_KWH).toBeCloseTo(281.5, 1);
   });
 
-  it('[E2E-02] Perdas do sistema mono MG: ~13.4% (com efic=98.4%)', () => {
-    // efic=98.4% → perda_inv=1.6% (vs 97%→3%), por isso 13.4% e não 14.6%
-    expect(perdas.perdaTotalLiquida).toBeCloseTo(0.134, 2);
+  // BUG CORRIGIDO em calcularPerdas.ts (ago/2026): Tcélula = Tamb+(NOCT-20)
+  // — removido o fator 0.8 (=800/1000, mistura errada NOCT/STC). Ver
+  // comentário completo em calcularPerdas.ts e validacao_calculos.test.ts
+  // [P1.1]. Tcell=24+(45-20)=49°C, ΔT=24, perdaTemp=0.34×24/100=8.16%.
+  it('[E2E-02] Perdas do sistema mono MG: ~14.9% (com efic=98.4%)', () => {
+    // efic=98.4% → perda_inv=1.6% (vs 97%→3%), por isso 14.94% e não 16.15%
+    expect(perdas.perdaTotalLiquida).toBeCloseTo(0.1494, 3);
     expect(perdas.perdaTotalLiquida).toBeGreaterThan(0.10);
     expect(perdas.perdaTotalLiquida).toBeLessThan(0.20);
   });

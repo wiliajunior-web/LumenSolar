@@ -12,7 +12,7 @@ Desenvolvido pela Lumen Soluções Ltda — Araguari/MG.
 
 | Item | Estado |
 |------|--------|
-| Testes automatizados | **905 passando** (E2E, cálculos, persistência de arquivo .lumensolar, precificação de serviços, proteção CC, cabo CA/disjuntor, FDI, banco de baterias, agrupamento de UCs, cronograma de obra, UTM, checklist de documentação, mapa de células do Formulário CEMIG, dimensionamento Grupo A, wiring do store, geração dos PDFs de proposta, geração do Excel de auditoria, simulação de financiamento/payback, validação de formulário, detecção de cálculo desatualizado, fábricas de estado padrão, paginação da capa do PDF comercial) |
+| Testes automatizados | **909 passando** (E2E, cálculos, persistência de arquivo .lumensolar, precificação de serviços, proteção CC, cabo CA/disjuntor, FDI, banco de baterias, agrupamento de UCs, cronograma de obra, UTM, checklist de documentação, mapa de células do Formulário CEMIG, dimensionamento Grupo A, wiring do store, geração dos PDFs de proposta, geração do Excel de auditoria, simulação de financiamento/payback, validação de formulário, detecção de cálculo desatualizado, fábricas de estado padrão, paginação da capa do PDF comercial, fórmula NOCT de temperatura de célula, metadados de "recentes" e cancelamento do diálogo de importação) |
 | Build Windows | ✅ GitHub Actions → artifact `LumenSolar-Windows` |
 | Normas implementadas | NBR 16690, NBR 5410, Lei 14.300/2022, REN ANEEL 1.000/2021 |
 | Tarifa CEMIG | R$1,1827/kWh (Res. ANEEL 3.589/2026) |
@@ -755,6 +755,86 @@ a entrada muda. Confirmei os dois achados manualmente antes de corrigir.
   corrida), é funcionalidade pronta mas nunca conectada à UI — o usuário preenche specs de
   módulo/inversor e UTM manualmente hoje, sem saber que esse atalho existe no código. Se o plano é
   usar essas duas funcionalidades, falta só montá-las em algum lugar da aba Kit/Localização.
+
+### Nona rodada (ago/2026) — auditoria via 5 subagentes paralelos (arquivos ainda sem cobertura de auditoria manual)
+
+Ângulo desta rodada: cobrir os arquivos que nenhuma das 8 rodadas anteriores tinha lido por completo —
+serviços do renderer, os 4 documentos PDF além da capa (Memorial, Procuração, Diagrama Unifilar, Planta
+de Situação), dimensionamento (agrupamento/bateria/FDI/perdas), geração de Excel/CEMIG/FioB, e geografia
+(UTM/tiles de mapa). 5 subagentes independentes, cada um instruído a verificar fórmulas manualmente
+(não confiar no `expect(...)` do teste) e citar norma/artigo quando aplicável.
+
+- [x] **ALTO — `calcularPerdas.ts`: fórmula de temperatura de célula (NOCT) misturava a irradiância de
+  referência do próprio ensaio NOCT (800 W/m²) com a de STC (1000 W/m²), subestimando a perda por
+  temperatura em todo dimensionamento do app.** A fórmula padrão (Sandia PVPMC; Duffie & Beckman,
+  *Solar Engineering of Thermal Processes*) é `Tcélula = Tamb + (NOCT-20) × (G/800)`, onde 800 W/m² é
+  a irradiância do próprio ensaio NOCT — não a de STC. O código já escolhia G=800 W/m² (irradiância
+  média anual representativa, decisão de projeto documentada no próprio comentário do arquivo), o que
+  faz o fator corretoser G/800=800/800=1 (ΔT = NOCT−20 direto). O código, porém, multiplicava por 0.8
+  (=800/1000 — a razão errada, misturando duas irradiâncias de referência que não têm relação nessa
+  fórmula). Divergência concreta (módulo padrão NOCT=45°C, Tamb=24°C): fórmula com bug → Tcél=44°C,
+  ΔT=19°C, perda-temperatura=6,46%; fórmula corrigida → Tcél=49°C, ΔT=24°C, perda-temperatura=8,16%.
+  Como a perda por temperatura entra na composição de `perdaTotalLiquida`, que alimenta diretamente
+  `dimensionar.ts` (potência necessária = consumo/(HSP×dias×(1-perdas))), perdas subestimadas geravam
+  um sistema dimensionado MENOR do que o necessário para entregar a compensação de energia contratada
+  — o risco concreto é o cliente receber um sistema que não bate a economia prometida na proposta.
+  Corrigido removendo o fator 0.8 (`Tcélula = Tamb + (NOCT-20)` diretamente, já que G=800=800). Um novo
+  teste de regressão em `calcularPerdas.test.ts` verifica o valor exato de Tcélula/perdaTemperatura
+  (não só o intervalo 6%-30% que os testes anteriores checavam, que não pegava o bug). **11 testes em
+  5 arquivos** (`validacao_calculos.test.ts`, `auditoria_completa_v2.test.ts`, `auditoria.test.ts`,
+  `pente_fino.test.ts`, `e2e_fluxo_completo.test.ts`) tinham valores esperados calibrados contra a
+  fórmula com bug — recalculados manualmente um a um (mostrado nos comentários de cada teste) e
+  atualizados; nenhum teste foi ajustado sem essa verificação independente.
+- [x] **ALTO — `persistence.ts`: metadados de "recentes" (usados pela tela Home) liam campos que o
+  único chamador real do app nunca envia — toda proposta salva mostrava potência/preço em branco.**
+  `salvarArquivo()`/`importarArquivo()` liam `dados.dimensionamento?.potenciaInstaladaRealKWp` e
+  `dados.precificacao?.precoVenda` (campos aninhados), mas `App.tsx` (função `salvar()`) monta o
+  objeto salvo com `potenciaKWp`/`precoVenda` já resolvidos na RAIZ, sem nenhum campo
+  `dimensionamento`/`precificacao` — os dois arquivos nunca tinham o mesmo contrato de dados, e como
+  `salvarArquivo(dados: any)` não é tipado, o tsc nunca acusou a dessincronia. Resultado: toda proposta
+  salva pelo fluxo real do app (não só nos testes, que usavam o formato aninhado e por isso davam falsa
+  confiança) gravava `potenciaKWp`/`precoVenda` como `undefined`, e a tela Home nunca mostrava esses
+  valores em nenhum card (renderização condicional `{p.potenciaKWp && (...)}`). Corrigido lendo
+  `dados.potenciaKWp ?? dados.dimensionamento?.potenciaInstaladaRealKWp` (mesma ideia para preço) —
+  aceita os dois formatos, com o real (raiz) tendo prioridade. Novos testes de regressão exercitam o
+  formato REAL enviado por `App.tsx`, não só o aninhado.
+- [x] **MÉDIO — `persistence.ts`, `importarArquivo()`: cancelar o diálogo nativo de importação
+  travava a Promise para sempre (sem erro, sem log).** Só havia listener em `input.onchange` — em
+  Chromium/Electron, quando o usuário clica em "Cancelar" no diálogo nativo sem escolher arquivo, o
+  evento `change` NÃO dispara (só dispara quando um arquivo é de fato selecionado). Sem
+  `input.oncancel`, a Promise nunca era resolvida nem rejeitada nesse caso. O teste que afirmava cobrir
+  esse cenário ("resolve null quando o usuário fecha o seletor sem escolher arquivo") usava um mock que
+  sempre disparava `onchange`, mesmo simulando "cancelar" — não reproduzia o comportamento real do DOM.
+  Corrigido com `input.oncancel = () => resolve(null)`. Novo teste no mock simula a decisão real do
+  navegador (dispara `oncancel`, não `onchange`, quando o usuário cancela).
+
+**Achados desta rodada NÃO corrigidos ainda — na fila para a próxima rodada:**
+
+- [ ] **ALTO — `Procuracao.tsx`: campo "estado civil" do outorgante sempre sai como "solteiro(a)"
+  escrito por extenso, mesmo quando é falso** (`ecMap[cliente.estadoCivil] || 'solteiro(a)'` — o
+  fallback `||` cai no valor padrão até para `estadoCivil==='outro'`, e a UI nunca coleta esse campo
+  de verdade). Num instrumento de mandato (procuração), afirmar um estado civil específico sem
+  indicação de que é um valor não confirmado é um risco jurídico real.
+- [ ] **ALTO — `MemorialDescritivo.tsx` e `Procuracao.tsx`: texto sempre diz "microgeração...BT",
+  mesmo para minigeração (>75 kWp) ou cliente Grupo A/Média Tensão** — nenhum dos dois documentos
+  recebe `enquadramento`/`grupoTensao`. `MemorialDescritivo.tsx` também cita "RN nº 482 da ANEEL"
+  (revogada desde 2023; o resto do código já cita corretamente REN ANEEL 1.000/2021).
+- [ ] **ALTO — `DiagramaUnifilarBasico.tsx`: rótulo "REDE CEMIG" fixo no diagrama, para qualquer
+  cliente de qualquer uma das 18 distribuidoras cadastradas** (`src/data/distribuidoras.ts`) — o
+  arquivo não lê `codigoDistribuidora`. Documento técnico enviado à distribuidora com o nome errado.
+- [ ] **ALTO — `gerarFormularioCemig.ts`: 3 campos obrigatórios do formulário oficial CEMIG (CPF,
+  Bairro, CEP) sempre saem em branco** — `cliente.bairro`/`cliente.cep` não existem em `DadosCliente`
+  (só existe `endereco` combinado) e `cliente.cpf` nunca é preenchido pela UI (aba Cliente só coleta
+  nome/cidade/UF/telefone/e-mail). Mais 5 campos obrigatórios (Grid Zero, Fast Track, Motor Gerador,
+  Armazenamento, Telhado Arrendado) têm valores-padrão `DEFAULTS_CEMIG` declarados mas NUNCA escritos
+  em nenhuma célula — código morto que aparenta preencher o formulário mas não preenche.
+- [ ] **MÉDIO — `calcularBateria.ts`: alerta de segurança "autonomia mínima recomendada: 2 dias"
+  nunca dispara em produção** — só é calculado dentro de `if (p.hspMinimo)`, e o único call site real
+  (`App.tsx`) nunca passa esse parâmetro (embora o valor já exista na store). Um sistema offgrid
+  configurado com autonomia insuficiente nunca recebe aviso nenhum na UI.
+- [ ] **BAIXO — `PlantaDeSituacao.tsx`: UTM digitada manualmente aparece sem separador de milhar**,
+  inconsistente com a UTM geocodificada na mesma tabela — `localizacao.utmE`/`utmN` são `string`, e
+  `String.prototype.toLocaleString` (herdado de `Object.prototype`) ignora o locale e não formata nada.
 
 ### Oitava rodada (ago/2026) — bug de renderização/paginação na capa do PDF Comercial (`PropostaComercialPDF.tsx`)
 

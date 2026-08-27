@@ -83,28 +83,34 @@ describe('AUDITORIA 1 — Dimensionamento (IEC 61724-1)', () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 describe('AUDITORIA 2 — Perdas (IEC 61724-1 / IEC TS 60904-1-2)', () => {
 
-  it('[P01] monocristalino Araguari/MG: perdas = 14.60% (verificado manualmente)', () => {
-    // Tcell=44°C, ΔT=19°C → perdaTemp=6.46%, Perda inv=3%, cabo=2%, somb=2%, suj=2%
-    // fator=(0.97)(0.9354)(0.98)(0.98)(0.98)=0.85398 → perda=14.602%
+  // BUG CORRIGIDO em calcularPerdas.ts (ago/2026): a fórmula de Tcélula usava
+  // o fator 0.8 (=800/1000, mistura errada entre a irradiância do ensaio
+  // NOCT [800 W/m²] e a de STC [1000 W/m²]). Fórmula correta (Sandia PVPMC /
+  // Duffie & Beckman): Tcélula = Tamb + (NOCT-20) × (G/800), com G=800
+  // (irradiância média anual já escolhida por este módulo) ⇒ fator = 1, ou
+  // seja ΔT = NOCT-20 diretamente. Valores abaixo recalculados manualmente.
+  it('[P01] monocristalino Araguari/MG: perdas = 16.15% (verificado manualmente)', () => {
+    // Tcell=24+(45-20)=49°C, ΔT=24°C → perdaTemp=0.34×24/100=8.16%
+    // fator=(0.97)(0.9184)(0.98)(0.98)(0.98)=0.83846 → perda=16.154%
     const r = calcularPerdas(
       { coeficienteTemperaturaPmax:-0.34, noct:45, toleranciaPercent:0, bifacial:false },
       { eficienciaMaximaPercent:97 },
       { temperaturaAmbienteMediaC:24, perdaSombreamentoPercent:2, perdaSujidadePercent:2 }
     );
-    expect(r.perdaTotalLiquida).toBeCloseTo(0.14602, 4);
+    expect(r.perdaTotalLiquida).toBeCloseTo(0.16154, 4);
   });
 
-  it('[P02] Tcell = Tamb + (NOCT-20)×0.8 (irrad. ref. 800W/m²)', () => {
-    // Tamb=24, NOCT=45: Tcell=24+(45-20)×0.8=44°C, ΔT=19, perdaTemp=0.34×19/100=6.46%
+  it('[P02] Tcell = Tamb + (NOCT-20) (fator G/800=1, G=800 = irrad. média anual)', () => {
+    // Tamb=24, NOCT=45: Tcell=24+(45-20)=49°C, ΔT=24, perdaTemp=0.34×24/100=8.16%
     const r = calcularPerdas(
       { coeficienteTemperaturaPmax:-0.34, noct:45, toleranciaPercent:0, bifacial:false },
       { eficienciaMaximaPercent:100 },
       { temperaturaAmbienteMediaC:24, perdaSombreamentoPercent:0, perdaSujidadePercent:0 }
     );
-    expect(r.perdaTemperatura).toBeCloseTo(0.0646, 4);
+    expect(r.perdaTemperatura).toBeCloseTo(0.0816, 4);
   });
 
-  it('[P03] bifacial N-TYPE: perdas = 8.11% < monocristalino 14.60%', () => {
+  it('[P03] bifacial N-TYPE: perdas = 9.52% < monocristalino 16.15%', () => {
     const mono = calcularPerdas(
       { coeficienteTemperaturaPmax:-0.34, noct:45, toleranciaPercent:0, bifacial:false },
       { eficienciaMaximaPercent:97 },
@@ -115,7 +121,7 @@ describe('AUDITORIA 2 — Perdas (IEC 61724-1 / IEC TS 60904-1-2)', () => {
       { eficienciaMaximaPercent:98.4 },
       { temperaturaAmbienteMediaC:24, perdaSombreamentoPercent:2, perdaSujidadePercent:2 }
     );
-    expect(bif.perdaTotalLiquida).toBeCloseTo(0.0811, 3);
+    expect(bif.perdaTotalLiquida).toBeCloseTo(0.09524, 4);
     expect(bif.perdaTotalLiquida).toBeLessThan(mono.perdaTotalLiquida);
   });
 

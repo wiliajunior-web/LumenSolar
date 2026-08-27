@@ -231,13 +231,17 @@ describe('Cálculo de perdas — IEC 61724-1 e specs do fabricante', () => {
     expect(diferencaPerdas).toBeLessThan(0.07);
   });
 
+  // BUG CORRIGIDO em calcularPerdas.ts (ago/2026): Tcélula = Tamb+(NOCT-20)
+  // — removido o fator 0.8 (=800/1000, mistura errada entre a irradiância do
+  // ensaio NOCT [800 W/m²] e a de STC [1000 W/m²]). Ver comentário completo
+  // em calcularPerdas.ts.
   it('[Temperatura] Leapton 620W em GO (Tamb 26°C, NOCT 45°C) → perda ~5-8%', () => {
     const r = calcularPerdas(moduloLeapton620, growattMIN6kW,
       { temperaturaAmbienteMediaC: 26, perdaSombreamentoPercent: 0, perdaSujidadePercent: 0 }
     );
-    // Tcélula ≈ 26 + (45-20)×0.8 = 26 + 20 = 46°C → ΔT = 21°C
-    // Perda = 0.29%/°C × 21°C = 6.09%
-    expect(r.perdaTemperatura).toBeCloseTo(0.0609, 3);
+    // Tcélula = 26 + (45-20) = 51°C → ΔT = 26°C
+    // Perda = 0.29%/°C × 26°C = 7.54%
+    expect(r.perdaTemperatura).toBeCloseTo(0.0754, 3);
   });
 
   it('[Inversor] Growatt 98.4% eficiência → perda de 1.6%', () => {
