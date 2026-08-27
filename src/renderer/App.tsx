@@ -973,6 +973,21 @@ function TabConsumo({ onPrev, onNext }: { onPrev:()=>void; onNext:()=>void }) {
                 <Campo label="Demanda contratada (kW)" tip="Potência máxima contratada com a distribuidora.">
                   <input className="inp inp-num" type="number" step="1" value={(s.consumo as any).demandaContratadaKW || ''} onChange={e => s.atualizarConsumo({ demandaContratadaKW: Number(e.target.value) } as any)} placeholder="Ex: 100" />
                 </Campo>
+                {/* ADICIONADO (ago/2026): campo que faltava — `demandaMedidaFPkW` já
+                    existia formalizado em EntradaConsumo e era passado para
+                    calcularDimensionamentoGrupoA (useProjetoStore.ts calcularTudo()),
+                    mas não havia NENHUM input na UI para preenchê-lo. Como o campo
+                    tem default 0 e a store usa `consumo.demandaMedidaFPkW || undefined`,
+                    ele SEMPRE chegava como `undefined`, e calcularCustoDemanda cai de
+                    volta em `medida = demandaContratadaKW` — que nunca é maior que o
+                    próprio limite tolerável (105% de si mesmo). Resultado:
+                    `houveUltrapassagemDemanda` NUNCA poderia ser `true` na prática,
+                    mesmo com a tolerância de 5% corrigida (e testada) nesta mesma
+                    auditoria — a lógica estava certa, mas inatingível por falta deste
+                    campo. */}
+                <Campo label="Demanda medida (kW)" tip="Maior demanda registrada na fatura (kW). Opcional — deixe em branco se ainda não tiver a fatura em mãos. Usado para calcular ultrapassagem de demanda (tolerância de 5% sobre a contratada).">
+                  <input className="inp inp-num" type="number" step="1" value={(s.consumo as any).demandaMedidaFPkW || ''} onChange={e => s.atualizarConsumo({ demandaMedidaFPkW: Number(e.target.value) } as any)} placeholder="Ex: 105" />
+                </Campo>
               </div>
               {(s.consumo as any).tePontaKWh > 0 && (s.consumo as any).teForaPontaKWh > 0 && (
                 <div style={{ padding:'8px 12px', background:'#1a2510', border:'1px solid #22c55e44', borderRadius:8, fontSize:12, color:'#86efac' }}>

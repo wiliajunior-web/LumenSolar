@@ -523,6 +523,21 @@ mais nesta situação — ver quarta rodada abaixo: tinha painel próprio, só n
   só o de "paralelo > 6". Nenhum teste novo (é wiring de UI React, sem infraestrutura de teste de
   componente no projeto) — a lógica em si já está coberta pelos 5 testes de `calcularBateria.test.ts`.
 
+- [x] **ALTO — campo `demandaMedidaFPkW` (Grupo A, ultrapassagem de demanda) nunca tinha um input
+  na UI, tornando a lógica de tolerância de 5% (pesquisada, corrigida e testada em rodada anterior
+  desta mesma auditoria) inatingível na prática.** O campo já existia formalizado em
+  `EntradaConsumo` (`useProjetoStore.ts`), com default `0`, e era passado para
+  `calcularDimensionamentoGrupoA` dentro de `calcularTudo()` como
+  `consumo.demandaMedidaFPkW || undefined`. Como nenhum lugar de `App.tsx` fazia referência a esse
+  campo (confirmado por grep — zero ocorrências antes desta correção), ele chegava sempre
+  `undefined`, e `calcularCustoDemanda` caía de volta em `medida = demandaContratadaKW` — que nunca
+  é maior que o próprio limite tolerável (105% de si mesmo). Resultado prático:
+  `houveUltrapassagemDemanda` NUNCA podia ser `true` em uso real do app, mesmo com a fórmula de
+  tolerância certa e testada. Corrigido: adicionado o campo "Demanda medida (kW)" na aba Consumo,
+  bloco de tarifas Grupo A, logo após "Demanda contratada (kW)", com tip explicando o uso (valor
+  da fatura, opcional). Nenhum teste novo necessário — é só o input que faltava; a lógica de
+  cálculo já tinha 3 testes dedicados de uma rodada anterior desta auditoria.
+
 **Não corrigido nesta auditoria — requer trabalho dedicado:**
 
 - [ ] **ALTO — Grupo A (Média Tensão): cálculo roda e é exibido no painel; os documentos gerados
