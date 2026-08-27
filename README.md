@@ -683,7 +683,8 @@ a entrada muda. Confirmei os dois achados manualmente antes de corrigir.
   `buildData()` — usada por 8 dos 9 geradores de documento — e `gerarExcel()` (o único que não passa
   por `buildData()`) lançam erro e bloqueiam a geração até o usuário recalcular. 4 novos testes de
   regressão em `useProjetoStore.test.ts` provam que a assinatura bate logo após calcular, diverge ao
-  editar `consumo`/`kit`, e volta a bater depois de recalcular.
+  editar `consumo`/`kit`, e volta a bater depois de recalcular. `abrirWhatsApp()` (cita kWp/preço
+  calculados na mensagem pré-preenchida) recebeu o mesmo guard.
 - [x] **MÉDIO — `novaProposta()` (App.tsx) resetava o store com um literal parcial próprio (via
   `as any`), que já estava desatualizado em relação ao formato real de `consumo`/`kit`.** Faltavam por
   completo, em `consumo`: `grupoTensao`, `agrupamentoAtivo`, `unidadesConsumidoras`, `historicoFP`,

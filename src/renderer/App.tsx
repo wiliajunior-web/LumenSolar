@@ -2487,6 +2487,13 @@ function TabResultado({ onPrev }: { onPrev:()=>void }) {
 
   function abrirWhatsApp() {
     const st = useProjetoStore.getState();
+    // Mesmo guard de calculoDesatualizado() dos documentos — esta mensagem
+    // também cita kWp/preço calculados, então também pode ficar desatualizada
+    // depois de uma edição pós-cálculo.
+    if (calculoDesatualizado(st)) {
+      alert('Os dados foram alterados depois do último cálculo. Recalcule (aba Preço) antes de enviar — os valores de kWp/preço na mensagem podem estar desatualizados.');
+      return;
+    }
     const tel = (st.cliente.telefone || '').replace(/\D/g, '');
     const nome = st.cliente.nome || 'cliente';
     const kwp  = st.dimensionamento?.potenciaInstaladaRealKWp?.toFixed(2) ?? '';
