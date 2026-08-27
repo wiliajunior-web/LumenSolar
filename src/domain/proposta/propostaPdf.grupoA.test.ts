@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import React from 'react';
 import { pdf } from '@react-pdf/renderer';
 import { PropostaPDF, type PropostaData } from './PropostaPDF';
@@ -124,5 +124,44 @@ describe('PropostaComercialPDF — página AvisoGrupoA', () => {
     const data = { ...dataComercialBase, consumo: { grupoTensao: 'A' }, resultadoGrupoA: resultadoGrupoAExemplo };
     const buf = await pdf(React.createElement(PropostaComercialPDF, { data }) as any).toBuffer();
     expect(buf).toBeTruthy();
+  });
+
+  // BUG CORRIGIDO (ago/2026): a página de capa usava uma <Image> de fundo
+  // full-bleed (position:'absolute', width/height:'100%') seguida de uma
+  // <View> irmã também absoluta (overlay com dados do cliente). O motor de
+  // paginação do @react-pdf/renderer interpretava essa combinação como "nó
+  // grande demais para caber e que não sabe quebrar entre páginas" — emite
+  // `console.warn('Node of type IMAGE can't wrap between pages...')` e separa
+  // o conteúdo: a imagem de fundo fica sozinha na página 1 e a <View> do
+  // overlay (com nome do cliente, cidade, kWp, economia) é órfã numa página
+  // 2 quase em branco. Resultado: o PDF entregue ao cliente tinha uma página
+  // extra vazia logo após a capa, e a capa em si aparecia sem nenhuma
+  // informação do cliente (pois o overlay tinha "vazado" pra página 2).
+  // Fix: prop `fixed` na <Image> de capa (isenta o nó da paginação normal,
+  // igual ao padrão já usado no rodapé <View style={S.footer} fixed>).
+  // Esse fix expôs um segundo defeito, também corrigido: o overlay usava
+  // `backgroundColor: 'rgba(0,0,0,0.72)'` (semi-transparente), deixando o
+  // texto/ícones já embutidos na foto de capa (badges "INSTALAÇÃO",
+  // "MANUTENÇÃO", "TECNOLOGIA" etc.) visíveis por baixo do texto dinâmico do
+  // cliente — colisão visual. Fix: cor sólida e opaca (C.dark, já usada no
+  // resto da paleta) em vez de rgba translúcido, eliminando qualquer chance
+  // de vazamento da imagem por trás do texto, independente da posição exata
+  // dos elementos gráficos embutidos na foto.
+  // A suíte anterior só checava `expect(buf).toBeTruthy()`, o que não
+  // detectava nenhum dos dois defeitos (o PDF continuava sendo gerado com
+  // sucesso, só que com conteúdo/paginação errados). Este teste verifica a
+  // causa raiz diretamente: nenhum warning de paginação deve ser emitido.
+  it('capa não deve gerar warning de paginação do react-pdf (nó IMAGE não deve "vazar" pra página órfã)', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const data = { ...dataComercialBase, consumo: { grupoTensao: 'B' } };
+      const buf = await pdf(React.createElement(PropostaComercialPDF, { data }) as any).toBuffer();
+      expect(buf).toBeTruthy();
+      const mensagensDeAviso = warnSpy.mock.calls.map((args) => String(args[0]));
+      const avisoDePaginacao = mensagensDeAviso.filter((m) => m.includes("can't wrap between pages"));
+      expect(avisoDePaginacao).toEqual([]);
+    } finally {
+      warnSpy.mockRestore();
+    }
   });
 });

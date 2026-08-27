@@ -247,11 +247,12 @@ export function PropostaComercialPDF({ data }: { data: any }) {
       <Page size="A4" style={{ fontFamily: 'Helvetica', padding: 0 }}>
         {/* Imagem de capa full-page */}
         <Image
+          fixed
           src={empresa.fotoCapa || IMG_CAPA}
           style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover' }}
         />
         {/* Overlay com info do cliente no rodapé */}
-        <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(0,0,0,0.72)', padding: '18 32 22 32' }}>
+        <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: C.dark, padding: '18 32 22 32' }}>
           <Text style={{ color: '#ffffff', fontFamily: 'Helvetica-Bold', fontSize: 16, marginBottom: 4 }}>
             {cliente.nome || 'Cliente'}
           </Text>

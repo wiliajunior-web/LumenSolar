@@ -12,7 +12,7 @@ Desenvolvido pela Lumen Soluções Ltda — Araguari/MG.
 
 | Item | Estado |
 |------|--------|
-| Testes automatizados | **904 passando** (E2E, cálculos, persistência de arquivo .lumensolar, precificação de serviços, proteção CC, cabo CA/disjuntor, FDI, banco de baterias, agrupamento de UCs, cronograma de obra, UTM, checklist de documentação, mapa de células do Formulário CEMIG, dimensionamento Grupo A, wiring do store, geração dos PDFs de proposta, geração do Excel de auditoria, simulação de financiamento/payback, validação de formulário, detecção de cálculo desatualizado, fábricas de estado padrão) |
+| Testes automatizados | **905 passando** (E2E, cálculos, persistência de arquivo .lumensolar, precificação de serviços, proteção CC, cabo CA/disjuntor, FDI, banco de baterias, agrupamento de UCs, cronograma de obra, UTM, checklist de documentação, mapa de células do Formulário CEMIG, dimensionamento Grupo A, wiring do store, geração dos PDFs de proposta, geração do Excel de auditoria, simulação de financiamento/payback, validação de formulário, detecção de cálculo desatualizado, fábricas de estado padrão, paginação da capa do PDF comercial) |
 | Build Windows | ✅ GitHub Actions → artifact `LumenSolar-Windows` |
 | Normas implementadas | NBR 16690, NBR 5410, Lei 14.300/2022, REN ANEEL 1.000/2021 |
 | Tarifa CEMIG | R$1,1827/kWh (Res. ANEEL 3.589/2026) |
@@ -755,3 +755,46 @@ a entrada muda. Confirmei os dois achados manualmente antes de corrigir.
   corrida), é funcionalidade pronta mas nunca conectada à UI — o usuário preenche specs de
   módulo/inversor e UTM manualmente hoje, sem saber que esse atalho existe no código. Se o plano é
   usar essas duas funcionalidades, falta só montá-las em algum lugar da aba Kit/Localização.
+
+### Oitava rodada (ago/2026) — bug de renderização/paginação na capa do PDF Comercial (`PropostaComercialPDF.tsx`)
+
+Mudança de ângulo de novo: nenhuma das 6 rodadas anteriores olhou de fato para as *páginas
+renderizadas* dos PDFs gerados — só `expect(buf).toBeTruthy()`. Gerei um PDF de exemplo (via o
+mesmo fixture de `propostaPdf.grupoA.test.ts`) e inspecionei visualmente cada página; a capa do
+"Doc Proposta" (`PropostaComercialPDF.tsx`, botão "📄 Proposta") tinha dois defeitos, o segundo só
+visível depois de corrigir o primeiro.
+
+- [x] **ALTO — a capa do PDF entregue ao cliente saía sem a foto de fundo, e o documento ganhava
+  uma página extra em branco logo depois dela.** A capa usa uma `<Image>` de fundo full-bleed
+  (`position:'absolute', width:'100%', height:'100%'`) seguida de uma `<View>` irmã, também
+  absoluta, com overlay de dados do cliente (nome, cidade, kWp, economia, payback). O motor de
+  paginação do `@react-pdf/renderer` interpreta essa combinação como "nó grande demais pra caber e
+  que não sabe quebrar entre páginas" — emite `console.warn("Node of type IMAGE can't wrap between
+  pages and it's bigger than available page height")` e separa o conteúdo: a imagem de fundo fica
+  sozinha na página 1 (sem nenhum texto do overlay) e a `<View>` do overlay vira órfã numa página 2
+  quase em branco (só o fundo escuro do overlay, sem a foto atrás). Confirmado visualmente: PDF de
+  teste tinha 7 páginas em vez de 6, com a página 2 vazia. Corrigido com a prop `fixed` na `<Image>`
+  de capa — isenta o nó da paginação normal, mesmo padrão já usado no rodapé
+  (`<View style={S.footer} fixed>`, já existente no mesmo arquivo). Página 2 órfã desaparece, PDF
+  volta a ter 6 páginas, capa mostra a foto com os dados do cliente por cima, tudo na mesma página.
+- [x] **MÉDIO — corrigir o bug acima expôs um segundo defeito que estava escondido atrás dele: o
+  texto dinâmico do overlay (nome do cliente, cidade/UF, kWp, economia/mês, payback) colidia
+  visualmente com texto/ícones já embutidos na própria foto de capa** (badges "PROJETOS INSTALAÇÃO
+  MANUTENÇÃO", "EFICIÊNCIA ECONOMIA SUSTENTABILIDADE", "TECNOLOGIA QUALIDADE CONFIANÇA", já
+  desenhados na imagem `IMG_CAPA`), porque o overlay usava `backgroundColor: 'rgba(0,0,0,0.72)'` —
+  72% opaco não é suficiente pra apagar completamente o que está atrás em todas as combinações de
+  cor/contraste da foto. Cheguei a testar `rgba(0,0,0,0.94)` e ainda sobrava traço visível do badge
+  por trás do texto branco/dourado do overlay. Corrigido trocando para uma cor sólida e 100% opaca
+  (`C.dark`, `#0a0b10`, já usada no resto da paleta do documento — mesma cor do plano de fundo do
+  "Doc Técnica") em vez de `rgba` translúcido: elimina qualquer chance de vazamento da imagem por
+  trás do texto, independente da posição exata dos elementos gráficos embutidos na foto (que eu não
+  medi pixel a pixel — a cor sólida torna essa medição desnecessária).
+- [x] Novo teste de regressão em `propostaPdf.grupoA.test.ts` ataca a causa raiz diretamente: espiona
+  `console.warn` durante a geração do PDF e falha se aparecer qualquer warning de paginação
+  (`"can't wrap between pages"`). Verificado manualmente que esse teste FALHA contra o código
+  original (sem a prop `fixed`) antes de confirmar que passa com o fix — não é um teste de
+  placebo. Nenhum dos outros arquivos de PDF (`PropostaPDF.tsx`, `MemorialDescritivo.tsx`,
+  `Procuracao.tsx`, `DiagramaUnifilarBasico.tsx`, `PlantaDeSituacao.tsx`) usa o padrão
+  imagem-de-fundo-full-bleed-mais-overlay-absoluto — `IMG_APOIO` (segunda imagem do mesmo arquivo)
+  usa altura fixa (110pt, não `'100%'`) e não é `position:'absolute'`, então não é afetada pelo
+  mesmo bug; confirmado por grep, o defeito é específico da capa do Doc Proposta.
