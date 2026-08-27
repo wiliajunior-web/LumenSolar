@@ -2846,9 +2846,23 @@ function TabResultado({ onPrev }: { onPrev:()=>void }) {
                   <table className="tbl">
                     <thead><tr><th>Ano</th><th style={{ textAlign:'center' }}>Fio B</th><th style={{ textAlign:'right' }}>Custo/mês est.</th></tr></thead>
                     <tbody>
-                      {[2025,2026,2027,2028,2029].map(ano => {
+                      {(() => {
+                        const anoAtual = new Date().getFullYear();
+                        return [anoAtual, anoAtual+1, anoAtual+2, anoAtual+3, 2029, 2030].filter((v,i,a) => a.indexOf(v)===i && v<=2035);
+                      })().map(ano => {
+                        // BUG CORRIGIDO (ago/2026): esta tabela reimplementava o cálculo de custo do
+                        // Fio B com a mesma fórmula que já tinha sido corrigida em PropostaPDF.tsx
+                        // (ver comentário lá) mas o fix não tinha sido propagado para cá — mesma
+                        // classe de bug (UI divergindo do módulo de domínio) encontrada e corrigida
+                        // várias vezes nesta auditoria. Usava geracaoMensalEstimadaKWh (energia total
+                        // gerada) em vez da energia efetivamente compensada (min(geração, consumo) —
+                        // mesma regra de calcularCustos.ts), e fração de tarifa do Fio B hardcoded em
+                        // 0.35 em vez de empresa.fracaoTarifaFioB (configurável). Para sistemas
+                        // superdimensionados isso superestimava o custo futuro do Fio B mostrado ao
+                        // cliente em até ~50%.
                         const distrib = DISTRIBUIDORAS.find(d => d.codigo === s.consumo.codigoDistribuidora) ?? DISTRIBUIDORAS[0];
-                        const custo = dim.geracaoMensalEstimadaKWh * distrib.tarifaKWhComICMS * 0.35 * (pfb[ano] ?? 1);
+                        const energiaCompensadaKWh = Math.min(dim.geracaoMensalEstimadaKWh, s.consumoMedioMensalKWh ?? dim.geracaoMensalEstimadaKWh);
+                        const custo = energiaCompensadaKWh * distrib.tarifaKWhComICMS * (s.empresa.fracaoTarifaFioB ?? 0.35) * (pfb[ano] ?? 1);
                         return (
                           <tr key={ano}>
                             <td>{ano}</td>

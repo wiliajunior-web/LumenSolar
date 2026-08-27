@@ -538,6 +538,30 @@ mais nesta situação — ver quarta rodada abaixo: tinha painel próprio, só n
   da fatura, opcional). Nenhum teste novo necessário — é só o input que faltava; a lógica de
   cálculo já tinha 3 testes dedicados de uma rodada anterior desta auditoria.
 
+- [x] **ALTO — a tabela "Fio B — Lei 14.300/2022" na aba Resultado (`App.tsx`, `TabResultado`)
+  reimplementava um cálculo que já tinha sido corrigido em outro lugar do código, mas o fix nunca
+  chegou até aqui — mesma classe de bug do painel de baterias acima.** `PropostaPDF.tsx` (linha
+  ~427) já documentava, de uma rodada anterior desta mesma auditoria, a correção de um bug
+  equivalente: usar `energiaCompensadaKWh = min(geração, consumo)` em vez da geração bruta, e
+  `empresa.fracaoTarifaFioB` (configurável, padrão 0,35) em vez de um `0.35` fixo no código — a
+  mesma regra que `calcularCustos.ts` usa internamente. A tabela de `App.tsx`, porém, continuava
+  com a fórmula antiga: `dim.geracaoMensalEstimadaKWh × tarifa × 0.35 × pctFioB`. Para qualquer
+  sistema superdimensionado (o caminho padrão da Estratégia de kWp, que mira ≥100% de compensação)
+  isso superestimava o custo futuro do Fio B mostrado ao cliente em até ~50% — e ignorava por
+  completo o campo "Fração da tarifa que é Fio B" configurado em ⚙ Empresa. Corrigido para usar a
+  mesma fórmula de `PropostaPDF.tsx`/`calcularCustos.ts`. Também troquei a lista fixa de anos
+  `[2025,2026,2027,2028,2029]` (já defasada — 2025 é passado em ago/2026) pela mesma janela
+  dinâmica `anoAtual..anoAtual+3, 2029, 2030` que `PropostaPDF.tsx` usa, para as duas telas
+  mostrarem os mesmos anos. Nenhum teste novo (é wiring de UI React); a fórmula em si é a mesma já
+  coberta pelos testes de `calcularCustos.test.ts`.
+
+**Auditoria de `App.tsx` (2914 linhas) concluída nesta sessão** — o arquivo inteiro foi lido e
+revisado seção por seção (Consumo, Local, Componentes Recomendados NBR 5410/16690, Importar
+Datasheet via IA, Buscador de Coordenadas UTM, Kit — módulos/inversor/bateria, Precificação,
+Resultado — todos os geradores de documento e as ações de assinatura). Os dois achados de maior
+impacto (`demandaMedidaFPkW` e a tabela Fio B) estão documentados acima; nenhum outro cálculo
+divergente foi encontrado no restante do arquivo.
+
 **Não corrigido nesta auditoria — requer trabalho dedicado:**
 
 - [ ] **ALTO — Grupo A (Média Tensão): cálculo roda e é exibido no painel; os documentos gerados
