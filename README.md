@@ -602,6 +602,14 @@ divergente foi encontrado no restante do arquivo.
   um confirma que a tabela de escalonamento NÃO aparece quando `elegivelArt26`, outro confirma que o
   percentual de um ano usado na planilha é o passado em `percentuaisFioBPorAno`, não o valor-padrão
   fixo — ambos falhariam com o código antigo.
+- [x] **BAIXO — mais 5 citações incorretas de "IEC 61724-1" removidas** (mesmo erro já corrigido em
+  `calcularPerdas.ts`, `calcularFDI.ts` e `App.tsx` em rodadas anteriores desta auditoria — essa
+  norma trata de monitoramento de desempenho de sistemas FV em operação, não define fórmulas de
+  perdas/dimensionamento nem a média de dias por mês). Encontradas em: `gerarExcel.ts` (cabeçalho do
+  arquivo + títulos e notas de célula das abas "Perdas" e "Dimensionamento" — texto que vai para
+  dentro do `.xlsx` entregue ao usuário, não só comentário de código) e `dimensionar.ts`
+  (`DIAS_MES = 30.4167`, que é só 365/12 — aritmética básica, sem norma nenhuma por trás). Não muda
+  nenhum cálculo, só remove citações normativas falsas.
 
 **Não corrigido nesta auditoria — requer trabalho dedicado:**
 

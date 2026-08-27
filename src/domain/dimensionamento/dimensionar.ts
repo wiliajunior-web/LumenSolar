@@ -1,6 +1,11 @@
 import { ParametrosDimensionamento, ResultadoDimensionamento } from './types';
 
-/** Média anual de dias por mês (365/12 = 30.4167). Ref: IEC 61724-1. */
+// CORRIGIDO (ago/2026): citava "Ref: IEC 61724-1" para esta constante — essa
+// norma trata de monitoramento de desempenho de sistemas FV em operação, não
+// tem relação com a média de dias por mês (é só 365/12, aritmética básica).
+// Mesma citação incorreta encontrada e removida de outros pontos do código
+// nesta auditoria (calcularPerdas.ts, calcularFDI.ts, gerarExcel.ts, App.tsx).
+/** Média anual de dias por mês: 365/12 = 30.4167. */
 const DIAS_MES = 30.4167;
 
 /**

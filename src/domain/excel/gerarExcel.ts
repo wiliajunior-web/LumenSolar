@@ -6,12 +6,19 @@
  *
  * Estrutura:
  *   Aba 1 — Entradas           (inputs em azul)
- *   Aba 2 — Perdas             (IEC 61724-1)
- *   Aba 3 — Dimensionamento    (IEC 61724-1)
+ *   Aba 2 — Perdas             (fórmulas de engenharia FV padrão — Sandia/PVsyst/Duffie & Beckman;
+ *                                ver comentário em calcularPerdas.ts)
+ *   Aba 3 — Dimensionamento    (mesmas fórmulas de engenharia FV padrão)
  *   Aba 4 — FioB_Economia      (Lei 14.300/2022)
  *   Aba 5 — Precificacao       (Preço = Custo/(1-imp-marg))
  *   Aba 6 — Tabela_Price       (amortização completa)
  *   Aba 7 — Fluxo_Caixa       (TIR, VPL, Payback — 25 anos)
+ *
+ * CORRIGIDO (ago/2026): o cabeçalho citava "IEC 61724-1" para as abas Perdas/
+ * Dimensionamento — mesma citação incorreta já removida de calcularPerdas.ts
+ * numa rodada anterior desta auditoria (essa norma trata de monitoramento de
+ * desempenho de sistemas FV em operação, não das fórmulas de perdas/
+ * dimensionamento usadas aqui).
  */
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -411,12 +418,18 @@ export function gerarExcelAuditoria(dados: any): void {
   setCols(ws2, [40, 18, 30]);
   r = 1;
 
-  setStr(ws2, r, 1, 'CÁLCULO DE PERDAS — IEC 61724-1'); r+=2;
+  // CORRIGIDO (ago/2026): "IEC 61724-1" era citada nesta aba (título e duas notas
+  // de célula) como se fosse a norma que define estas fórmulas de perdas — não é;
+  // essa norma trata de monitoramento de desempenho de sistemas FV em operação.
+  // Mesma citação incorreta já removida de calcularPerdas.ts numa rodada anterior
+  // desta auditoria. São fórmulas de engenharia FV padrão (Sandia/PVsyst/Duffie &
+  // Beckman); os cálculos em si não mudam.
+  setStr(ws2, r, 1, 'CÁLCULO DE PERDAS'); r+=2;
 
   setStr(ws2, r, 1, 'TEMPERATURA DE CÉLULA  Tcell = Tamb + (NOCT-20)×0.8'); r++;
   const P_TAMB = r; setStr(ws2, r, 1, 'Temperatura ambiente (°C)'); setFrm(ws2, r, 2, `=${E(ROW_TAMB)}`); setStr(ws2, r, 3, `Entradas!B${ROW_TAMB}`); r++;
   const P_NOCT = r; setStr(ws2, r, 1, 'NOCT (°C)'); setFrm(ws2, r, 2, `=${E(ROW_NOCT)}`); r++;
-  const P_TCELL= r; setStr(ws2, r, 1, 'Tcell = Tamb + (NOCT-20)×0.8'); setFrm(ws2, r, 2, `=B${P_TAMB}+(B${P_NOCT}-20)*0.8`, 'General', tamb+(noct-20)*0.8); setStr(ws2, r, 3, 'IEC 61724-1 — irrad. ref. 800 W/m²'); r++;
+  const P_TCELL= r; setStr(ws2, r, 1, 'Tcell = Tamb + (NOCT-20)×0.8'); setFrm(ws2, r, 2, `=B${P_TAMB}+(B${P_NOCT}-20)*0.8`, 'General', tamb+(noct-20)*0.8); setStr(ws2, r, 3, 'Irradiância de referência: 800 W/m² (média anual, < 1000 W/m² STC)'); r++;
   const P_DT   = r; setStr(ws2, r, 1, 'ΔT = Tcell - 25°C (STC)'); setFrm(ws2, r, 2, `=B${P_TCELL}-25`); r+=2;
 
   setStr(ws2, r, 1, 'COMPONENTES DE PERDA  [composição encadeada]'); r++;
@@ -425,7 +438,7 @@ export function gerarExcelAuditoria(dados: any): void {
   const P_INV  = r; setStr(ws2, r, 1, '2. Perda do inversor'); setFrm(ws2, r, 2, `=1-${E(ROW_EFIC)}/100`, F_PCT); setStr(ws2, r, 3, '1 − eficiência'); r++;
   const P_SOMB = r; setStr(ws2, r, 1, '3. Perda por sombreamento'); setFrm(ws2, r, 2, `=${E(ROW_SOMB)}`, F_PCT); r++;
   const P_SUJ  = r; setStr(ws2, r, 1, '4. Perda por sujidade'); setFrm(ws2, r, 2, `=${E(ROW_SUJ)}`, F_PCT); r++;
-  const P_CAB  = r; setStr(ws2, r, 1, '5. Perda por cabeamento'); setNum(ws2, r, 2, 0.02, F_PCT); setStr(ws2, r, 3, 'Fixo 2% — IEC 61724-1 §A.2'); r++;
+  const P_CAB  = r; setStr(ws2, r, 1, '5. Perda por cabeamento'); setNum(ws2, r, 2, 0.02, F_PCT); setStr(ws2, r, 3, 'Fixo 2% — estimativa padrão de engenharia FV'); r++;
   const P_BIF  = r; setStr(ws2, r, 1, '6. Ganho bifacial (+)'); setFrm(ws2, r, 2, `=${E(ROW_BIF)}`, F_PCT); setStr(ws2, r, 3, 'Positivo — reduz perdas'); r+=2;
 
   setStr(ws2, r, 1, 'FATOR DE EFICIÊNCIA  [encadeado = mais preciso que aditivo]'); r++;
@@ -455,7 +468,9 @@ export function gerarExcelAuditoria(dados: any): void {
   const ws3: WS = {};
   setCols(ws3, [40, 18, 30]);
   r = 1;
-  setStr(ws3, r, 1, 'DIMENSIONAMENTO DO SISTEMA — IEC 61724-1'); r+=2;
+  // CORRIGIDO (ago/2026): mesma citação incorreta de "IEC 61724-1" removida do
+  // título desta aba — ver comentário na aba "Perdas" acima.
+  setStr(ws3, r, 1, 'DIMENSIONAMENTO DO SISTEMA'); r+=2;
 
   setStr(ws3, r, 1, 'DADOS DE ENTRADA'); r++;
   const D_CONS = r; setStr(ws3, r, 1, 'Consumo médio mensal (kWh/mês)'); setFrm(ws3, r, 2, `=Entradas!B${ROW_MEDIA}`, F_KWH, mediaConsumo); r++;
