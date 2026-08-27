@@ -58,7 +58,7 @@ function setCols(ws: WS, widths: number[]) {
 export function gerarExcelAuditoria(dados: any): void {
   const { empresa, cliente, consumo, localizacao, kit, preco,
           dimensionamento, custosRecorrentes, precificacao, indicadores,
-          resultadoGrupoA } = dados;
+          resultadoGrupoA, enquadramento, percentuaisFioBPorAno } = dados;
 
   const wb: WB = XLSX.utils.book_new();
 
@@ -298,32 +298,55 @@ export function gerarExcelAuditoria(dados: any): void {
   setStr(ws0, r0, 4, 'R$/ano'); r0+=2;
 
   // ── FioB projeção ─────────────────────────────────────────────────────────
-  setStr(ws0, r0, 2, '▌ PROJEÇÃO FIO-B — LEI 14.300/2022 (Art. 27)'); r0++;
-  setStr(ws0, r0, 2, 'Ano'); setStr(ws0, r0, 3, 'FioB (%)');
-  setStr(ws0, r0, 4, 'Economia/mês'); setStr(ws0, r0, 5, 'Obs.'); r0++;
-
-  const fiobRows: Array<[number,number,number]> = [
-    [2026, 0.60, custosRecorrentes?.economiaMensalRS ?? 0],
-    [2027, 0.75, 0],
-    [2028, 0.90, 0],
-    [2029, 1.00, 0],
-  ];
-  // Calcular economia por ano com cada % de FioB
+  // BUG CORRIGIDO (ago/2026): esta tabela ignorava por completo o enquadramento
+  // real do cliente (`enquadramento`/`percentuaisFioBPorAno`, calculados por
+  // classificarEnquadramento()/percentualFioBPorAno() em calculoFioB.ts, já
+  // usados no resto do app) — nem `enquadramento` nem `percentuaisFioBPorAno`
+  // eram sequer passados a esta função pelo chamador (App.tsx `gerarExcel()`).
+  // Sempre assumia o escalonamento do Art. 27 a partir de 60% em 2026, mesmo
+  // para um cliente elegível à regra de transição do Art. 26 (isento até
+  // 2045) — nesse caso a aba "Resumo" (primeira aba, voltada ao cliente)
+  // mostraria uma tabela de custo crescente de Fio B totalmente fictícia.
+  // Também usava fracTUSD=0.35 fixo em vez de empresa.fracaoTarifaFioB
+  // (configurável) — mesmo bug já corrigido em App.tsx/TabResultado e em
+  // PropostaPDF.tsx nesta mesma auditoria.
   const tarifaLocal = tarifa;
   const kwhDispLocal = kwhMin;
-  const fracTUSD = 0.35;
+  const fracTUSD = empresa?.fracaoTarifaFioB ?? 0.35;
   const compLocal = Math.min(gerMens, mediaConsumo);
   const contaBaseSemEco = mediaConsumo * tarifaLocal + cip;
 
-  for (const [ano, pctFioB, _ecoDefault] of fiobRows) {
-    const fiob = compLocal * tarifaLocal * fracTUSD * pctFioB;
-    const contaAposAno = kwhDispLocal * tarifaLocal + cip + fiob;
-    const ecoAno2 = contaBaseSemEco - contaAposAno;
-    setNum(ws0, r0, 2, ano,     F_INT);
-    setNum(ws0, r0, 3, pctFioB, F_PCT);
-    setNum(ws0, r0, 4, ecoAno2, F_BRL);
-    setStr(ws0, r0, 5, pctFioB === 1.00 ? 'Regra plena (Art.27)' : '');
+  if (enquadramento?.elegivelArt26) {
+    setStr(ws0, r0, 2, '▌ FIO-B — LEI 14.300/2022 (Art. 26 — regra de transição)'); r0++;
+    setStr(ws0, r0, 2, 'Sistema enquadrado na regra de transição do art. 26: Fio B isento sobre a');
     r0++;
+    setStr(ws0, r0, 2, 'energia compensada até 31/12/2045. Sem escalonamento de custo a projetar.');
+    r0++;
+  } else {
+    setStr(ws0, r0, 2, '▌ PROJEÇÃO FIO-B — LEI 14.300/2022 (Art. 27)'); r0++;
+    setStr(ws0, r0, 2, 'Ano'); setStr(ws0, r0, 3, 'FioB (%)');
+    setStr(ws0, r0, 4, 'Economia/mês'); setStr(ws0, r0, 5, 'Obs.'); r0++;
+
+    // Percentuais reais do enquadramento do cliente quando disponíveis
+    // (percentuaisFioBPorAno, calculado em calcularTudo()); os valores do
+    // escalonamento-padrão da lei ficam como fallback só se não vierem.
+    const anoAtualLocal = new Date().getFullYear();
+    const anosProjecao = [anoAtualLocal, anoAtualLocal+1, anoAtualLocal+2, anoAtualLocal+3, 2029]
+      .filter((v,i,a) => a.indexOf(v)===i && v<=2035)
+      .sort((a,b)=>a-b);
+    const fallbackPct: Record<number,number> = { 2025:0.15, 2026:0.60, 2027:0.75, 2028:0.90, 2029:1.00 };
+
+    for (const ano of anosProjecao) {
+      const pctFioB = percentuaisFioBPorAno?.[ano] ?? fallbackPct[ano] ?? 1.00;
+      const fiob = compLocal * tarifaLocal * fracTUSD * pctFioB;
+      const contaAposAno = kwhDispLocal * tarifaLocal + cip + fiob;
+      const ecoAno2 = contaBaseSemEco - contaAposAno;
+      setNum(ws0, r0, 2, ano,     F_INT);
+      setNum(ws0, r0, 3, pctFioB, F_PCT);
+      setNum(ws0, r0, 4, ecoAno2, F_BRL);
+      setStr(ws0, r0, 5, pctFioB >= 1.00 ? 'Regra plena (Art.27)' : '');
+      r0++;
+    }
   }
   r0++;
 
@@ -489,7 +512,12 @@ export function gerarExcelAuditoria(dados: any): void {
   const FE_CONS = r; setStr(ws4, r, 1, 'Consumo médio (kWh/mês)'); setFrm(ws4, r, 2, `=Dimensionamento!B${D_CONS}`, F_KWH); r++;
   const FE_GER  = r; setStr(ws4, r, 1, 'Geração mensal (kWh/mês)'); setFrm(ws4, r, 2, `=Dimensionamento!B${D_GERM}`, F_KWH); r++;
   const FE_COMP = r; setStr(ws4, r, 1, 'Energia compensada (kWh)'); setFrm(ws4, r, 2, `=MIN(B${FE_CONS},B${FE_GER})`, F_KWH); setStr(ws4, r, 3, 'min(geração, consumo) — regra ANEEL'); r++;
-  const FE_FRAC = r; setStr(ws4, r, 1, 'Fração tarifária FioB'); setNum(ws4, r, 2, 0.35, F_PCT); setStr(ws4, r, 3, '35% da tarifa — fixo em lei'); r++;
+  // BUG CORRIGIDO (ago/2026): rótulo dizia "fixo em lei" — falso; é uma
+  // estimativa configurável (empresa.fracaoTarifaFioB, padrão 35%), não um
+  // percentual definido pela Lei 14.300/2022. Valor inicial da célula também
+  // passou a vir de empresa.fracaoTarifaFioB (o usuário pode sobrescrever a
+  // célula manualmente, como o cabeçalho do arquivo já promete).
+  const FE_FRAC = r; setStr(ws4, r, 1, 'Fração tarifária FioB'); setNum(ws4, r, 2, empresa?.fracaoTarifaFioB ?? 0.35, F_PCT); setStr(ws4, r, 3, 'Estimativa (editável) — não é percentual definido em lei'); r++;
   const FE_ANOB = r; setStr(ws4, r, 1, 'Ano base'); setFrm(ws4, r, 2, `=${E(ROW_ANOB)}`, F_INT); r+=2;
 
   // FioB por ano — tabela Art.27

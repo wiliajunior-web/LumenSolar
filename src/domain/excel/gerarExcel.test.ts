@@ -1,5 +1,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { existsSync, unlinkSync, readdirSync } from 'node:fs';
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const XLSX: typeof import('xlsx') = require('xlsx');
 import { gerarExcelAuditoria } from './gerarExcel';
 
 // Este arquivo não tinha NENHUM teste antes. Dois bugs reais passaram
@@ -92,5 +94,61 @@ describe('gerarExcelAuditoria — smoke test (regressão do bug FC_T0 + dependê
       },
     };
     expect(() => gerarExcelAuditoria(dados as any)).not.toThrow();
+  });
+});
+
+// [REGRESSÃO ago/2026] o bloco "PROJEÇÃO FIO-B" da aba Resumo ignorava por
+// completo o enquadramento real do cliente — nem `enquadramento` nem
+// `percentuaisFioBPorAno` eram passados a gerarExcelAuditoria() por App.tsx,
+// então a tabela sempre assumia o escalonamento do Art. 27 a partir de 60%
+// em 2026, mesmo para um cliente elegível à regra de transição do Art. 26
+// (isento até 2045) — e usava fracTUSD=0.35 fixo em vez de
+// empresa.fracaoTarifaFioB (configurável). Ver comentário completo em
+// gerarExcel.ts.
+describe('gerarExcelAuditoria — REGRESSÃO ago/2026: aba Resumo respeita o enquadramento real (Fio B)', () => {
+  afterEach(() => limparArquivosGerados());
+
+  function planilhaResumo(dados: any): any {
+    gerarExcelAuditoria(dados);
+    const gerados = readdirSync('.').filter(f => f.startsWith('Auditoria_') && f.endsWith('.xlsx'));
+    const wb = XLSX.readFile(gerados[0]);
+    return wb.Sheets['Resumo'];
+  }
+
+  function todosOsTextos(ws: any): string[] {
+    return Object.keys(ws)
+      .filter(k => k !== '!ref' && k !== '!cols' && ws[k].t === 's')
+      .map(k => ws[k].v as string);
+  }
+
+  it('cliente elegível ao art. 26 (isento): NÃO mostra a tabela de escalonamento do Art. 27', () => {
+    const dados = {
+      cliente: { nome: 'Cliente Art26' },
+      enquadramento: { classe: 'microgeracao', elegivelArt26: true, regraEspecialArt27Paragrafo1: false, observacoes: [] },
+      percentuaisFioBPorAno: { 2025: 0, 2026: 0, 2027: 0, 2028: 0, 2029: 0 },
+    };
+    const textos = todosOsTextos(planilhaResumo(dados));
+    expect(textos.some(t => t.includes('PROJEÇÃO FIO-B') && t.includes('Art. 27'))).toBe(false);
+    expect(textos.some(t => t.includes('art. 26') && t.includes('isento'))).toBe(true);
+  });
+
+  it('cliente Art. 27: usa o percentual REAL de percentuaisFioBPorAno, não o escalonamento-padrão fixo', () => {
+    // protocolo hipotético que dá 15% em 2026 (valor bem diferente do
+    // escalonamento-padrão de 60% que o código antigo sempre usava) — o que
+    // importa aqui é só provar que a aba lê o valor passado, não recalcula.
+    const dados = {
+      cliente: { nome: 'Cliente Art27' },
+      enquadramento: { classe: 'microgeracao', elegivelArt26: false, regraEspecialArt27Paragrafo1: false, observacoes: [] },
+      percentuaisFioBPorAno: { 2025: 0.15, 2026: 0.15, 2027: 0.15, 2028: 0.15, 2029: 0.15 },
+    };
+    const ws = planilhaResumo(dados);
+    // acha a(s) linha(s) onde a coluna B tem o ano 2026 (F_INT) e confere que
+    // a coluna C (pctFioB, F_PCT) na mesma linha é 0.15 — não 0.60.
+    const linhasAno2026 = Object.keys(ws)
+      .filter(k => /^B\d+$/.test(k) && ws[k].t === 'n' && ws[k].v === 2026)
+      .map(k => k.slice(1));
+    expect(linhasAno2026.length).toBeGreaterThan(0);
+    const pct = linhasAno2026.map(linha => ws[`C${linha}`]?.v).find(v => v !== undefined);
+    expect(pct).toBeCloseTo(0.15, 6);
   });
 });

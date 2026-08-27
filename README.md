@@ -12,7 +12,7 @@ Desenvolvido pela Lumen Soluções Ltda — Araguari/MG.
 
 | Item | Estado |
 |------|--------|
-| Testes automatizados | **891 passando** (E2E, cálculos, persistência de arquivo .lumensolar, precificação de serviços, proteção CC, cabo CA/disjuntor, FDI, banco de baterias, agrupamento de UCs, cronograma de obra, UTM, checklist de documentação, mapa de células do Formulário CEMIG, dimensionamento Grupo A, wiring do store, geração dos PDFs de proposta) |
+| Testes automatizados | **893 passando** (E2E, cálculos, persistência de arquivo .lumensolar, precificação de serviços, proteção CC, cabo CA/disjuntor, FDI, banco de baterias, agrupamento de UCs, cronograma de obra, UTM, checklist de documentação, mapa de células do Formulário CEMIG, dimensionamento Grupo A, wiring do store, geração dos PDFs de proposta, geração do Excel de auditoria) |
 | Build Windows | ✅ GitHub Actions → artifact `LumenSolar-Windows` |
 | Normas implementadas | NBR 16690, NBR 5410, Lei 14.300/2022, REN ANEEL 1.000/2021 |
 | Tarifa CEMIG | R$1,1827/kWh (Res. ANEEL 3.589/2026) |
@@ -583,6 +583,25 @@ divergente foi encontrado no restante do arquivo.
   de UTM, delegam a matemática para `converterCoordenadas.ts`/`tileMercator.ts`, ambos testados; a
   parte de rede/canvas do `satelliteMosaic.ts` é documentada no próprio arquivo como não testável em
   vitest/jsdom — testada manualmente no app real).
+- [x] **ALTO — revisando `PropostaComercialPDF.tsx`/`PropostaPDF.tsx` (nenhum bug novo neles, já
+  corrigidos em rodadas anteriores) encontrei o mesmo bug de novo em `gerarExcel.ts`: a aba "Resumo"
+  do Excel (primeira aba, voltada ao cliente) tinha um bloco "PROJEÇÃO FIO-B" que ignorava por
+  completo o enquadramento real do cliente.** Nem `enquadramento` nem `percentuaisFioBPorAno`
+  (calculados em `calcularTudo()`, já usados por `App.tsx`/`PropostaPDF.tsx`) eram sequer passados
+  a `gerarExcelAuditoria()` pelo chamador (`App.tsx` `gerarExcel()`) — a função sempre assumia o
+  escalonamento do Art. 27 a partir de 60% em 2026, **mesmo para um cliente elegível à regra de
+  transição do Art. 26** (isento até 31/12/2045): nesse caso a aba mostraria ao cliente uma tabela
+  de custo crescente de Fio B inteiramente fictícia. Também usava `fracTUSD=0.35` fixo em vez de
+  `empresa.fracaoTarifaFioB` (configurável) — mesmo bug do item da tabela Fio B em `App.tsx` acima.
+  Corrigido: `App.tsx` agora passa `enquadramento`/`percentuaisFioBPorAno`; `gerarExcel.ts` mostra a
+  mensagem de isenção quando `elegivelArt26`, e usa os percentuais reais por ano (com a tabela-padrão
+  da lei só como fallback quando o dado não vier). Também corrigido um rótulo falso na aba
+  "FioB_Economia" ("35% da tarifa — **fixo em lei**" — não é; é uma estimativa configurável) e seu
+  valor inicial, que agora vem de `empresa.fracaoTarifaFioB`. 2 testes novos de regressão em
+  `gerarExcel.test.ts`, lendo o `.xlsx` gerado de volta (mesmo padrão de `gerarCronograma.test.ts`):
+  um confirma que a tabela de escalonamento NÃO aparece quando `elegivelArt26`, outro confirma que o
+  percentual de um ano usado na planilha é o passado em `percentuaisFioBPorAno`, não o valor-padrão
+  fixo — ambos falhariam com o código antigo.
 
 **Não corrigido nesta auditoria — requer trabalho dedicado:**
 

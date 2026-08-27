@@ -2630,6 +2630,9 @@ function TabResultado({ onPrev }: { onPrev:()=>void }) {
         dimensionamento: st.dimensionamento, custosRecorrentes: st.custosRecorrentes,
         precificacao: st.precificacao, indicadores: st.indicadores,
         resultadoGrupoA: st.resultadoGrupoA,
+        // ADICIONADO (ago/2026): faltavam por completo — ver comentário "BUG
+        // CORRIGIDO" no bloco "PROJEÇÃO FIO-B" de gerarExcel.ts.
+        enquadramento: st.enquadramento, percentuaisFioBPorAno: st.percentuaisFioBPorAno,
       });
     } catch(e) { alert('Erro ao gerar Excel: ' + (e instanceof Error ? e.message : String(e)));
     } finally { setGerando(false); }
