@@ -129,7 +129,16 @@ export function MemorialDescritivo({ data }: { data:any }) {
   const potKWp = dim.potenciaInstaladaRealKWp;
   const geracaoAnual = Math.round(dim.geracaoAnualEstimadaKWh);
   const geracaoMensal = Math.round(dim.geracaoMensalEstimadaKWh);
-  const area = fmtN(dim.numeroModulos * (kit.comprimentoMm/1000) * (kit.larguraMm/1000) || ind?.areaNecessariaM2 || 0);
+  // BUG CORRIGIDO (ago/2026): faltava o fator de espaçamento de 10% (folga entre
+  // fileiras/módulos para fixação e manutenção) que os outros pontos do app já usam
+  // para a mesma grandeza — ver comentário em gerarFormularioCemig.ts (mesma fórmula,
+  // já corrigida numa rodada anterior desta auditoria) e areaTotalNecessariaM2() em
+  // financeiro/indicadores.ts (fallback `ind?.areaNecessariaM2`, usado em App.tsx e
+  // PropostaComercialPDF.tsx). Sem o fator, o Memorial Descritivo — justamente o
+  // documento técnico enviado à distribuidora — mostrava uma área ~10% MENOR que a
+  // área necessária real e ~10% menor que a mesma grandeza nos outros documentos do
+  // mesmo projeto.
+  const area = fmtN(dim.numeroModulos * (kit.comprimentoMm/1000) * (kit.larguraMm/1000) * 1.1 || ind?.areaNecessariaM2 || 0);
   const tensaoSistCC = kit.vocV * kit.modulosPorString;
 
   return (

@@ -562,6 +562,28 @@ Resultado — todos os geradores de documento e as ações de assinatura). Os do
 impacto (`demandaMedidaFPkW` e a tabela Fio B) estão documentados acima; nenhum outro cálculo
 divergente foi encontrado no restante do arquivo.
 
+### Quinta rodada (ago/2026) — documentos PDF sem cobertura de teste (Memorial, DUB, Procuração, Planta de Situação)
+
+- [x] **MÉDIO — `MemorialDescritivo.tsx` calculava a "área ocupada" pelos módulos sem o fator de
+  espaçamento de 10% que o resto do app já aplica para a mesma grandeza.** `App.tsx` (card "Sistema
+  fotovoltaico") e `PropostaComercialPDF.tsx` mostram `ind.areaNecessariaM2`, calculado por
+  `areaTotalNecessariaM2()` em `financeiro/indicadores.ts` — que já inclui ×1,10 de folga para
+  fixação/manutenção entre módulos. `gerarFormularioCemig.ts` tem um caminho alternativo, quando as
+  dimensões físicas do módulo (do datasheet) estão preenchidas, que também aplica ×1,10 — corrigido
+  numa rodada anterior desta auditoria (comentário "BUG CORRIGIDO" no próprio arquivo). O Memorial
+  Descritivo, porém, calculava `numeroModulos × comprimento × largura` SEM esse fator — mesma classe
+  de bug (fix não propagado para todos os pontos que calculam a mesma grandeza), e justamente no
+  documento técnico enviado à distribuidora, mostrando uma área ~10% menor que a dos outros
+  documentos do mesmo projeto. Corrigido: adicionado o `× 1.1`, alinhando com
+  `gerarFormularioCemig.ts`.
+- [x] Lidos e revisados por inteiro (sem bug de cálculo encontrado): `DiagramaUnifilarBasico.tsx`
+  (já usa `calcularCaboCA`/`calcularProtecaoCC` de verdade, com os fixes de rodadas anteriores
+  citados em comentário próprio), `Procuracao.tsx` (documento jurídico, sem cálculo — só
+  formatação/texto), `PlantaDeSituacao.tsx` e `satelliteMosaic.ts` (mosaico de satélite + conferência
+  de UTM, delegam a matemática para `converterCoordenadas.ts`/`tileMercator.ts`, ambos testados; a
+  parte de rede/canvas do `satelliteMosaic.ts` é documentada no próprio arquivo como não testável em
+  vitest/jsdom — testada manualmente no app real).
+
 **Não corrigido nesta auditoria — requer trabalho dedicado:**
 
 - [ ] **ALTO — Grupo A (Média Tensão): cálculo roda e é exibido no painel; os documentos gerados
