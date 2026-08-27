@@ -122,11 +122,20 @@ function GeracaoBarChart({ geracaoMensal }: { geracaoMensal:number[] }) {
 }
 
 export function MemorialDescritivo({ data }: { data:any }) {
-  const { empresa, cliente, localizacao, kit, dimensionamento:dim, consumo, indicadores:ind } = data;
+  const { empresa, cliente, localizacao, kit, dimensionamento:dim, consumo, indicadores:ind, enquadramento } = data;
   if (!dim) return null;
 
   const distrib = DISTRIBUIDORAS.find((d:any)=>d.codigo===consumo.codigoDistribuidora) ?? {nome:'', nomeAbreviado:'CEMIG'};
   const potKWp = dim.potenciaInstaladaRealKWp;
+  // BUG CORRIGIDO (ago/2026): capa e texto de objetivo diziam sempre
+  // "Microgeração...BT", independente do enquadramento real do projeto
+  // (enquadramento.classe, LIMITE_MICROGERACAO_KW=75kWp em fioB/types.ts) e
+  // do grupo de tensão real (consumo.grupoTensao — ver mesmo padrão já usado
+  // em PropostaPDF.tsx/PropostaComercialPDF.tsx via mostrarAvisoGrupoA). Um
+  // documento técnico enviado à distribuidora não pode afirmar uma classe de
+  // geração ou nível de tensão diferente do projeto real.
+  const classeGD = enquadramento?.classe === 'minigeracao' ? 'Minigeração' : 'Microgeração';
+  const nivelTensao = consumo?.grupoTensao === 'A' ? 'MT' : 'BT';
   const geracaoAnual = Math.round(dim.geracaoAnualEstimadaKWh);
   const geracaoMensal = Math.round(dim.geracaoMensalEstimadaKWh);
   // BUG CORRIGIDO (ago/2026): faltava o fator de espaçamento de 10% (folga entre
@@ -159,7 +168,7 @@ export function MemorialDescritivo({ data }: { data:any }) {
           </View>
 
           <View style={S.capaTitleBox}>
-            <Text style={S.capaTitle}>Memorial descritivo de Sistema de{'\n'}Microgeração Fotovoltaica conectado à rede{'\n'}elétrica de BT com potência instalada de</Text>
+            <Text style={S.capaTitle}>Memorial descritivo de Sistema de{'\n'}{classeGD} Fotovoltaica conectado à rede{'\n'}elétrica de {nivelTensao} com potência instalada de</Text>
             <Text style={[S.capaSub,{marginTop:6}]}>
               <Text style={S.capaHighlight}>{fmtN(potKWp)} kWp em {cliente.cidade}, {cliente.uf}</Text>
             </Text>
@@ -230,8 +239,8 @@ export function MemorialDescritivo({ data }: { data:any }) {
           {/* Objetivo */}
           <Text style={S.secNum}>OBJETIVO DO PROJETO</Text>
           <Text style={S.para}>
-            O objetivo deste projeto é a INSTALAÇÃO DE UMA UNIDADE DE MICROGERAÇÃO DE ENERGIA SOLAR FOTOVOLTAICA CONECTADA À REDE ELÉTRICA COM POTÊNCIA INSTALADA DE{' '}
-            <Text style={S.bold}>{fmtN(potKWp)} kWp</Text>, cuja finalidade é a geração de energia elétrica e injeção do excedente de energia, se houver, na rede de Baixa Tensão da concessionária distribuidora de energia, caracterizando o sistema de compensação de energia elétrica previsto na Lei no 14.300/2022 e na RN no 482 da ANEEL.
+            O objetivo deste projeto é a INSTALAÇÃO DE UMA UNIDADE DE {classeGD.toUpperCase()} DE ENERGIA SOLAR FOTOVOLTAICA CONECTADA À REDE ELÉTRICA COM POTÊNCIA INSTALADA DE{' '}
+            <Text style={S.bold}>{fmtN(potKWp)} kWp</Text>, cuja finalidade é a geração de energia elétrica e injeção do excedente de energia, se houver, na rede de {nivelTensao === 'MT' ? 'Média Tensão' : 'Baixa Tensão'} da concessionária distribuidora de energia, caracterizando o sistema de compensação de energia elétrica previsto na Lei no 14.300/2022 e na REN ANEEL no 1.000/2021.
           </Text>
           <Text style={S.para}>
             O presente documento descreve os principais aspectos técnicos deste sistema fotovoltaico de capacidade já referida a ser instalado, daqui em diante denominado "UFV (Unidade Fotovoltaica) <Text style={S.bold}>{cliente.nome}</Text>", para fins de consulta de acesso junto à{' '}
@@ -378,7 +387,7 @@ export function MemorialDescritivo({ data }: { data:any }) {
 
           <Text style={S.secNumSub}>3.4  Dispositivos de proteção CC e CA</Text>
           <Text style={S.para}>
-            Serão instalados Dispositivos de Proteção contra Surtos (DPS) no lado CA da instalação, entre o inversor e o quadro de distribuição, conforme recomendações da NBR 5410 e normas da distribuidora. Caso a distância entre os módulos e a entrada do inversor seja superior a 15 metros no lado CC, serão instalados DPS também no lado CC. O sistema contará ainda com disjuntor termomagnético de proteção no Quadro de Distribuição Geral de Baixa Tensão.
+            Serão instalados Dispositivos de Proteção contra Surtos (DPS) no lado CA da instalação, entre o inversor e o quadro de distribuição, conforme recomendações da NBR 5410 e normas da distribuidora. Caso a distância entre os módulos e a entrada do inversor seja superior a 15 metros no lado CC, serão instalados DPS também no lado CC. O sistema contará ainda com disjuntor termomagnético de proteção no Quadro de Distribuição Geral de {nivelTensao === 'MT' ? 'Média Tensão' : 'Baixa Tensão'}.
           </Text>
 
           <Text style={S.secNumSub}>3.5  Aterramento</Text>

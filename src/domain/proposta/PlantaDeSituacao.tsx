@@ -51,6 +51,16 @@ const S = StyleSheet.create({
 });
 
 const N6 = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 6, maximumFractionDigits: 6 });
+// BUG CORRIGIDO (ago/2026): localizacao.utmE/utmN são `string` (DadosLocalizacao,
+// campo de texto livre) — chamar String.prototype.toLocaleString() nelas é um
+// no-op (retorna a própria string, sem separador de milhar), diferente de
+// Number.prototype.toLocaleString() usado em utmGeocodificado (numérico, calculado
+// por latLonParaUTM). Convertida para número antes de formatar; se não for um
+// número válido (usuário digitou algo fora do padrão), mostra o texto bruto.
+const fmtUtm = (v: string) => {
+  const n = Number(v);
+  return Number.isFinite(n) ? n.toLocaleString('pt-BR') : v;
+};
 
 export function PlantaDeSituacao({ data, mosaico }: { data: any; mosaico: ResultadoMosaicoSatelite }) {
   const { empresa = {}, cliente = {}, localizacao = {} } = data;
@@ -100,7 +110,7 @@ export function PlantaDeSituacao({ data, mosaico }: { data: any; mosaico: Result
             ['Endereco buscado', safe(mosaico.enderecoEncontrado)],
             ['Latitude / Longitude', `${N6(mosaico.latitude)}, ${N6(mosaico.longitude)}`],
             ['UTM (do endereco geocodificado)', `Fuso ${utmGeocodificado.fuso}S — E=${utmGeocodificado.utmE.toLocaleString('pt-BR')} N=${utmGeocodificado.utmN.toLocaleString('pt-BR')}`],
-            ['UTM digitada no projeto (passo Local)', temUtmDigitada ? `Fuso ${utmDigitada!.fuso}S — E=${utmDigitada!.utmE.toLocaleString('pt-BR')} N=${utmDigitada!.utmN.toLocaleString('pt-BR')}` : 'nao preenchida'],
+            ['UTM digitada no projeto (passo Local)', temUtmDigitada ? `Fuso ${utmDigitada!.fuso}S — E=${fmtUtm(utmDigitada!.utmE)} N=${fmtUtm(utmDigitada!.utmN)}` : 'nao preenchida'],
             ['No da UC', localizacao.numeroUC || '-'],
           ].map(([lbl,val],i) => (
             <View key={i} style={i%2===1?S.tblRowAlt:S.tblRow}>

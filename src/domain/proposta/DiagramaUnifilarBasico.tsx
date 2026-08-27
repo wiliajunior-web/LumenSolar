@@ -19,6 +19,7 @@ import { Document, Page, Text, View, StyleSheet, Svg, Line, Rect, Circle, Path }
 import { calcularCaboCA } from '@domain/dimensionamento/calcularCaboCA';
 import { calcularProtecaoCC, calcularDPSCA } from '@domain/dimensionamento/calcularProtecaoCC';
 import { PRESETS_MODULO } from '@data/presetsModulo';
+import { DISTRIBUIDORAS } from '@data/distribuidoras';
 
 const DARK = '#0a0a1e';
 const GOLD = '#c9a227';
@@ -85,7 +86,7 @@ function Bloco({ x, y, w, h, label, sub }: BlocoProps) {
 }
 
 function DiagramaSvg({ dados }: { dados: ReturnType<typeof montarDadosDiagrama> }) {
-  const { potCA, secaoCA, disjCA, dpsCA, nStrings, modPorString, potModulo, qtdModulos, secaoCC, fusivel, dpsCC } = dados;
+  const { potCA, secaoCA, disjCA, dpsCA, nStrings, modPorString, potModulo, qtdModulos, secaoCC, fusivel, dpsCC, nomeDistribuidora } = dados;
   const bW = 100, bH = 34, gap = 42;
   const xs = [10, 10+bW+gap, 10+2*(bW+gap), 10+3*(bW+gap)];
   const W = xs[3] + bW + 10, H = 220;
@@ -103,9 +104,12 @@ function DiagramaSvg({ dados }: { dados: ReturnType<typeof montarDadosDiagrama> 
     );
   }
 
-  // Fronteira de responsabilidade REDE CEMIG (acessada) / ACESSANTE — no
-  // ponto de conexao, logo apos o padrao de entrada (medidor bidirecional),
-  // seguindo o mesmo local usado no exemplo oficial de DUB da CEMIG (Anexo 1).
+  // Fronteira de responsabilidade REDE (acessada) / ACESSANTE — no ponto de
+  // conexao, logo apos o padrao de entrada (medidor bidirecional), seguindo
+  // o mesmo local usado no exemplo oficial de DUB da CEMIG (Anexo 1) — o
+  // layout do diagrama segue esse modelo independente da distribuidora real
+  // do projeto, mas o RÓTULO exibido reflete a distribuidora real (ver
+  // BUG CORRIGIDO abaixo).
   const fronteiraX = xs[1] + bW + gap / 2;
 
   return (
@@ -136,13 +140,13 @@ function DiagramaSvg({ dados }: { dados: ReturnType<typeof montarDadosDiagrama> 
 
       {/* Zonas de responsabilidade, acima dos blocos, separadas pela linha tracejada da fronteira */}
       <Text style={{ position:'absolute', left:xs[0], top:0, width:(xs[1]+bW)-xs[0], fontSize:6.3, fontFamily:'Helvetica-Bold', textAlign:'center', color:'#7f1d1d' }}>
-        {'REDE CEMIG (ACESSADA)'}
+        {`REDE ${nomeDistribuidora} (ACESSADA)`}
       </Text>
       <Text style={{ position:'absolute', left:xs[2], top:0, width:(xs[3]+bW)-xs[2], fontSize:6.3, fontFamily:'Helvetica-Bold', textAlign:'center', color:'#7f1d1d' }}>
         {'ACESSANTE'}
       </Text>
 
-      <Bloco x={xs[0]} y={yLine} w={bW} h={bH} label="REDE CEMIG" sub="Concessionaria" />
+      <Bloco x={xs[0]} y={yLine} w={bW} h={bH} label={`REDE ${nomeDistribuidora}`} sub="Concessionaria" />
       <Bloco x={xs[1]} y={yLine} w={bW} h={bH} label="PADRAO DE ENTRADA" sub="Medidor bidirecional" />
       <Bloco x={xs[2]} y={yLine} w={bW} h={bH} label={`INVERSOR${potCA?` ${N(potCA,1)}kW`:''}`} sub={dados.marcaInversor} />
       <Bloco x={xs[3]} y={yLine} w={bW} h={bH} label={`STRING(S) FV (CC)`} sub={`${nStrings}x${modPorString}=${qtdModulos} mod. ${potModulo?`${potModulo}Wp`:''}`} />
@@ -174,6 +178,15 @@ function DiagramaSvg({ dados }: { dados: ReturnType<typeof montarDadosDiagrama> 
 
 function montarDadosDiagrama(data: any) {
   const kit = data.kit || {};
+  // BUG CORRIGIDO (ago/2026): os rótulos "REDE CEMIG" no diagrama eram
+  // hardcoded, ignorando data.consumo.codigoDistribuidora — um projeto de
+  // outra distribuidora (ex: outra concessionária de MG, ou de outro
+  // estado) gerava um DUB identificando a rede errada, documento que é
+  // efetivamente enviado à distribuidora real. Mesmo padrão de busca já
+  // usado em MemorialDescritivo.tsx/Procuracao.tsx (fallback CEMIG, mercado
+  // primário da Lumen Soluções, mantendo consistência com o resto do app).
+  const distrib = DISTRIBUIDORAS.find((d: any) => d.codigo === data.consumo?.codigoDistribuidora) ?? { nomeAbreviado: 'CEMIG' };
+  const nomeDistribuidora = safe((distrib.nomeAbreviado || 'CEMIG').toUpperCase());
   const potCA = kit.potenciaInversorKW || 0;
   const tensaoCA = kit.tensaoSaidaV || 220;
   const fp = parseFloat(String(kit.fatorPotencia || '>0.99').replace('>','')) || 0.99;
@@ -210,7 +223,7 @@ function montarDadosDiagrama(data: any) {
     nStrings: kit.numStrings || 1, modPorString: kit.modulosPorString || 1,
     qtdModulos: kit.quantidade || 0, potModulo: kit.potenciaModuloWp || 0,
     secaoCC: protecaoCC.secaoCaboMm2, fusivel: protecaoCC.fusivelStringA, dpsCC: protecaoCC.dpsClasseKA,
-    caboCA, protecaoCC,
+    caboCA, protecaoCC, nomeDistribuidora,
   };
 }
 

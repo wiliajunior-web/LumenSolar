@@ -12,7 +12,7 @@ Desenvolvido pela Lumen Soluções Ltda — Araguari/MG.
 
 | Item | Estado |
 |------|--------|
-| Testes automatizados | **911 passando** (E2E, cálculos, persistência de arquivo .lumensolar, precificação de serviços, proteção CC, cabo CA/disjuntor, FDI, banco de baterias, agrupamento de UCs, cronograma de obra, UTM, checklist de documentação, mapa de células do Formulário CEMIG, dimensionamento Grupo A, wiring do store, geração dos PDFs de proposta, geração do Excel de auditoria, simulação de financiamento/payback, validação de formulário, detecção de cálculo desatualizado, fábricas de estado padrão, paginação da capa do PDF comercial, fórmula NOCT de temperatura de célula, metadados de "recentes" e cancelamento do diálogo de importação) |
+| Testes automatizados | **927 passando** (E2E, cálculos, persistência de arquivo .lumensolar, precificação de serviços, proteção CC, cabo CA/disjuntor, FDI, banco de baterias, agrupamento de UCs, cronograma de obra, UTM, checklist de documentação, mapa de células do Formulário CEMIG, dimensionamento Grupo A, wiring do store, geração dos PDFs de proposta, geração do Excel de auditoria, simulação de financiamento/payback, validação de formulário, detecção de cálculo desatualizado, fábricas de estado padrão, paginação da capa do PDF comercial, fórmula NOCT de temperatura de célula, metadados de "recentes", cancelamento do diálogo de importação, Procuração/Memorial/Diagrama Unifilar/Planta de Situação) |
 | Build Windows | ✅ GitHub Actions → artifact `LumenSolar-Windows` |
 | Normas implementadas | NBR 16690, NBR 5410, Lei 14.300/2022, REN ANEEL 1.000/2021 |
 | Tarifa CEMIG | R$1,1827/kWh (Res. ANEEL 3.589/2026) |
@@ -837,23 +837,58 @@ de Situação), dimensionamento (agrupamento/bateria/FDI/perdas), geração de E
   células saem preenchidas a partir do formato real de `dados.cliente`; confirmado manualmente que o
   teste falha contra o código original (as 5 células Sim/Não) antes do fix.
 
-**Achados desta rodada NÃO corrigidos ainda — na fila para a próxima rodada:**
+- [x] **ALTO — `Procuracao.tsx`: campo "estado civil" do outorgante sempre saía como "solteiro(a)"
+  escrito por extenso, mesmo quando era falso — corrigido nesta rodada.**
+  `ecMap[cliente.estadoCivil] || 'solteiro(a)'` afirmava "solteiro(a)" como FATO sempre que
+  `estadoCivil` era `'outro'` (mapeava para `''`, falsy) ou qualquer valor ausente/não reconhecido —
+  e não existe (nem existia) campo de estado civil na UI, então essa era a única saída possível na
+  prática: todo instrumento de procuração gerado pelo app afirmava um estado civil nunca confirmado
+  pelo usuário, risco jurídico real num documento com esse efeito. Corrigido para cair no mesmo
+  padrão de placeholder em branco (`____________`) já usado no restante do arquivo para dado ausente
+  (`rgCliente`, `endCliente`), em vez de uma afirmação não verificada — tanto para `'outro'` quanto
+  para qualquer valor ausente/desconhecido. Novos testes cobrem os dois casos de bug e os dois casos
+  de valor real informado (`'casado'`, `'solteiro'`), este último provando que o valor real continua
+  sendo exibido corretamente quando de fato foi informado.
+- [x] **ALTO — `MemorialDescritivo.tsx` e `Procuracao.tsx`: texto sempre dizia "microgeração...BT",
+  mesmo para minigeração (>75 kWp) ou cliente Grupo A/Média Tensão — corrigido nesta rodada.** Nenhum
+  dos dois documentos lia `data.enquadramento`/`data.consumo.grupoTensao`, apesar de `buildData()`
+  (`App.tsx`) já enviar os dois campos para ambos — bastava ler o que já chegava, não plumbar dado
+  novo. Corrigido com `classeGD = enquadramento?.classe==='minigeracao' ? 'Minigeração' :
+  'Microgeração'` (mesmo limiar `LIMITE_MICROGERACAO_KW=75kWp` de `fioB/types.ts`) e
+  `nivelTensao = consumo?.grupoTensao==='A' ? 'MT' : 'BT'`, aplicados na capa, no parágrafo de
+  OBJETIVO e — achado adicional durante a escrita do teste de regressão, não estava na lista original
+  do subagente — na seção 3.4 (Dispositivos de proteção), que também citava "Quadro de Distribuição
+  Geral de Baixa Tensão" incondicionalmente. `MemorialDescritivo.tsx` também citava "RN nº 482 da
+  ANEEL" no corpo do texto (norma revogada desde 2023) enquanto o comentário do próprio cabeçalho do
+  arquivo já citava corretamente "REN ANEEL 1000/2021" — uma inconsistência entre o comentário interno
+  e o texto realmente impresso no documento entregue à distribuidora. Corrigido para
+  "REN ANEEL no 1.000/2021" no corpo também.
+- [x] **ALTO — `DiagramaUnifilarBasico.tsx`: rótulo "REDE CEMIG" fixo no diagrama, para qualquer
+  cliente de qualquer uma das 18 distribuidoras cadastradas — corrigido nesta rodada.**
+  (`src/data/distribuidoras.ts`) — o arquivo não lia `consumo.codigoDistribuidora`. Documento técnico
+  enviado à distribuidora com o nome da rede errado. Corrigido buscando a distribuidora real (mesmo
+  padrão de fallback `nomeAbreviado:'CEMIG'` já usado em `MemorialDescritivo.tsx`/`Procuracao.tsx`) e
+  usando o nome real nos dois rótulos "REDE ..." do diagrama (bloco da rede e faixa de
+  responsabilidade "REDE ... (ACESSADA)").
+- [x] **BAIXO — `PlantaDeSituacao.tsx`: UTM digitada manualmente aparecia sem separador de milhar —
+  corrigido nesta rodada.** Inconsistente com a UTM geocodificada na mesma tabela —
+  `localizacao.utmE`/`utmN` são `string` (campo de texto livre), e
+  `String.prototype.toLocaleString()` é, por especificação (ECMA-402 21.1.3.28), equivalente a
+  `toString()`: não formata nada, é um no-op silencioso — diferente de
+  `Number.prototype.toLocaleString()`, usado corretamente na UTM geocodificada (numérica). Corrigido
+  convertendo para `Number` antes de formatar, com fallback para o texto bruto se a conversão não for
+  um número válido (defensivo, já que é entrada de texto livre do usuário).
 
-- [ ] **ALTO — `Procuracao.tsx`: campo "estado civil" do outorgante sempre sai como "solteiro(a)"
-  escrito por extenso, mesmo quando é falso** (`ecMap[cliente.estadoCivil] || 'solteiro(a)'` — o
-  fallback `||` cai no valor padrão até para `estadoCivil==='outro'`, e a UI nunca coleta esse campo
-  de verdade). Num instrumento de mandato (procuração), afirmar um estado civil específico sem
-  indicação de que é um valor não confirmado é um risco jurídico real.
-- [ ] **ALTO — `MemorialDescritivo.tsx` e `Procuracao.tsx`: texto sempre diz "microgeração...BT",
-  mesmo para minigeração (>75 kWp) ou cliente Grupo A/Média Tensão** — nenhum dos dois documentos
-  recebe `enquadramento`/`grupoTensao`. `MemorialDescritivo.tsx` também cita "RN nº 482 da ANEEL"
-  (revogada desde 2023; o resto do código já cita corretamente REN ANEEL 1.000/2021).
-- [ ] **ALTO — `DiagramaUnifilarBasico.tsx`: rótulo "REDE CEMIG" fixo no diagrama, para qualquer
-  cliente de qualquer uma das 18 distribuidoras cadastradas** (`src/data/distribuidoras.ts`) — o
-  arquivo não lê `codigoDistribuidora`. Documento técnico enviado à distribuidora com o nome errado.
-- [ ] **BAIXO — `PlantaDeSituacao.tsx`: UTM digitada manualmente aparece sem separador de milhar**,
-  inconsistente com a UTM geocodificada na mesma tabela — `localizacao.utmE`/`utmN` são `string`, e
-  `String.prototype.toLocaleString` (herdado de `Object.prototype`) ignora o locale e não formata nada.
+**Todos os achados desta rodada foram corrigidos.** 4 arquivos (`Procuracao.tsx`,
+`MemorialDescritivo.tsx`, `DiagramaUnifilarBasico.tsx`, `PlantaDeSituacao.tsx`) não tinham NENHUMA
+cobertura de teste antes desta rodada — os 16 novos testes usam um helper
+(`pdfTextTestHelper.ts`) que chama os componentes React diretamente (sem `pdf().toBuffer()`) e
+extrai todo o texto da árvore de elementos recursivamente — inclusive invocando subcomponentes
+customizados (`typeof node.type === 'function'`) para não perder texto que more dentro deles, caso
+descoberto ao rodar os testes pela primeira vez contra os componentes já corrigidos (todos os 3
+testes do Diagrama Unifilar davam falso-negativo sem esse passo, porque `<DiagramaSvg/>` é um
+subcomponente). Isso permite regressão de TEXTO exato (ex: "deve conter 'Minigeração', não deve
+conter 'Microgeração'"), não só `expect(buf).toBeTruthy()`.
 
 ### Oitava rodada (ago/2026) — bug de renderização/paginação na capa do PDF Comercial (`PropostaComercialPDF.tsx`)
 

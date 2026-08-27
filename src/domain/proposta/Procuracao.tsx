@@ -77,13 +77,24 @@ export function Procuracao({ data }: { data: any }) {
   const cliente = data?.cliente  || {};
   const consumo = data?.consumo  || {};
   const loc     = data?.localizacao || {};
+  const enquadramento = data?.enquadramento || {};
 
   const distrib = DISTRIBUIDORAS.find((d: any) => d.codigo === consumo.codigoDistribuidora);
   const distribNome = safe(distrib?.nome?.toUpperCase() || 'CEMIG - COMPANHIA ENERGETICA DE MINAS GERAIS');
 
+  // BUG CORRIGIDO (ago/2026): 'outro' mapeava para '' (falsy) e caia no
+  // fallback '|| solteiro(a)' — e o mesmo fallback também cobria
+  // silenciosamente qualquer estadoCivil ausente/não reconhecido. Resultado:
+  // TODA procuração gerada afirmava "solteiro(a)" como fato juridico, mesmo
+  // quando o dado nunca foi de fato informado pelo usuário (não há campo de
+  // estado civil na UI — só existe o valor-padrão 'solteiro' do store). Um
+  // documento com efeito legal não deve afirmar um dado não confirmado.
+  // Corrigido para cair no mesmo padrão de placeholder em branco já usado
+  // neste arquivo para outros dados ausentes (ver rgCliente/endCliente
+  // abaixo), em vez de uma afirmação não verificada.
   const ecMap: Record<string,string> = {
     solteiro:'solteiro(a)', casado:'casado(a)',
-    divorciado:'divorciado(a)', viuvo:'viuvo(a)', outro:''
+    divorciado:'divorciado(a)', viuvo:'viuvo(a)',
   };
 
   // Dados do OUTORGANTE (cliente)
@@ -91,7 +102,7 @@ export function Procuracao({ data }: { data: any }) {
   const cpfCliente  = fmtCPF(cliente.cpf);
   const rgCliente   = safe(cliente.rg  || '______________');
   const profissao   = safe(cliente.profissao || '______________');
-  const ecCivil     = ecMap[cliente.estadoCivil] || 'solteiro(a)';
+  const ecCivil     = ecMap[cliente.estadoCivil] || '____________';
   const endCliente  = safe(cliente.endereco || '___________________________');
   const cidadeCliente = safe([cliente.cidade, cliente.uf].filter(Boolean).join(' - ') || '_______________');
   const endInstalacao = safe(loc.enderecoInstalacao || cliente.endereco || '___________________________');
@@ -105,6 +116,12 @@ export function Procuracao({ data }: { data: any }) {
   const cpfEng    = fmtCPF(empresa.cpfEngenheiro);
   const creaEng   = empresa.crea ? `CREA-${empresa.uf || 'MG'} ${empresa.crea}` : '____________';
   const cidadeLoc = safe(cliente.cidade || empresa.cidade || '_________________');
+
+  // BUG CORRIGIDO (ago/2026): texto sempre dizia "sistema de microgeracao",
+  // mesmo quando enquadramento.classe (LIMITE_MICROGERACAO_KW=75kWp, ver
+  // fioB/types.ts) classificava o projeto como minigeração — uma procuração
+  // com objeto juridico diferente do enquadramento real do projeto.
+  const classeGD = enquadramento.classe === 'minigeracao' ? 'minigeracao' : 'microgeracao';
 
   return (
     <Document title={`Procuracao - ${cliente.nome || ''}`} author={razaoSoc}>
@@ -164,7 +181,7 @@ export function Procuracao({ data }: { data: any }) {
           <Text style={S.bold}>amplos poderes</Text>
           {' para efetuar requerimentos, juntar documentos, verificar andamento de processos, solicitar informacoes, satisfazer exigencias, retirar copias, certidoes e documentos, praticar todos os atos necessarios para representar o(a) OUTORGANTE perante a '}
           <Text style={S.bold}>{distribNome}</Text>
-          {', referentes ao acesso ao Sistema de Compensacao de Energia Eletrica (SCEE) e a instalacao do sistema de microgeracao fotovoltaica localizado em '}
+          {`, referentes ao acesso ao Sistema de Compensacao de Energia Eletrica (SCEE) e a instalacao do sistema de ${classeGD} fotovoltaica localizado em `}
           <Text style={S.bold}>{endInstalacao}</Text>
           {ucNum ? `, UC no ${ucNum}` : ''}
           {', conforme Lei no 14.300/2022 e normas da ANEEL.'}
