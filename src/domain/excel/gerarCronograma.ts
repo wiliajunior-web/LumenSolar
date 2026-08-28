@@ -51,6 +51,25 @@ export function gerarCronograma(dados: ParamsCronograma): void {
   const wb = XLSX.utils.book_new();
   const ws: Record<string, any> = {};
 
+  // BUG CORRIGIDO (ago/2026): só a duração da própria etapa "Análise CEMIG —
+  // Parecer de Acesso" variava com `tipoSistema` (3 semanas MicroGD / 6
+  // semanas MiniGD) — mas TODAS as etapas seguintes (Instalação mecânica,
+  // Instalação elétrica, Comissionamento, Solicitação de vistoria, Vistoria
+  // CEMIG, Entrega) tinham `semana` FIXA (6, 7, 8, 8, 9, 13), calibrada só
+  // para o caso MicroGD (Parecer termina na semana 3+3=6, batendo com o
+  // início da Instalação mecânica na semana 6). Para um sistema MiniGD
+  // (Parecer termina na semana 3+6=9), o cronograma gerado agendava
+  // instalação mecânica/elétrica e até o comissionamento (semanas 6-8) para
+  // ANTES do Parecer de Acesso da CEMIG ser concluído (semana 9) — um
+  // cronograma que orienta o cliente a instalar o sistema antes de ter a
+  // aprovação de acesso da distribuidora, o oposto do processo real de
+  // homologação. Corrigido calculando a semana de início de cada etapa
+  // pós-Parecer a partir do fim real do Parecer (`semanaParecerFim`), que
+  // já varia com `tipoSistema` — preserva exatamente o cronograma MicroGD
+  // original (3+3=6, igual ao valor fixo anterior) e desloca corretamente
+  // o MiniGD (3+6=9) para não mais empurrar obra para antes da aprovação.
+  const semanaParecerFim = 3 + (dados.tipoSistema === 'micro' ? 3 : 6); // 6 (MicroGD) ou 9 (MiniGD)
+
   // ── Etapas do processo ────────────────────────────────────────────────────
   const etapas: Etapa[] = [
     // FASE 1 — ESTUDO E LEVANTAMENTO
@@ -119,21 +138,21 @@ export function gerarCronograma(dados: ParamsCronograma): void {
     {
       fase: '4. Aquisição e Instalação',
       etapa: 'Aquisição do kit fotovoltaico',
-      semana: 4, duracao: 2,
+      semana: 4, duracao: Math.max(2, semanaParecerFim - 4),
       responsavel: 'Lumen',
       descricao: `${dados.potenciaKWp} kWp — ${dados.numModulos} módulos + inversor + estrutura + materiais elétricos`,
     },
     {
       fase: '4. Aquisição e Instalação',
       etapa: 'Instalação mecânica (estrutura + módulos)',
-      semana: 6, duracao: 1,
+      semana: semanaParecerFim, duracao: 1,
       responsavel: 'Lumen',
       descricao: 'Fixação da estrutura metálica, instalação dos módulos fotovoltaicos, string box CC',
     },
     {
       fase: '4. Aquisição e Instalação',
       etapa: 'Instalação elétrica (inversores + proteções CA)',
-      semana: 7, duracao: 1,
+      semana: semanaParecerFim + 1, duracao: 1,
       responsavel: 'Lumen',
       descricao: 'Inversor, DPS CA, disjuntor bipolar, cabeamento CA até o QDG, aterramento',
     },
@@ -142,21 +161,21 @@ export function gerarCronograma(dados: ParamsCronograma): void {
     {
       fase: '5. Comissionamento',
       etapa: 'Testes e comissionamento do sistema',
-      semana: 8, duracao: 0.5,
+      semana: semanaParecerFim + 2, duracao: 0.5,
       responsavel: 'Lumen',
       descricao: 'Verificação de Voc, Vmpp, Isc por string. Teste de isolamento. Energização e monitoramento.',
     },
     {
       fase: '5. Comissionamento',
       etapa: 'Solicitação de vistoria CEMIG',
-      semana: 8, duracao: 0.5,
+      semana: semanaParecerFim + 2, duracao: 0.5,
       responsavel: 'Lumen',
       descricao: 'Solicitar vistoria no portal CEMIG Atende. Prazo CEMIG: até 30 dias úteis.',
     },
     {
       fase: '5. Comissionamento',
       etapa: 'Vistoria CEMIG e troca do medidor',
-      semana: 9, duracao: 4,
+      semana: semanaParecerFim + 3, duracao: 4,
       responsavel: 'CEMIG',
       descricao: 'Inspeção técnica CEMIG. Após aprovação: troca do medidor para bidirecional. Prazo: ~30 dias.',
     },
@@ -165,14 +184,14 @@ export function gerarCronograma(dados: ParamsCronograma): void {
     {
       fase: '6. Entrega e Pós-Obra',
       etapa: 'Entrega da documentação ao cliente',
-      semana: 13, duracao: 0.5,
+      semana: semanaParecerFim + 7, duracao: 0.5,
       responsavel: 'Lumen',
       descricao: 'Manual do sistema, garantias, ART, memorial, cópia do parecer e contrato CEMIG',
     },
     {
       fase: '6. Entrega e Pós-Obra',
       etapa: 'Verificação da primeira fatura com créditos',
-      semana: 13, duracao: 1,
+      semana: semanaParecerFim + 7, duracao: 1,
       responsavel: 'Lumen + CEMIG',
       descricao: 'Confirmar que os créditos estão sendo gerados e faturados corretamente. Monitorar geração.',
     },

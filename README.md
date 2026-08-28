@@ -12,7 +12,7 @@ Desenvolvido pela Lumen Soluções Ltda — Araguari/MG.
 
 | Item | Estado |
 |------|--------|
-| Testes automatizados | **937 passando** (E2E, cálculos, persistência de arquivo .lumensolar, precificação de serviços, proteção CC, cabo CA/disjuntor, FDI, banco de baterias, agrupamento de UCs, cronograma de obra, UTM, checklist de documentação, mapa de células do Formulário CEMIG, dimensionamento Grupo A, wiring do store, geração dos PDFs de proposta, geração do Excel de auditoria (fórmulas de perdas/payback/FioB/HSP/tarifa), simulação de financiamento/payback, validação de formulário, detecção de cálculo desatualizado, fábricas de estado padrão, paginação da capa do PDF comercial, fórmula NOCT de temperatura de célula, metadados de "recentes", cancelamento do diálogo de importação, Procuração/Memorial/Diagrama Unifilar/Planta de Situação) |
+| Testes automatizados | **940 passando** (E2E, cálculos, persistência de arquivo .lumensolar, precificação de serviços, proteção CC, cabo CA/disjuntor, FDI, banco de baterias, agrupamento de UCs, cronograma de obra, UTM, checklist de documentação, mapa de células do Formulário CEMIG, dimensionamento Grupo A, wiring do store, geração dos PDFs de proposta, geração do Excel de auditoria (fórmulas de perdas/payback/FioB/HSP/tarifa), simulação de financiamento/payback, validação de formulário, detecção de cálculo desatualizado, fábricas de estado padrão, paginação da capa do PDF comercial, fórmula NOCT de temperatura de célula, metadados de "recentes", cancelamento do diálogo de importação, Procuração/Memorial/Diagrama Unifilar/Planta de Situação) |
 | Build Windows | ✅ GitHub Actions → artifact `LumenSolar-Windows` |
 | Normas implementadas | NBR 16690, NBR 5410, Lei 14.300/2022, REN ANEEL 1.000/2021 |
 | Tarifa CEMIG | R$1,1827/kWh (Res. ANEEL 3.589/2026) |
@@ -961,6 +961,31 @@ posterior de cada achado (fórmula recalculada à mão, campo cruzado contra o p
 10 novos testes de regressão em `gerarExcel.test.ts` (lendo o `.xlsx` gerado de volta via
 `XLSX.readFile`, checando valores/fórmulas reais das células — não só `expect(...).not.toThrow()`),
 todos confirmados falhando contra o código pré-fix (via `git stash`) antes de restaurar.
+
+- [x] **ALTO — `gerarCronograma.ts`: para sistemas MiniGD, o cronograma agendava instalação
+  mecânica/elétrica e até o comissionamento ANTES do Parecer de Acesso da CEMIG estar concluído.**
+  Só a duração da própria etapa "Análise CEMIG — Parecer de Acesso" variava com `tipoSistema` (3
+  semanas para MicroGD / 6 semanas para MiniGD, refletindo os prazos reais de 15/30 dias úteis) —
+  mas todas as etapas seguintes (Instalação mecânica, Instalação elétrica, Testes e comissionamento,
+  Solicitação de vistoria, Vistoria CEMIG, Entrega) tinham `semana` de início FIXA (6, 7, 8, 8, 9,
+  13), calibrada apenas para o caso MicroGD, em que o Parecer termina exatamente na semana 3+3=6,
+  batendo por coincidência com o início hardcoded da Instalação mecânica. Para um sistema MiniGD
+  (>75 kWp, prazo de Parecer maior — 30 dias úteis), o Parecer só termina na semana 3+6=9, mas o
+  cronograma gerado continuava mostrando instalação mecânica começando na semana 6, elétrica na 7 e
+  comissionamento na 8 — ou seja, 3 semanas antes da aprovação de acesso da distribuidora, um
+  cronograma que orientaria a Lumen/o cliente a iniciar obra sem o Parecer de Acesso da CEMIG em mãos
+  para projetos de minigeração. Corrigido introduzindo `semanaParecerFim = 3 +
+  (tipoSistema==='micro'?3:6)` e reescrevendo a semana de início de cada etapa pós-Parecer como
+  deslocamento a partir dele (`semanaParecerFim`, `+1`, `+2`, `+2`, `+3`, `+7`) — verificado
+  algebricamente que isso reproduz exatamente o cronograma MicroGD original (semanas 6/7/8/8/9/13,
+  zero mudança de comportamento) e desloca corretamente o MiniGD para começar só após a semana 9,
+  ainda cabendo dentro da grade fixa de `N_SEMANAS=16` (última etapa cai exatamente na semana 16).
+  `gerarCronograma.ts` não tinha NENHUM teste que checasse valores reais de semana/data por etapa
+  (só um smoke-test `not.toThrow()` para o caso `'mini'`) — 5 novos testes de regressão em
+  `gerarCronograma.test.ts` (lendo o `.xlsx` gerado de volta, comparando datas reais de início/término
+  por etapa via `XLSX.readFile`), 2 deles confirmados falhando contra o código pré-fix (via `git
+  stash`) antes de restaurar — a etapa "Instalação mecânica" começava 3 semanas antes do "Análise
+  CEMIG — Parecer de Acesso" terminar, no caso MiniGD.
 
 ### Oitava rodada (ago/2026) — bug de renderização/paginação na capa do PDF Comercial (`PropostaComercialPDF.tsx`)
 

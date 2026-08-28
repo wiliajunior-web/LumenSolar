@@ -79,3 +79,67 @@ describe('gerarCronograma — REGRESSÃO ago/2026: datas corretas independente d
     })).not.toThrow();
   });
 });
+
+// [REGRESSÃO ago/2026 — rodada 10] só a duração da etapa "Análise CEMIG —
+// Parecer de Acesso" variava com tipoSistema (3 semanas MicroGD / 6 semanas
+// MiniGD) — as etapas seguintes (Instalação mecânica/elétrica,
+// Comissionamento, Vistoria, Entrega) tinham semana FIXA, calibrada só para
+// o caso MicroGD. Para MiniGD, isso agendava instalação para ANTES do
+// Parecer de Acesso da CEMIG estar concluído. Ver comentário completo em
+// gerarCronograma.ts.
+describe('gerarCronograma — REGRESSÃO ago/2026 (rodada 10): instalação nunca agendada antes do Parecer de Acesso concluir', () => {
+  afterEach(() => limparArquivosGerados());
+
+  function gerarEler(tipoSistema: 'micro' | 'mini'): any {
+    gerarCronograma({
+      nomeCliente: `Cliente ${tipoSistema}`,
+      enderecoInstalacao: 'Rua X, 1',
+      dataInicio: '2026-01-05', // segunda-feira
+      potenciaKWp: tipoSistema === 'micro' ? 10 : 80,
+      numModulos: tipoSistema === 'micro' ? 19 : 145,
+      empresa: 'Lumen Soluções Ltda',
+      responsavelTecnico: 'Eng. Teste',
+      tipoSistema,
+    });
+    // Filtra pelo nome do cliente: como o teste de comparação micro-vs-mini gera
+    // os dois arquivos antes de limpar (afterEach só roda ao fim do `it`), um
+    // filtro genérico por prefixo pegaria o primeiro arquivo em ordem alfabética
+    // (ex.: "...Cliente_mini..." < "...Cliente_micro..." alfabeticamente é falso
+    // — "mini" > "micro" — mas não se pode confiar em ordem alfabética aqui).
+    const gerados = readdirSync('.').filter(f => f.startsWith(`Cronograma_Cliente_${tipoSistema}_`) && f.endsWith('.xlsx'));
+    const wb = XLSX.readFile(gerados[0]);
+    return wb.Sheets['Cronograma'];
+  }
+
+  function linhaPorEtapa(ws: any, etapa: string): number {
+    for (const key of Object.keys(ws)) {
+      if (/^B\d+$/.test(key) && ws[key].v === etapa) return Number(key.slice(1));
+    }
+    throw new Error(`Etapa não encontrada: ${etapa}`);
+  }
+
+  function dataBR(s: string): Date {
+    // "DD/MM/YYYY" (ou "S3\nDD/MM/YYYY") -> Date, só a parte da data
+    const m = s.match(/(\d{2})\/(\d{2})\/(\d{4})/)!;
+    return new Date(`${m[3]}-${m[2]}-${m[1]}T00:00:00Z`);
+  }
+
+  for (const tipoSistema of ['micro', 'mini'] as const) {
+    it(`tipoSistema="${tipoSistema}": Início da "Instalação mecânica" é NO MÍNIMO o Término da "Análise CEMIG — Parecer de Acesso"`, () => {
+      const ws = gerarEler(tipoSistema);
+      const linhaParecer = linhaPorEtapa(ws, 'Análise CEMIG — Parecer de Acesso');
+      const linhaInstalacao = linhaPorEtapa(ws, 'Instalação mecânica (estrutura + módulos)');
+      const terminoParecer = dataBR(ws[`E${linhaParecer}`].v);
+      const inicioInstalacao = dataBR(ws[`D${linhaInstalacao}`].v);
+      expect(inicioInstalacao.getTime()).toBeGreaterThanOrEqual(terminoParecer.getTime());
+    });
+  }
+
+  it('tipoSistema="mini": Instalação mecânica começa mais tarde que em "micro" (cronograma realmente se ajusta ao prazo maior)', () => {
+    const wsMicro = gerarEler('micro');
+    const wsMini = gerarEler('mini');
+    const inicioMicro = dataBR(wsMicro[`D${linhaPorEtapa(wsMicro, 'Instalação mecânica (estrutura + módulos)')}`].v);
+    const inicioMini = dataBR(wsMini[`D${linhaPorEtapa(wsMini, 'Instalação mecânica (estrutura + módulos)')}`].v);
+    expect(inicioMini.getTime()).toBeGreaterThan(inicioMicro.getTime());
+  });
+});
