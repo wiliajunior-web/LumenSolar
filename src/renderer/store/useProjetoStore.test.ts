@@ -251,4 +251,26 @@ describe('assinaturaEntradasCalculo / ultimoCalculoAssinatura — detecção de 
     const s = useProjetoStore.getState();
     expect(assinaturaEntradasCalculo(s)).toBe(s.ultimoCalculoAssinatura);
   });
+
+  // [REGRESSÃO ago/2026] editar um campo específico de Grupo A (demanda
+  // contratada) DEPOIS de calcular também precisa fazer a assinatura
+  // divergir — é exatamente o mecanismo que o painel "Cálculo Grupo A
+  // (preview)" em App.tsx (TabConsumo) passou a usar (calculoDesatualizado(),
+  // que chama esta mesma função) para avisar o vendedor que os números do
+  // preview — que o próprio app instrui a copiar MANUALMENTE para a proposta
+  // de média tensão — estão desatualizados. Antes da correção, o painel não
+  // chamava calculoDesatualizado() nenhuma vez; este teste prova que a
+  // assinatura de fato muda para um campo exclusivo de Grupo A (não só para
+  // os campos genéricos de Grupo B já cobertos acima), então o guard
+  // reaproveitado funciona para esse caso — não fecha o loop da renderização
+  // JSX em si (o projeto não tem infraestrutura de teste de componente React:
+  // vitest.config.ts usa environment:'node', sem jsdom/@testing-library).
+  it('[Grupo A] editar demandaContratadaKW DEPOIS de calcular faz a assinatura divergir (mecanismo usado pelo painel de preview em TabConsumo)', () => {
+    useProjetoStore.getState().atualizarConsumo({ grupoTensao: 'A' });
+    useProjetoStore.getState().calcularTudo();
+    useProjetoStore.getState().atualizarConsumo({ demandaContratadaKW: 60 });
+    const s = useProjetoStore.getState();
+    expect(s.consumo.grupoTensao).toBe('A');
+    expect(assinaturaEntradasCalculo(s)).not.toBe(s.ultimoCalculoAssinatura);
+  });
 });

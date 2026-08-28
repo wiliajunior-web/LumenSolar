@@ -12,7 +12,7 @@ Desenvolvido pela Lumen Soluções Ltda — Araguari/MG.
 
 | Item | Estado |
 |------|--------|
-| Testes automatizados | **946 passando** (E2E, cálculos, persistência de arquivo .lumensolar, precificação de serviços, proteção CC, cabo CA/disjuntor, FDI, banco de baterias, agrupamento de UCs, cronograma de obra, UTM, checklist de documentação, mapa de células do Formulário CEMIG, dimensionamento Grupo A, wiring do store, geração dos PDFs de proposta, geração do Excel de auditoria (fórmulas de perdas/payback/FioB/HSP/tarifa), simulação de financiamento/payback, validação de formulário, detecção de cálculo desatualizado, fábricas de estado padrão, paginação da capa do PDF comercial, fórmula NOCT de temperatura de célula, metadados de "recentes", cancelamento do diálogo de importação, Procuração/Memorial/Diagrama Unifilar/Planta de Situação) |
+| Testes automatizados | **947 passando** (E2E, cálculos, persistência de arquivo .lumensolar, precificação de serviços, proteção CC, cabo CA/disjuntor, FDI, banco de baterias, agrupamento de UCs, cronograma de obra, UTM, checklist de documentação, mapa de células do Formulário CEMIG, dimensionamento Grupo A, wiring do store, geração dos PDFs de proposta, geração do Excel de auditoria (fórmulas de perdas/payback/FioB/HSP/tarifa), simulação de financiamento/payback, validação de formulário, detecção de cálculo desatualizado, fábricas de estado padrão, paginação da capa do PDF comercial, fórmula NOCT de temperatura de célula, metadados de "recentes", cancelamento do diálogo de importação, Procuração/Memorial/Diagrama Unifilar/Planta de Situação) |
 | Build Windows | ✅ GitHub Actions → artifact `LumenSolar-Windows` |
 | Normas implementadas | NBR 16690, NBR 5410, Lei 14.300/2022, REN ANEEL 1.000/2021 |
 | Tarifa CEMIG | R$1,1827/kWh (Res. ANEEL 3.589/2026) |
@@ -1021,6 +1021,47 @@ real e o expandiu:
 6 novos testes de regressão (`converterCoordenadas.test.ts` e `PlantaDeSituacao.test.ts`, este último
 usando coordenadas de Boa Vista/RR como caso do hemisfério norte), todos confirmados falhando contra
 o código pré-fix (via `git stash`) antes de restaurar.
+
+### Décima segunda rodada (ago/2026) — auditoria via subagente do painel Grupo A (`App.tsx`/`useProjetoStore.ts`)
+
+Ângulo desta rodada: auditar a CORRETUDE (não o escopo, já documentado como pendência aceita) do
+painel "Cálculo Grupo A (preview)" adicionado numa rodada anterior — o cálculo de Grupo A
+(`calcularDimensionamentoGrupoA`) em si, o novo JSX em `TabConsumo` (`App.tsx`) que o exibe, o
+`resultadoGrupoA` do store, e os 3 blocos de aviso nos documentos. Subagente confirmou: fórmula de
+`calcularGrupoA.ts` correta (já auditada em rodada anterior, sem achado novo); condicional de
+exibição do painel (A vs B) correta; mapeamento de campos exibidos correto (sem trocas); os 3 blocos
+de aviso nos documentos usam leitura direta de `resultadoGrupoA` (sem fórmula duplicada divergente);
+reset ao trocar de grupo funciona.
+
+- [x] **ALTO — o painel "Cálculo Grupo A (preview)" em `App.tsx` (`TabConsumo`) exibia
+  `s.resultadoGrupoA` sem checar se os dados de tarifa/demanda/histórico ainda batiam com o último
+  cálculo — ao contrário de TODO o resto do app, que já usa `calculoDesatualizado()` para essa
+  proteção.** `resultadoGrupoA` só é recalculado dentro de `calcularTudo()` (botão "Calcular
+  resultado completo" na aba Preço) — não há nenhum recálculo automático ao editar os campos de
+  Grupo A na aba Consumo. `calculoDesatualizado()`/`assinaturaEntradasCalculo()` já protegem
+  `buildData()` (geração de PDF) e `gerarExcel()` contra dados obsoletos — mas essa proteção nunca
+  era chamada dentro de `TabConsumo`, então o preview de Grupo A ficava sem a mesma rede de
+  segurança. Isso é agravado pelo aviso vermelho logo abaixo do próprio painel, que instrui
+  explicitamente o vendedor a **copiar esses números manualmente** para a proposta do cliente de
+  média tensão ("...use os números deste painel manualmente até a integração com os documentos ser
+  concluída") — um fluxo que não passa pelos guards de `buildData()`/`gerarExcel()`. Cenário
+  concreto: vendedor calcula com demanda contratada = 100 kW, volta à aba Consumo e corrigie para 60
+  kW (erro de digitação) — o painel continuava mostrando os números da conta calculada com 100 kW,
+  sem nenhum aviso, e a própria instrução do app dizia para copiar isso à mão para o cliente.
+  Corrigido reaproveitando `calculoDesatualizado()` dentro do painel — mesmo padrão visual e botão
+  "🔄 Recalcular agora" já usados em `TabResultado`. Como `assinaturaEntradasCalculo()` serializa o
+  objeto `consumo` inteiro (não campo a campo), o mecanismo já cobre genericamente qualquer campo de
+  Grupo A (tarifas Ponta/Fora-Ponta, demanda contratada/medida, histórico mensal) sem precisar de
+  lista própria — confirmado com um novo teste dedicado que edita `demandaContratadaKW` (campo
+  exclusivo de Grupo A) depois de calcular e prova que a assinatura diverge, fechando o loop de que o
+  mecanismo reaproveitado realmente cobre este caso.
+  **Limitação de cobertura de teste, declarada explicitamente:** o projeto não tem infraestrutura de
+  teste de componente React (`vitest.config.ts` usa `environment:'node'`, sem jsdom/
+  `@testing-library`) — o novo teste em `useProjetoStore.test.ts` prova que o MECANISMO subjacente
+  (`calculoDesatualizado`/`assinaturaEntradasCalculo`) funciona para um campo de Grupo A, mas não
+  renderiza o JSX do painel em si para provar que o banner aparece na tela; essa parte foi verificada
+  por leitura manual cuidadosa do código (mesmo padrão já usado em rodadas anteriores para fixes de
+  JSX em `App.tsx`, arquivo sem cobertura de teste de UI desde o início do projeto).
 
 ### Oitava rodada (ago/2026) — bug de renderização/paginação na capa do PDF Comercial (`PropostaComercialPDF.tsx`)
 

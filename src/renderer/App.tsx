@@ -1061,11 +1061,35 @@ function TabConsumo({ onPrev, onNext }: { onPrev:()=>void; onNext:()=>void }) {
                   agora roda de verdade (useProjetoStore.calcularTudo), com os dados acima.
                   Ainda NÃO alimenta dimensionamento/custosRecorrentes/indicadores nem os
                   PDFs/Excel — ver aviso abaixo. */}
+              {/* BUG CORRIGIDO (ago/2026): este painel mostrava s.resultadoGrupoA sem checar
+                  se os dados de tarifa/demanda/histórico acima ainda batem com o último
+                  cálculo — diferente de TabResultado, que já usa calculoDesatualizado() para
+                  isso. Como o próprio aviso vermelho abaixo instrui o vendedor a copiar esses
+                  números MANUALMENTE para a proposta do cliente de média tensão (fluxo que
+                  não passa pelos guards de buildData()/gerarExcel()), um número desatualizado
+                  aqui ia direto pro cliente sem nenhum aviso — o guard que protege os outros
+                  documentos do app não cobria este painel. Corrigido reaproveitando
+                  calculoDesatualizado(), mesmo padrão/botão já usado em TabResultado. */}
               {s.resultadoGrupoA && (
                 <div style={{ background:'#0f1a0f', border:'1px solid #22c55e44', borderRadius:8, padding:12, marginBottom:10 }}>
                   <div style={{ fontSize:11, fontWeight:700, color:'#86efac', textTransform:'uppercase', letterSpacing:'.05em', marginBottom:8 }}>
                     Cálculo Grupo A (preview)
                   </div>
+                  {calculoDesatualizado(s) && (
+                    <div style={{
+                      marginBottom: 10, padding: '8px 12px', background: '#3a1414',
+                      border: '1px solid #dc2626', borderRadius: 6, color: '#fca5a5',
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap',
+                    }}>
+                      <span style={{ fontSize: 11.5, lineHeight: 1.5 }}>
+                        ⚠️ <strong>Dados desatualizados</strong> — tarifa/demanda/histórico foram alterados
+                        depois do último cálculo. Os números abaixo NÃO refletem os dados atuais.
+                      </span>
+                      <Btn onClick={() => { try { useProjetoStore.getState().calcularTudo(); } catch (e) { alert('Erro ao recalcular: ' + (e instanceof Error ? e.message : String(e))); } }}>
+                        🔄 Recalcular agora
+                      </Btn>
+                    </div>
+                  )}
                   <div style={{ display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:'6px 16px', fontSize:12, color:'#d1d5db' }}>
                     <div>Potência mínima: <strong>{s.resultadoGrupoA.potenciaMinKWp.toFixed(2)} kWp</strong></div>
                     <div>Potência real: <strong>{s.resultadoGrupoA.potenciaRealKWp.toFixed(2)} kWp</strong></div>
