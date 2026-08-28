@@ -19,8 +19,21 @@ export interface CoordenadaUTM {
   utmE: number;
   utmN: number;
   fuso: number;
+  // Opcional: só quem tem lat/lon de origem (latLonParaUTM) sabe o hemisfério
+  // com certeza. UTM digitada manualmente pelo usuário (sem lat/lon associado)
+  // não carrega esse campo — quem consome decide como aproximar.
+  hemisferio?: 'N' | 'S';
 }
 
+// BUG CORRIGIDO (ago/2026): a letra do hemisfério ("N23" vs "S23") era
+// hardcoded como "S" em toda exibição de UTM no app (busca de coordenadas e
+// Planta de Situação), presumindo Brasil = hemisfério sul sempre. Isso é
+// verdade para a esmagadora maioria do território, mas não para Roraima
+// inteiro e partes do norte do Amapá/Amazonas (lat >= 0) — nesses casos a
+// convenção UTM usa "N" e NÃO soma a falsa origem de 10.000.000 em N (efeito
+// já tratado corretamente no cálculo abaixo, só faltava refletir no rótulo).
+// Convenção: lat=0 (equador) cai na faixa "N" (limite entre as letras MGRS M
+// e N é o próprio equador).
 export function latLonParaUTM(lat: number, lon: number): CoordenadaUTM {
   const a = 6378137.0, f = 1 / 298.257223563;
   const b = a * (1 - f), e2 = 1 - (b / a) ** 2;
@@ -41,8 +54,9 @@ export function latLonParaUTM(lat: number, lon: number): CoordenadaUTM {
   const utmE = Math.round(k0 * N * (A + (1 - T + C) * A ** 3 / 6 + (5 - 18 * T + T ** 2 + 72 * C - 58 * (e2 / (1 - e2))) * A ** 5 / 120) + E0);
   const utmNraw = Math.round(k0 * (M + N * Math.tan(phi) * (A ** 2 / 2 + (5 - T + 9 * C + 4 * C ** 2) * A ** 4 / 24 + (61 - 58 * T + T ** 2 + 600 * C - 330 * (e2 / (1 - e2))) * A ** 6 / 720)));
   const utmN = utmNraw + (lat < 0 ? 10_000_000 : 0); // Hemisfério Sul: falsa origem
+  const hemisferio: 'N' | 'S' = lat < 0 ? 'S' : 'N';
 
-  return { utmE, utmN, fuso };
+  return { utmE, utmN, fuso, hemisferio };
 }
 
 /**

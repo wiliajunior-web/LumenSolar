@@ -2004,9 +2004,11 @@ function BuscadorCoordenadas({ endereco, cidade, uf, onEncontrado }: {
       const data = await r.json();
       if (!data.length) { setEstado('erro'); setMsg('Endereço não encontrado — ajuste e tente novamente'); return; }
       const { lat, lon } = data[0];
-      const { utmE, utmN, fuso } = latLonParaUTM(parseFloat(lat), parseFloat(lon));
+      const { utmE, utmN, fuso, hemisferio } = latLonParaUTM(parseFloat(lat), parseFloat(lon));
       onEncontrado(utmE, utmN, fuso);
-      setEstado('ok'); setMsg(`UTM ${fuso}S: E=${utmE.toLocaleString()} N=${utmN.toLocaleString()}`);
+      // CORRIGIDO (ago/2026): letra do hemisfério vinha hardcoded "S" — errada
+      // para Roraima e partes do norte do Amapá/Amazonas (lat >= 0, hemisfério N).
+      setEstado('ok'); setMsg(`UTM ${fuso}${hemisferio}: E=${utmE.toLocaleString()} N=${utmN.toLocaleString()}`);
       setTimeout(() => setEstado('idle'), 4000);
     } catch { setEstado('erro'); setMsg('Sem conexão ou erro na busca'); }
   }

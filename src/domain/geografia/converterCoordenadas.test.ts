@@ -33,6 +33,22 @@ describe('latLonParaUTM', () => {
     expect(sul.utmN).toBeGreaterThan(5_000_000);
     expect(norte.utmN).toBeLessThan(5_000_000);
   });
+
+  // [REGRESSÃO ago/2026] a letra do hemisfério não era retornada pela função —
+  // quem exibia UTM (BuscadorCoordenadas em App.tsx, PlantaDeSituacao.tsx)
+  // hardcodeava "S", presumindo Brasil = hemisfério sul sempre. Errado para
+  // Roraima inteiro e partes do norte do Amapá/Amazonas (lat >= 0).
+  it('[hemisferio] retorna "S" para latitude negativa (a maior parte do Brasil)', () => {
+    expect(latLonParaUTM(-18.6476, -48.1936).hemisferio).toBe('S');
+  });
+
+  it('[hemisferio] retorna "N" para latitude positiva (ex: norte de Roraima)', () => {
+    expect(latLonParaUTM(2.8, -60.7).hemisferio).toBe('N'); // Boa Vista/RR: lat +2,8°
+  });
+
+  it('[hemisferio] equador (lat=0) é convencionado como "N" (limite MGRS M/N é o próprio equador)', () => {
+    expect(latLonParaUTM(0, -48).hemisferio).toBe('N');
+  });
 });
 
 describe('distanciaUTM', () => {

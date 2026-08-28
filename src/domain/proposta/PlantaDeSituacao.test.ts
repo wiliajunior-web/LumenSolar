@@ -58,3 +58,31 @@ describe('PlantaDeSituacao — formatação da UTM digitada pelo usuário', () =
     expect(texto).toContain('E=abc');
   });
 });
+
+describe('PlantaDeSituacao — REGRESSÃO ago/2026: letra do hemisfério da UTM não é sempre "S"', () => {
+  // BUG CORRIGIDO (ago/2026): as duas linhas de UTM da tabela (geocodificada e
+  // digitada) mostravam sempre "Fuso <n>S", hardcoded — presumindo Brasil =
+  // hemisfério sul sempre. Errado para Roraima inteiro e partes do norte do
+  // Amapá/Amazonas (lat >= 0, hemisfério N). Documento enviado à distribuidora
+  // (ND 5.30) — rótulo de fuso errado nesse documento é o pior caso.
+
+  it('endereço geocodificado no hemisfério sul (a esmagadora maioria do Brasil): mostra "S"', () => {
+    const texto = extractPdfTextJoined(PlantaDeSituacao({ data: dataBase(), mosaico: mosaicoBase }));
+    expect(texto).toContain('Fuso 22S');
+  });
+
+  it('endereço geocodificado no hemisfério norte (ex: Boa Vista/RR, lat > 0): mostra "N", não "S"', () => {
+    const mosaicoNorte: ResultadoMosaicoSatelite = { ...mosaicoBase, latitude: 2.8, longitude: -60.7 } as any;
+    const texto = extractPdfTextJoined(PlantaDeSituacao({ data: dataBase(), mosaico: mosaicoNorte }));
+    expect(texto).toContain('N —'); // "Fuso <n>N — E=..."
+    expect(texto).not.toMatch(/Fuso \d+S/);
+  });
+
+  it('UTM digitada (aproximada pelo hemisfério do endereço geocodificado) também usa "N" no hemisfério norte', () => {
+    const mosaicoNorte: ResultadoMosaicoSatelite = { ...mosaicoBase, latitude: 2.8, longitude: -60.7 } as any;
+    const data = dataBase({ localizacao: { utmE: '674321', utmN: '312000', utmFuso: 20 } });
+    const texto = extractPdfTextJoined(PlantaDeSituacao({ data, mosaico: mosaicoNorte }));
+    expect(texto).toContain('Fuso 20N');
+    expect(texto).not.toContain('Fuso 20S');
+  });
+});

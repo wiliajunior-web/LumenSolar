@@ -67,8 +67,16 @@ export function PlantaDeSituacao({ data, mosaico }: { data: any; mosaico: Result
 
   const utmGeocodificado = latLonParaUTM(mosaico.latitude, mosaico.longitude);
   const temUtmDigitada = !!(localizacao.utmE && localizacao.utmN);
+  // CORRIGIDO (ago/2026): a letra do hemisfério vinha hardcoded "S" nas duas
+  // linhas da tabela — errada para Roraima e partes do norte do
+  // Amapá/Amazonas (lat >= 0, hemisfério N; ver converterCoordenadas.ts). A
+  // UTM digitada pelo usuário não carrega lat/lon próprio (é texto livre do
+  // passo "Local"), então não há como calcular seu hemisfério de forma
+  // exata — usa-se o hemisfério do endereço geocodificado como aproximação,
+  // já que ambos representam o mesmo local (é a mesma premissa já usada pelo
+  // alerta de divergência abaixo, que só compara os dois quando "mesmo fuso").
   const utmDigitada = temUtmDigitada
-    ? { utmE: localizacao.utmE, utmN: localizacao.utmN, fuso: localizacao.utmFuso || utmGeocodificado.fuso }
+    ? { utmE: localizacao.utmE, utmN: localizacao.utmN, fuso: localizacao.utmFuso || utmGeocodificado.fuso, hemisferio: utmGeocodificado.hemisferio }
     : null;
   const divergenciaM = utmDigitada ? distanciaUTM(utmDigitada, utmGeocodificado) : null;
   // Tolerância: um lote/terreno grande pode ter várias dezenas de metros
@@ -109,8 +117,8 @@ export function PlantaDeSituacao({ data, mosaico }: { data: any; mosaico: Result
           {[
             ['Endereco buscado', safe(mosaico.enderecoEncontrado)],
             ['Latitude / Longitude', `${N6(mosaico.latitude)}, ${N6(mosaico.longitude)}`],
-            ['UTM (do endereco geocodificado)', `Fuso ${utmGeocodificado.fuso}S — E=${utmGeocodificado.utmE.toLocaleString('pt-BR')} N=${utmGeocodificado.utmN.toLocaleString('pt-BR')}`],
-            ['UTM digitada no projeto (passo Local)', temUtmDigitada ? `Fuso ${utmDigitada!.fuso}S — E=${fmtUtm(utmDigitada!.utmE)} N=${fmtUtm(utmDigitada!.utmN)}` : 'nao preenchida'],
+            ['UTM (do endereco geocodificado)', `Fuso ${utmGeocodificado.fuso}${utmGeocodificado.hemisferio} — E=${utmGeocodificado.utmE.toLocaleString('pt-BR')} N=${utmGeocodificado.utmN.toLocaleString('pt-BR')}`],
+            ['UTM digitada no projeto (passo Local)', temUtmDigitada ? `Fuso ${utmDigitada!.fuso}${utmDigitada!.hemisferio} — E=${fmtUtm(utmDigitada!.utmE)} N=${fmtUtm(utmDigitada!.utmN)}` : 'nao preenchida'],
             ['No da UC', localizacao.numeroUC || '-'],
           ].map(([lbl,val],i) => (
             <View key={i} style={i%2===1?S.tblRowAlt:S.tblRow}>

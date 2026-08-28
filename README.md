@@ -12,7 +12,7 @@ Desenvolvido pela Lumen Soluções Ltda — Araguari/MG.
 
 | Item | Estado |
 |------|--------|
-| Testes automatizados | **940 passando** (E2E, cálculos, persistência de arquivo .lumensolar, precificação de serviços, proteção CC, cabo CA/disjuntor, FDI, banco de baterias, agrupamento de UCs, cronograma de obra, UTM, checklist de documentação, mapa de células do Formulário CEMIG, dimensionamento Grupo A, wiring do store, geração dos PDFs de proposta, geração do Excel de auditoria (fórmulas de perdas/payback/FioB/HSP/tarifa), simulação de financiamento/payback, validação de formulário, detecção de cálculo desatualizado, fábricas de estado padrão, paginação da capa do PDF comercial, fórmula NOCT de temperatura de célula, metadados de "recentes", cancelamento do diálogo de importação, Procuração/Memorial/Diagrama Unifilar/Planta de Situação) |
+| Testes automatizados | **946 passando** (E2E, cálculos, persistência de arquivo .lumensolar, precificação de serviços, proteção CC, cabo CA/disjuntor, FDI, banco de baterias, agrupamento de UCs, cronograma de obra, UTM, checklist de documentação, mapa de células do Formulário CEMIG, dimensionamento Grupo A, wiring do store, geração dos PDFs de proposta, geração do Excel de auditoria (fórmulas de perdas/payback/FioB/HSP/tarifa), simulação de financiamento/payback, validação de formulário, detecção de cálculo desatualizado, fábricas de estado padrão, paginação da capa do PDF comercial, fórmula NOCT de temperatura de célula, metadados de "recentes", cancelamento do diálogo de importação, Procuração/Memorial/Diagrama Unifilar/Planta de Situação) |
 | Build Windows | ✅ GitHub Actions → artifact `LumenSolar-Windows` |
 | Normas implementadas | NBR 16690, NBR 5410, Lei 14.300/2022, REN ANEEL 1.000/2021 |
 | Tarifa CEMIG | R$1,1827/kWh (Res. ANEEL 3.589/2026) |
@@ -986,6 +986,41 @@ todos confirmados falhando contra o código pré-fix (via `git stash`) antes de 
   por etapa via `XLSX.readFile`), 2 deles confirmados falhando contra o código pré-fix (via `git
   stash`) antes de restaurar — a etapa "Instalação mecânica" começava 3 semanas antes do "Análise
   CEMIG — Parecer de Acesso" terminar, no caso MiniGD.
+
+### Décima primeira rodada (ago/2026) — auditoria via subagente (`precificacaoServicos/`, `precificacao/`, `geografia/`) + bug de rótulo de hemisfério UTM
+
+Ângulo desta rodada: subagente auditou `calcularTabelaAtualizada.ts`, `indiceCorrecao.ts`,
+`calcularPrecificacao.ts`, `converterCoordenadas.ts` e `tileMercator.ts` — reimplementando cada
+fórmula (correção monetária composta, precificação "imposto por dentro", projeção UTM de Snyder/USGS
+1987, tile math de mapa "slippy") de forma independente (inclusive comparando `converterCoordenadas.ts`
+contra `pyproj`, biblioteca GIS de referência) antes de aceitar qualquer valor. **Nenhum bug de
+fórmula foi encontrado nesses 5 arquivos** — resultado diferente das rodadas anteriores, reportado
+como está (0 bugs), sem inflar a lista com nitpicks de estilo.
+
+O subagente citou, como observação periférica fora do escopo pedido, que `App.tsx` exibia UTM com a
+letra do hemisfério ("S") hardcoded. Investigação própria (não do subagente) confirmou que era um bug
+real e o expandiu:
+
+- [x] **BAIXO/MÉDIO — letra do hemisfério da UTM ("N" ou "S") hardcoded como "S" em TRÊS lugares,
+  presumindo Brasil = hemisfério sul sempre.** `latLonParaUTM()` (`converterCoordenadas.ts`) já
+  calculava a falsa origem de 10.000.000 corretamente para hemisfério sul (`lat < 0`) — mas não
+  retornava a letra do hemisfério, e os 3 pontos que exibem UTM formatada (busca de coordenadas em
+  `App.tsx`, e as duas linhas da tabela UTM em `PlantaDeSituacao.tsx` — este último é o documento
+  exigido pela CEMIG ND 5.30, efetivamente enviado à distribuidora) hardcodeavam a letra "S" no texto.
+  Isso é verdade para a esmagadora maioria do território brasileiro, mas **não** para Roraima inteiro
+  e partes do norte do Amapá/Amazonas (latitude ≥ 0°, hemisfério N pela convenção UTM/MGRS — o
+  próprio equador cai na faixa "N"). Para uma instalação nessa região, o documento enviado à
+  distribuidora mostraria "Fuso 20S" quando o correto seria "Fuso 20N" — rótulo tecnicamente incorreto
+  num documento oficial, ainda que o valor numérico de E/N em si já estivesse certo. Corrigido
+  adicionando `hemisferio: 'N'|'S'` ao retorno de `latLonParaUTM()` (campo opcional na interface
+  `CoordenadaUTM`, já que UTM digitada manualmente pelo usuário não tem lat/lon associado para
+  calcular com certeza — nesse caso, `PlantaDeSituacao.tsx` aproxima usando o hemisfério do endereço
+  geocodificado, mesma premissa já usada pelo alerta de divergência entre as duas UTMs) e propagando
+  o campo real aos 3 pontos de exibição em vez do "S" fixo.
+
+6 novos testes de regressão (`converterCoordenadas.test.ts` e `PlantaDeSituacao.test.ts`, este último
+usando coordenadas de Boa Vista/RR como caso do hemisfério norte), todos confirmados falhando contra
+o código pré-fix (via `git stash`) antes de restaurar.
 
 ### Oitava rodada (ago/2026) — bug de renderização/paginação na capa do PDF Comercial (`PropostaComercialPDF.tsx`)
 
