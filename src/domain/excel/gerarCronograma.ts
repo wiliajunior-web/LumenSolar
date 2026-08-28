@@ -170,14 +170,33 @@ export function gerarCronograma(dados: ParamsCronograma): void {
       etapa: 'Solicitação de vistoria CEMIG',
       semana: semanaParecerFim + 2, duracao: 0.5,
       responsavel: 'Lumen',
-      descricao: 'Solicitar vistoria no portal CEMIG Atende. Prazo CEMIG: até 30 dias úteis.',
+      // CORRIGIDO (ago/2026): o texto anterior ("Prazo CEMIG: até 30 dias
+      // úteis") atribuía a ESTA etapa — a própria solicitação, uma ação quase
+      // instantânea do instalador/Lumen — o prazo que na verdade pertence à
+      // etapa SEGUINTE (CEMIG realizar a vistoria depois de solicitada). O
+      // prazo que de fato se aplica a ESTA ação é outro, e é do acessante, não
+      // da CEMIG: "O acessante deve solicitar vistoria em até 120 (cento e
+      // vinte) dias após a emissão do parecer de acesso" (Manual do Usuário —
+      // Sistema APR Web, CEMIG, v.2H/23-12-2021, seção 7.6, card "Vistoria de
+      // Mini/Microgeração Distribuída"). O cronograma já agenda a solicitação
+      // ~2 semanas após o fim do Parecer — bem dentro da janela de 120 dias —
+      // então não é uma correção de data, só de rótulo.
+      descricao: 'Solicitar vistoria no portal CEMIG Atende. Prazo do ACESSANTE para solicitar: até 120 dias após a emissão do Parecer de Acesso (Manual APR Web CEMIG, 7.6).',
     },
     {
       fase: '5. Comissionamento',
       etapa: 'Vistoria CEMIG e troca do medidor',
       semana: semanaParecerFim + 3, duracao: 4,
       responsavel: 'CEMIG',
-      descricao: 'Inspeção técnica CEMIG. Após aprovação: troca do medidor para bidirecional. Prazo: ~30 dias.',
+      // CORRIGIDO (ago/2026): a descrição citava só o prazo de troca do
+      // medidor (~30 dias após vistoria favorável), omitindo o prazo da
+      // CEMIG para REALIZAR a vistoria em si (até 30 dias úteis após
+      // solicitada — o prazo que a etapa anterior citava incorretamente).
+      // As duas etapas foram unificadas num único bloco de 4 semanas no
+      // cronograma; o texto agora deixa claro que são dois prazos
+      // sequenciais somados, não um só — útil para quem for reconciliar o
+      // cronograma gerado com o andamento real do pedido no APR Web.
+      descricao: 'Inspeção técnica CEMIG (prazo CEMIG p/ realizar: até 30 dias úteis após solicitada) + troca do medidor para bidirecional após aprovação (prazo: ~30 dias). Bloco de 4 semanas soma os dois prazos sequenciais.',
     },
 
     // FASE 6 — ENTREGA
@@ -214,6 +233,20 @@ export function gerarCronograma(dados: ParamsCronograma): void {
   set(4, 1, `${dados.potenciaKWp} kWp | ${dados.numModulos} módulos | Início: ${addWeeks(dados.dataInicio, 0)}`);
   set(5, 1, `Elaborado por: ${dados.empresa} — ${dados.responsavelTecnico}`);
 
+  // BUG CORRIGIDO (ago/2026): `Etapa.descricao` é preenchida para toda etapa
+  // (prazos, normas, responsabilidades — inclusive os dois textos logo acima
+  // corrigidos com fonte no Manual do Usuário do APR Web da CEMIG) mas nunca
+  // era escrita na planilha — o loop abaixo só escrevia Fase/Etapa/
+  // Responsável/Início/Término/barras de Gantt. O cliente/empresa que abre o
+  // cronograma gerado nunca via nenhuma dessas descrições, por mais detalhe
+  // que tivessem: o campo existia no código e era só descartado no render.
+  // Corrigido adicionando uma coluna "Descrição / Prazos" após as 16 colunas
+  // de semana (coluna N_SEMANAS+6 = 22, 1-indexado).
+  const COL_DESC = N_SEMANAS + 6;
+  ws['!cols'] = [{ wch: 26 }, { wch: 34 }, { wch: 14 }, { wch: 11 }, { wch: 11 }];
+  for (let s = 1; s <= N_SEMANAS; s++) ws['!cols'].push({ wch: 6 });
+  ws['!cols'].push({ wch: 70 });
+
   row = 7;
   // Header das semanas
   set(row, 1, 'Fase');
@@ -225,6 +258,7 @@ export function gerarCronograma(dados: ParamsCronograma): void {
   for (let s = 1; s <= N_SEMANAS; s++) {
     set(row, 5 + s, `S${s}\n${addWeeks(dados.dataInicio, s - 1)}`);
   }
+  set(row, COL_DESC, 'Descrição / Prazos');
 
   row++;
 
@@ -235,6 +269,7 @@ export function gerarCronograma(dados: ParamsCronograma): void {
     set(row, 3, et.responsavel);
     set(row, 4, addWeeks(dados.dataInicio, et.semana - 1));
     set(row, 5, addWeeks(dados.dataInicio, et.semana + et.duracao - 1));
+    set(row, COL_DESC, et.descricao);
 
     // Barras Gantt
     for (let s = 1; s <= N_SEMANAS; s++) {

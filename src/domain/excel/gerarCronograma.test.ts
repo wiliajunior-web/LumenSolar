@@ -143,3 +143,68 @@ describe('gerarCronograma — REGRESSÃO ago/2026 (rodada 10): instalação nunc
     expect(inicioMini.getTime()).toBeGreaterThan(inicioMicro.getTime());
   });
 });
+
+// [REGRESSÃO ago/2026 — rodada 13] `Etapa.descricao` (prazos, normas,
+// responsabilidades de cada etapa — inclusive as duas citações corrigidas
+// nesta rodada com fonte no "Manual do Usuário — Sistema APR Web" da CEMIG,
+// v.2H/23-12-2021) era calculada para toda etapa mas NUNCA escrita na
+// planilha — o cliente que abrisse o cronograma gerado nunca via essas
+// descrições. Corrigido adicionando a coluna "Descrição / Prazos" (coluna V,
+// a 22ª, logo após as 16 colunas de semana).
+describe('gerarCronograma — REGRESSÃO ago/2026 (rodada 13): coluna "Descrição / Prazos" (et.descricao nunca era escrita na planilha)', () => {
+  afterEach(() => limparArquivosGerados());
+
+  function gerar(): any {
+    gerarCronograma({
+      nomeCliente: 'Cliente Descricao',
+      enderecoInstalacao: 'Rua X, 1',
+      dataInicio: '2026-01-05',
+      potenciaKWp: 10,
+      numModulos: 19,
+      empresa: 'Lumen Soluções Ltda',
+      responsavelTecnico: 'Eng. Teste',
+      tipoSistema: 'micro',
+    });
+    const gerados = readdirSync('.').filter(f => f.startsWith('Cronograma_') && f.endsWith('.xlsx'));
+    const wb = XLSX.readFile(gerados[0]);
+    return wb.Sheets['Cronograma'];
+  }
+
+  function linhaPorEtapa(ws: any, etapa: string): number {
+    for (const key of Object.keys(ws)) {
+      if (/^B\d+$/.test(key) && ws[key].v === etapa) return Number(key.slice(1));
+    }
+    throw new Error(`Etapa não encontrada: ${etapa}`);
+  }
+
+  it('cabeçalho da coluna V (22ª) é "Descrição / Prazos"', () => {
+    const ws = gerar();
+    expect(ws['V7'].v).toBe('Descrição / Prazos');
+  });
+
+  it('toda etapa tem uma descrição não-vazia escrita na coluna V da sua linha', () => {
+    const ws = gerar();
+    // 16 etapas no total (ver array `etapas` em gerarCronograma.ts) — linhas 8 a 23.
+    for (let r = 8; r <= 23; r++) {
+      expect(ws[`B${r}`], `linha ${r} deveria ter uma Etapa na coluna B`).toBeTruthy();
+      expect(ws[`V${r}`], `linha ${r} (etapa "${ws[`B${r}`].v}") deveria ter descrição na coluna V`).toBeTruthy();
+      expect(String(ws[`V${r}`].v).length).toBeGreaterThan(10);
+    }
+  });
+
+  it('"Solicitação de vistoria CEMIG": descrição cita o prazo do ACESSANTE (120 dias, fonte Manual APR Web), não mais "Prazo CEMIG: até 30 dias úteis" atribuído à ação de solicitar', () => {
+    const ws = gerar();
+    const linha = linhaPorEtapa(ws, 'Solicitação de vistoria CEMIG');
+    const desc = String(ws[`V${linha}`].v);
+    expect(desc).toContain('120 dias');
+    expect(desc).not.toMatch(/^Solicitar vistoria no portal CEMIG Atende\. Prazo CEMIG: até 30 dias úteis\.$/);
+  });
+
+  it('"Vistoria CEMIG e troca do medidor": descrição cita os dois prazos sequenciais (vistoria em até 30 dias úteis E troca do medidor em ~30 dias), não só o segundo', () => {
+    const ws = gerar();
+    const linha = linhaPorEtapa(ws, 'Vistoria CEMIG e troca do medidor');
+    const desc = String(ws[`V${linha}`].v);
+    expect(desc).toContain('30 dias úteis');
+    expect(desc).toContain('30 dias');
+  });
+});

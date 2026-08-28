@@ -12,7 +12,7 @@ Desenvolvido pela Lumen Soluções Ltda — Araguari/MG.
 
 | Item | Estado |
 |------|--------|
-| Testes automatizados | **947 passando** (E2E, cálculos, persistência de arquivo .lumensolar, precificação de serviços, proteção CC, cabo CA/disjuntor, FDI, banco de baterias, agrupamento de UCs, cronograma de obra, UTM, checklist de documentação, mapa de células do Formulário CEMIG, dimensionamento Grupo A, wiring do store, geração dos PDFs de proposta, geração do Excel de auditoria (fórmulas de perdas/payback/FioB/HSP/tarifa), simulação de financiamento/payback, validação de formulário, detecção de cálculo desatualizado, fábricas de estado padrão, paginação da capa do PDF comercial, fórmula NOCT de temperatura de célula, metadados de "recentes", cancelamento do diálogo de importação, Procuração/Memorial/Diagrama Unifilar/Planta de Situação) |
+| Testes automatizados | **951 passando** (E2E, cálculos, persistência de arquivo .lumensolar, precificação de serviços, proteção CC, cabo CA/disjuntor, FDI, banco de baterias, agrupamento de UCs, cronograma de obra, UTM, checklist de documentação, mapa de células do Formulário CEMIG, dimensionamento Grupo A, wiring do store, geração dos PDFs de proposta, geração do Excel de auditoria (fórmulas de perdas/payback/FioB/HSP/tarifa), simulação de financiamento/payback, validação de formulário, detecção de cálculo desatualizado, fábricas de estado padrão, paginação da capa do PDF comercial, fórmula NOCT de temperatura de célula, metadados de "recentes", cancelamento do diálogo de importação, Procuração/Memorial/Diagrama Unifilar/Planta de Situação) |
 | Build Windows | ✅ GitHub Actions → artifact `LumenSolar-Windows` |
 | Normas implementadas | NBR 16690, NBR 5410, Lei 14.300/2022, REN ANEEL 1.000/2021 |
 | Tarifa CEMIG | R$1,1827/kWh (Res. ANEEL 3.589/2026) |
@@ -1062,6 +1062,49 @@ reset ao trocar de grupo funciona.
   renderiza o JSX do painel em si para provar que o banner aparece na tela; essa parte foi verificada
   por leitura manual cuidadosa do código (mesmo padrão já usado em rodadas anteriores para fixes de
   JSX em `App.tsx`, arquivo sem cobertura de teste de UI desde o início do projeto).
+
+### Décima terceira rodada (ago/2026) — cross-check contra o "Manual do Usuário — Sistema APR Web" oficial da CEMIG (`gerarCronograma.ts`)
+
+O usuário enviou dois documentos oficiais da CEMIG: um pacote de anexos do processo **PART**
+(Programa de Antecipação de Redes de Distribuição por Terceiros Legalmente Habilitados — obra de
+expansão de rede paga por terceiros, ex.: loteamentos) e o **Manual do Usuário — Sistema APR Web**
+(v.2H, 23/12/2021). O primeiro **não se aplica** ao escopo do LumenSolar (processo de expansão de
+rede, não de geração distribuída/MicroGD) e foi descartado sem uso. O segundo é diretamente
+relevante — é o manual oficial do próprio portal que `gerarCronograma.ts` e `App.tsx` já citam nos
+comentários (Cemig Atende + APR Web) — e foi usado para conferir os prazos hardcoded no cronograma
+contra a fonte primária.
+
+Confirmado correto: prazo de 24h para cadastrar/enviar a Solicitação de Acesso de GD no APR Web
+(manual, seção 8, "Cadastrar e Consultar uma Nota de Serviço") bate com o já existente em
+`gerarCronograma.ts`.
+
+- [x] **MÉDIO — a etapa "Solicitação de vistoria CEMIG" atribuía a si mesma o prazo "CEMIG: até 30
+  dias úteis", mas esse prazo pertence à etapa SEGUINTE (CEMIG realizar a vistoria depois de
+  solicitada), não à ação de solicitar em si — que tem seu PRÓPRIO prazo, e é do acessante, não da
+  CEMIG.** Conferido no manual (seção 7.6, card "Vistoria de Mini/Microgeração Distribuída"): "O
+  acessante deve solicitar vistoria em até 120 (cento e vinte) dias após a emissão do parecer de
+  acesso" — um prazo completamente diferente (quem tem o prazo, e de quantos dias) do que estava
+  escrito. Não é uma correção de data (o cronograma já agenda a solicitação ~2 semanas após o fim do
+  Parecer, bem dentro dos 120 dias), só de rótulo — mas o rótulo antigo confundia de quem é o prazo e
+  citava o número errado para a etapa em questão. A etapa seguinte ("Vistoria CEMIG e troca do
+  medidor") também foi corrigida para citar os DOIS prazos sequenciais que na verdade se aplicam a
+  ela (CEMIG até 30 dias úteis para REALIZAR a vistoria + até 30 dias para trocar o medidor após
+  aprovação) — antes citava só o segundo.
+- [x] **ALTO — `Etapa.descricao` (prazos, normas, responsabilidades de cada etapa — inclusive as
+  duas citações acima, agora corretas e com fonte) era calculada para as 16 etapas do cronograma mas
+  NUNCA era escrita na planilha gerada.** O loop que monta a planilha só escrevia
+  Fase/Etapa/Responsável/Início/Término e as barras de Gantt — o campo `descricao` existia no código,
+  continha informação real e útil (inclusive os prazos regulatórios citados nos comentários do
+  cabeçalho do arquivo), mas era silenciosamente descartado: o cliente/empresa que abrisse o
+  cronograma gerado nunca via nenhuma dessas descrições. Corrigido adicionando a coluna "Descrição /
+  Prazos" (coluna V, a 22ª, logo após as 16 colunas de semana) e uma largura de coluna própria (70
+  caracteres) para o texto ficar legível — o arquivo não tinha nenhuma configuração de largura de
+  coluna antes (`!cols` inexistente), então de passagem as 5 primeiras colunas também ganharam
+  largura mínima razoável.
+
+4 novos testes de regressão em `gerarCronograma.test.ts` (cabeçalho da coluna, todas as 16 etapas com
+descrição não-vazia, e as duas citações de prazo corrigidas), confirmados falhando contra o código
+pré-fix (via `git stash`) antes de restaurar.
 
 ### Oitava rodada (ago/2026) — bug de renderização/paginação na capa do PDF Comercial (`PropostaComercialPDF.tsx`)
 
