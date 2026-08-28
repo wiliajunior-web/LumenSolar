@@ -23,6 +23,8 @@
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const XLSX: typeof import('xlsx') = require('xlsx');
+import { DISTRIBUIDORAS } from '@data/distribuidoras';
+import { HSP_MEDIO_POR_UF } from '@data/hspPorUF';
 
 // ── Tipos SheetJS ─────────────────────────────────────────────────────────────
 type WS  = Record<string, any>;
@@ -85,11 +87,31 @@ export function gerarExcelAuditoria(dados: any): void {
   const contas: number[] = (consumo?.contas ?? []).slice(0, 12).map((c:any) => c.kWh || 0);
   while (contas.length < 12) contas.push(0);
   const mediaConsumo = contas.filter(k=>k>0).reduce((a:number,b:number)=>a+b,0) / Math.max(contas.filter((k:number)=>k>0).length, 1);
-  const tarifa   = consumo?.tarifaRealKWhComICMS   ?? 1.18272801;
+  // BUG CORRIGIDO (ago/2026): `?? 1.18272801` só cai no fallback quando o
+  // valor é null/undefined — mas o default real do campo é `0` (número,
+  // não undefined; ver consumoPadrao() em useProjetoStore.ts), então
+  // sempre que o usuário deixava a tarifa em branco (bem comum — é um
+  // campo opcional), o Excel usava tarifa=0, zerando toda a planilha
+  // (Entradas, FioB_Economia, Fluxo_Caixa, VPL, TIR, Payback). O fallback
+  // fixo também assumia CEMIG (1.18272801 ≈ DISTRIBUIDORAS.CEMIG.
+  // tarifaKWhComICMS=1.1827) mesmo para outra distribuidora. Corrigido para
+  // o mesmo padrão já usado pelo app real (useProjetoStore.ts ~L459):
+  // usa a tarifa real se > 0, senão a tarifa de referência da
+  // distribuidora selecionada pelo cliente (ou CEMIG, se nenhuma bater).
+  const distribuidoraExcel = DISTRIBUIDORAS.find((d: any) => d.codigo === consumo?.codigoDistribuidora) ?? DISTRIBUIDORAS[0];
+  const tarifa   = (consumo?.tarifaRealKWhComICMS ?? 0) > 0
+    ? consumo.tarifaRealKWhComICMS
+    : distribuidoraExcel.tarifaKWhComICMS;
   const cip      = consumo?.cipMensalRS             ?? 0;
   const kwhMin   = consumo?.tipoLigacao === 'monofasica' ? 30 : consumo?.tipoLigacao === 'trifasica' ? 100 : 50;
 
-  const hsp       = 5.4; // HSP MG — pode ser parametrizado
+  // BUG CORRIGIDO (ago/2026): HSP fixo em 5.4 (valor de MG), ignorando
+  // cliente.uf (disponível no escopo desta função) — o app real usa
+  // HSP_MEDIO_POR_UF[cliente.uf] (useProjetoStore.ts, via hspPorUF()). Para
+  // qualquer cliente fora de MG a geração/dimensionamento estimados nesta
+  // planilha divergiam do valor real do app (ex.: AM=4.4 vs 5.4 usado
+  // aqui — ~23% de diferença).
+  const hsp       = (cliente?.uf && HSP_MEDIO_POR_UF[String(cliente.uf).toUpperCase()]) || 5.4; // fallback MG (mercado primário) se UF ausente/desconhecida
   const potWp     = kit?.potenciaModuloWp          ?? 550;
   const qtd       = kit?.quantidade                ?? 0;
   const eficInv   = kit?.eficienciaInversorPercent ?? 98.4;
@@ -115,11 +137,17 @@ export function gerarExcelAuditoria(dados: any): void {
   const aliqImp   = preco?.aliquotaImpostos        ?? 0.065;
   const margem    = preco?.margemDesejada          ?? 0.18;
 
-  const degradacao = 0.005;
-  const reajuste   = 0.07;
-  const tma        = 0.08;
-  const taxaSolf48 = 0.0199;
-  const taxaSolf60 = 0.0199;
+  const degradacao = 0.005; // não é campo editável em DadosEmpresa — mesma constante DEGRADACAO_ANUAL usada em useProjetoStore.ts
+  // BUG CORRIGIDO (ago/2026): os 4 valores abaixo eram fixos, ignorando os
+  // campos reais e editáveis de `empresa` (aba Empresa da UI) — mesmo
+  // `empresa` já estando disponível no escopo desta função. O próprio
+  // fallback de `reajuste` (0.07) nem batia com o default real
+  // (empresa.reajusteTarifarioAnual=0.06, ver @data/empresa.ts) — ou seja,
+  // mesmo o caso "sem nenhuma configuração customizada" já saía errado.
+  const reajuste   = empresa?.reajusteTarifarioAnual      ?? 0.06;
+  const tma        = empresa?.taxaMinimaAtratividadeAnual ?? 0.08;
+  const taxaSolf48 = empresa?.taxaSolfacil48Mensal        ?? 0.0199;
+  const taxaSolf60 = empresa?.taxaSolfacil60Mensal        ?? 0.0199;
   const anoBase    = new Date().getFullYear();
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -160,7 +188,11 @@ export function gerarExcelAuditoria(dados: any): void {
 
   // Local
   setStr(ws1, r, 1, '3. IRRADIAÇÃO');  r++;
-  const ROW_HSP  = r; setStr(ws1, r, 1, 'HSP local (h/dia)'); setNum(ws1, r, 2, hsp); setStr(ws1, r, 3, 'MG=5.4 | SP=5.2 | BA=5.8'); r++;
+  // BUG CORRIGIDO (ago/2026): a nota estática "MG=5.4 | SP=5.2 | BA=5.8"
+  // nem batia com a própria tabela de referência do app (HSP_MEDIO_POR_UF:
+  // SP=5.0, BA=5.6, não 5.2/5.8) — trocada por uma nota que reflete a UF
+  // real do cliente usada no cálculo (ver `hsp` acima).
+  const ROW_HSP  = r; setStr(ws1, r, 1, 'HSP local (h/dia)'); setNum(ws1, r, 2, hsp); setStr(ws1, r, 3, `Referência p/ UF do cliente (${cliente?.uf ?? 'MG'}) — @data/hspPorUF.ts`); r++;
   const ROW_DIAS = r; setStr(ws1, r, 1, 'Dias por mês (365/12)'); setNum(ws1, r, 2, 30.4167); r+=2;
 
   // Kit
@@ -426,10 +458,17 @@ export function gerarExcelAuditoria(dados: any): void {
   // Beckman); os cálculos em si não mudam.
   setStr(ws2, r, 1, 'CÁLCULO DE PERDAS'); r+=2;
 
-  setStr(ws2, r, 1, 'TEMPERATURA DE CÉLULA  Tcell = Tamb + (NOCT-20)×0.8'); r++;
+  // BUG CORRIGIDO (ago/2026): esta aba reintroduzia o mesmo bug do fator
+  // ×0.8 já corrigido em calcularPerdas.ts numa rodada anterior desta
+  // auditoria — misturava a irradiância de referência do próprio ensaio
+  // NOCT (800 W/m²) com a de STC (1000 W/m²). G=800 W/m² É a irradiância
+  // do próprio ensaio NOCT (não a de STC), então o fator correto é
+  // G/800=800/800=1 — ou seja, Tcélula = Tamb + (NOCT-20) diretamente, sem
+  // multiplicar por 0.8. Ver comentário completo em calcularPerdas.ts.
+  setStr(ws2, r, 1, 'TEMPERATURA DE CÉLULA  Tcell = Tamb + (NOCT-20)'); r++;
   const P_TAMB = r; setStr(ws2, r, 1, 'Temperatura ambiente (°C)'); setFrm(ws2, r, 2, `=${E(ROW_TAMB)}`); setStr(ws2, r, 3, `Entradas!B${ROW_TAMB}`); r++;
   const P_NOCT = r; setStr(ws2, r, 1, 'NOCT (°C)'); setFrm(ws2, r, 2, `=${E(ROW_NOCT)}`); r++;
-  const P_TCELL= r; setStr(ws2, r, 1, 'Tcell = Tamb + (NOCT-20)×0.8'); setFrm(ws2, r, 2, `=B${P_TAMB}+(B${P_NOCT}-20)*0.8`, 'General', tamb+(noct-20)*0.8); setStr(ws2, r, 3, 'Irradiância de referência: 800 W/m² (média anual, < 1000 W/m² STC)'); r++;
+  const P_TCELL= r; setStr(ws2, r, 1, 'Tcell = Tamb + (NOCT-20)'); setFrm(ws2, r, 2, `=B${P_TAMB}+(B${P_NOCT}-20)`, 'General', tamb+(noct-20)); setStr(ws2, r, 3, 'G=800 W/m² é a própria irradiância do ensaio NOCT — fator G/800=1, ver calcularPerdas.ts'); r++;
   const P_DT   = r; setStr(ws2, r, 1, 'ΔT = Tcell - 25°C (STC)'); setFrm(ws2, r, 2, `=B${P_TCELL}-25`); r+=2;
 
   setStr(ws2, r, 1, 'COMPONENTES DE PERDA  [composição encadeada]'); r++;
@@ -535,20 +574,59 @@ export function gerarExcelAuditoria(dados: any): void {
   const FE_FRAC = r; setStr(ws4, r, 1, 'Fração tarifária FioB'); setNum(ws4, r, 2, empresa?.fracaoTarifaFioB ?? 0.35, F_PCT); setStr(ws4, r, 3, 'Estimativa (editável) — não é percentual definido em lei'); r++;
   const FE_ANOB = r; setStr(ws4, r, 1, 'Ano base'); setFrm(ws4, r, 2, `=${E(ROW_ANOB)}`, F_INT); r+=2;
 
-  // FioB por ano — tabela Art.27
-  setStr(ws4, r, 1, 'PERCENTUAL FIOB — Art. 27 Lei 14.300/2022'); r++;
-  setStr(ws4, r, 1, 'Ano'); setStr(ws4, r, 2, '% FioB (Art.27)'); setStr(ws4, r, 3, '% FioB (Art.26 — prot. até 07/2023)'); r++;
+  // BUG CORRIGIDO (ago/2026): esta aba (FioB_Economia) ignorava por
+  // completo `enquadramento`/`percentuaisFioBPorAno` — sempre assumia o
+  // escalonamento do Art. 27 a partir de 2026, mesmo para um cliente
+  // elegível à regra de transição do Art. 26 (isento até 31/12/2045,
+  // classificarEnquadramento()/percentualFioBPorAno() em calculoFioB.ts).
+  // A aba "Resumo" (ws0, primeira aba) já tinha sido corrigida numa
+  // rodada anterior para checar `enquadramento?.elegivelArt26` — mas essa
+  // aba só mostra texto explicativo; os números "ao vivo" desta aba
+  // (FE_PCT/FE_FIOB/FE_APOS/FE_ECO) é que alimentam
+  // FioB_Economia→Fluxo_Caixa→VPL/TIR/Payback, e continuavam calculados
+  // como se o cliente pagasse Fio B crescente — contradição interna no
+  // mesmo documento entre o texto do Resumo e os números do Fluxo_Caixa.
+  // `enquadramento`/`percentuaisFioBPorAno` são fatos fixos deste projeto
+  // (não algo que o usuário reconfigura ao vivo na aba Entradas — não há
+  // célula de "data de protocolo" nem "elegível Art.26" nas Entradas),
+  // por isso, assim como no Resumo, a decisão Art.26-vs-Art.27 é tomada em
+  // JS na geração do arquivo (mesmo padrão), mas a célula "Ano base" (que
+  // É editável nas Entradas) continua reagindo ao vivo dentro do caso
+  // Art.27, para não perder a promessa de "fórmula viva" do cabeçalho.
+  const artIsento = !!enquadramento?.elegivelArt26;
+  const formulaEscalonamentoArt27 =
+    `IF(B${FE_ANOB}<=2022,0,IF(B${FE_ANOB}=2023,0.15,IF(B${FE_ANOB}=2024,0.30,IF(B${FE_ANOB}=2025,0.45,IF(B${FE_ANOB}=2026,0.60,IF(B${FE_ANOB}=2027,0.75,IF(B${FE_ANOB}=2028,0.90,1.00)))))))`;
+  // pctFioBReal(ano): mesma lógica de percentualFioBPorAno() (calculoFioB.ts) —
+  // usa percentuaisFioBPorAno (pré-calculado pelo store) quando disponível
+  // para o ano, senão cai no escalonamento-padrão do Art.27 como fallback.
+  function pctFioBReal(ano: number): number {
+    if (artIsento && ano <= 2045) return 0;
+    if (percentuaisFioBPorAno?.[ano] !== undefined) return percentuaisFioBPorAno[ano];
+    if (ano <= 2022) return 0;
+    if (ano === 2023) return 0.15;
+    if (ano === 2024) return 0.30;
+    if (ano === 2025) return 0.45;
+    if (ano === 2026) return 0.60;
+    if (ano === 2027) return 0.75;
+    if (ano === 2028) return 0.90;
+    return 1.00;
+  }
+
+  setStr(ws4, r, 1, artIsento
+    ? 'PERCENTUAL FIOB — cliente elegível ao Art. 26 (isento até 31/12/2045)'
+    : 'PERCENTUAL FIOB — Art. 27 Lei 14.300/2022'); r++;
+  setStr(ws4, r, 1, 'Ano'); setStr(ws4, r, 2, '% FioB (Art.27)'); setStr(ws4, r, 3, '% FioB (Art.26 — regra de transição)'); r++;
   const FE_PTAB = r;
   const tabFioB = [[2023,0.15],[2024,0.30],[2025,0.45],[2026,0.60],[2027,0.75],[2028,0.90],[2029,1.00],[2030,1.00]];
   for (const [ano, pct] of tabFioB) {
-    setNum(ws4, r, 1, ano, F_INT); setNum(ws4, r, 2, pct, F_PCT); setNum(ws4, r, 3, 0, F_PCT); r++;
+    setNum(ws4, r, 1, ano, F_INT); setNum(ws4, r, 2, pct, F_PCT); setNum(ws4, r, 3, ano <= 2045 ? 0 : pct, F_PCT); r++;
   }
 
   r++;
-  setStr(ws4, r, 1, 'Percentual FioB do ano base'); r++;
+  setStr(ws4, r, 1, artIsento ? 'Percentual FioB do ano base (isento — Art. 26)' : 'Percentual FioB do ano base'); r++;
   const FE_PCT  = r;
   setFrm(ws4, r, 2,
-    `=IF(B${FE_ANOB}<=2022,0,IF(B${FE_ANOB}=2023,0.15,IF(B${FE_ANOB}=2024,0.30,IF(B${FE_ANOB}=2025,0.45,IF(B${FE_ANOB}=2026,0.60,IF(B${FE_ANOB}=2027,0.75,IF(B${FE_ANOB}=2028,0.90,1.00)))))))`,
+    artIsento ? `=IF(B${FE_ANOB}<=2045,0,${formulaEscalonamentoArt27})` : `=${formulaEscalonamentoArt27}`,
     F_PCT); r+=2;
 
   setStr(ws4, r, 1, 'CONTA DE ENERGIA — ANTES e APÓS O SOLAR'); r++;
@@ -567,13 +645,19 @@ export function gerarExcelAuditoria(dados: any): void {
   const FE_ECOA = r; setStr(ws4, r, 1, 'ECONOMIA ANUAL (R$/ano)');
   setFrm(ws4, r, 2, `=B${FE_ECO}*12`, F_BRL); r+=2;
 
-  // Projeção 25 anos
-  setStr(ws4, r, 1, 'PROJEÇÃO FIOB — Economia por ano (Art.27)'); r++;
+  // Projeção 25 anos — BUG CORRIGIDO (ago/2026): mesmo bug do bloco acima,
+  // aqui é onde mais importa: esta tabela alimenta diretamente FC_ECO na
+  // aba Fluxo_Caixa (`=FioB_Economia!B${FE_ECO}` usa só o ano 1, mas o
+  // padrão de escalonamento errado também distorcia a lógica de qualquer
+  // extensão futura que reprojete ano-a-ano). Agora usa pctFioBReal(ano),
+  // que respeita Art.26/percentuaisFioBPorAno.
+  setStr(ws4, r, 1, artIsento
+    ? 'PROJEÇÃO FIOB — Economia por ano (Art. 26 — isento até 2045)'
+    : 'PROJEÇÃO FIOB — Economia por ano (Art.27)'); r++;
   setStr(ws4, r, 1, 'Ano'); setStr(ws4, r, 2, '% FioB'); setStr(ws4, r, 3, 'Economia mensal (R$)'); r++;
   for (let i = 0; i < 25; i++) {
     const ano = anoBase + i;
-    const pctFio = ano <= 2022 ? 0 : ano === 2023 ? 0.15 : ano === 2024 ? 0.30 : ano === 2025 ? 0.45 :
-                   ano === 2026 ? 0.60 : ano === 2027 ? 0.75 : ano === 2028 ? 0.90 : 1.00;
+    const pctFio = pctFioBReal(ano);
     setNum(ws4, r, 1, ano, F_INT);
     setNum(ws4, r, 2, pctFio, F_PCT);
     setFrm(ws4, r, 3, `=B${FE_ANTS}-MAX(B${FE_DISP}+B${FE_CIP}+B${FE_COMP}*B${FE_TAR}*B${FE_FRAC}*${pctFio},B${FE_DISP}+B${FE_CIP})`, F_BRL);
@@ -696,8 +780,18 @@ export function gerarExcelAuditoria(dados: any): void {
   setFrm(ws7, r, 2, `=SUM(E${FC_T0+1}:E${FC_T0+25})`, F_BRL); r++;
   setStr(ws7, r, 1, 'ROI (retorno sobre investimento)');
   setFrm(ws7, r, 2, `=(SUM(E${FC_T0+1}:E${FC_T0+25})-B${FC_INV})/B${FC_INV}`, F_PCT); r++;
+  // BUG CORRIGIDO (ago/2026): a fórmula procurava SIGN(fluxo acumulado)
+  // EXATAMENTE IGUAL a 0 (MATCH(0,...)) para achar o ano do payback — com
+  // valores monetários reais, o fluxo acumulado praticamente nunca cai
+  // exatamente em zero (cruza de negativo pra positivo entre dois meses),
+  // então SIGN(F) nunca retorna 0 e o MATCH sempre falhava, caindo no
+  // IFERROR e mostrando ">25 anos" mesmo quando o payback real era de
+  // 4-5 anos. Corrigido para procurar o primeiro ano com SIGN=1 (fluxo
+  // acumulado positivo) — SIGN(x) para x>0 sempre retorna exatamente 1,
+  // então este MATCH é confiável (o "-1" já compensava a linha extra do
+  // ano 0 nesta mesma fórmula, continua correto).
   setStr(ws7, r, 1, 'Payback simples (anos)');
-  setFrm(ws7, r, 2, `=IFERROR(MATCH(0,SIGN(F${FC_T0}:F${FC_T0+25}),0)-1,">25 anos")`); r++;
+  setFrm(ws7, r, 2, `=IFERROR(MATCH(1,SIGN(F${FC_T0}:F${FC_T0+25}),0)-1,">25 anos")`); r++;
 
   updateRef(ws7, r, 6);
   XLSX.utils.book_append_sheet(wb, ws7, 'Fluxo_Caixa');

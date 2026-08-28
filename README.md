@@ -12,7 +12,7 @@ Desenvolvido pela Lumen Soluções Ltda — Araguari/MG.
 
 | Item | Estado |
 |------|--------|
-| Testes automatizados | **927 passando** (E2E, cálculos, persistência de arquivo .lumensolar, precificação de serviços, proteção CC, cabo CA/disjuntor, FDI, banco de baterias, agrupamento de UCs, cronograma de obra, UTM, checklist de documentação, mapa de células do Formulário CEMIG, dimensionamento Grupo A, wiring do store, geração dos PDFs de proposta, geração do Excel de auditoria, simulação de financiamento/payback, validação de formulário, detecção de cálculo desatualizado, fábricas de estado padrão, paginação da capa do PDF comercial, fórmula NOCT de temperatura de célula, metadados de "recentes", cancelamento do diálogo de importação, Procuração/Memorial/Diagrama Unifilar/Planta de Situação) |
+| Testes automatizados | **937 passando** (E2E, cálculos, persistência de arquivo .lumensolar, precificação de serviços, proteção CC, cabo CA/disjuntor, FDI, banco de baterias, agrupamento de UCs, cronograma de obra, UTM, checklist de documentação, mapa de células do Formulário CEMIG, dimensionamento Grupo A, wiring do store, geração dos PDFs de proposta, geração do Excel de auditoria (fórmulas de perdas/payback/FioB/HSP/tarifa), simulação de financiamento/payback, validação de formulário, detecção de cálculo desatualizado, fábricas de estado padrão, paginação da capa do PDF comercial, fórmula NOCT de temperatura de célula, metadados de "recentes", cancelamento do diálogo de importação, Procuração/Memorial/Diagrama Unifilar/Planta de Situação) |
 | Build Windows | ✅ GitHub Actions → artifact `LumenSolar-Windows` |
 | Normas implementadas | NBR 16690, NBR 5410, Lei 14.300/2022, REN ANEEL 1.000/2021 |
 | Tarifa CEMIG | R$1,1827/kWh (Res. ANEEL 3.589/2026) |
@@ -889,6 +889,78 @@ descoberto ao rodar os testes pela primeira vez contra os componentes já corrig
 testes do Diagrama Unifilar davam falso-negativo sem esse passo, porque `<DiagramaSvg/>` é um
 subcomponente). Isso permite regressão de TEXTO exato (ex: "deve conter 'Minigeração', não deve
 conter 'Microgeração'"), não só `expect(buf).toBeTruthy()`.
+
+### Décima rodada (ago/2026) — auditoria via subagente (`gerarExcel.ts`, a planilha de "segunda opinião")
+
+Ângulo desta rodada: `gerarExcel.ts` (709 linhas) — o gerador do Excel de auditoria, cujo propósito
+declarado no próprio cabeçalho do arquivo é "permitir segunda opinião e rastreabilidade" replicando
+cada cálculo do app como fórmula Excel viva. Auditoria via subagente, com verificação manual
+posterior de cada achado (fórmula recalculada à mão, campo cruzado contra o payload real enviado por
+`App.tsx` — `gerarExcel()`, que monta o objeto direto de `useProjetoStore.getState()`, não passa por
+`buildData()`) antes de aceitar qualquer um deles.
+
+- [x] **ALTO — mesmo bug do fator ×0.8 na temperatura de célula (NOCT), já corrigido em
+  `calcularPerdas.ts` numa rodada anterior, reintroduzido nesta planilha.** A aba "Perdas" calculava
+  `Tcell = Tamb + (NOCT-20)×0.8`, com o mesmo comentário ("irradiância 800 W/m² vs 1000 STC") que já
+  havia sido identificado como fisicamente errado — G=800 W/m² É a irradiância do próprio ensaio
+  NOCT, não a de STC, então o fator correto é G/800=1. Exemplo concreto (NOCT=45°C, Tamb=24°C):
+  Tcél=44°C (com o bug) vs Tcél=49°C (correto). Corrigido removendo o ×0.8, igual à correção já feita
+  em `calcularPerdas.ts`.
+- [x] **ALTO — fórmula de "Payback simples (anos)" na aba Fluxo_Caixa estava quebrada por
+  construção — sempre mostrava ">25 anos", mesmo quando o payback real era de 4-5 anos.**
+  `=IFERROR(MATCH(0,SIGN(F...),0)-1,">25 anos")` procurava o ano em que o fluxo acumulado é
+  EXATAMENTE zero — com valores monetários reais isso praticamente nunca acontece (o cruzamento de
+  negativo pra positivo cai entre dois meses, não exatamente em zero), então `SIGN(F)` nunca retorna
+  0 e o `MATCH` sempre falha, caindo no `IFERROR`. Essa é a célula "viva" de segunda opinião — o
+  Payback correto já aparecia certo na aba Resumo (vem de `indicadores.paybackSimplesAnos`, já
+  calculado, não desta fórmula), mas a checagem independente que é o propósito declarado do arquivo
+  estava sempre errada. Corrigido para `MATCH(1,SIGN(...))` — busca o primeiro ano com fluxo
+  acumulado positivo (`SIGN(x)` para `x>0` sempre retorna exatamente `1`, nunca fracionário, então
+  esse `MATCH` é confiável).
+- [x] **ALTO — aba "FioB_Economia" (a que alimenta Fluxo_Caixa/VPL/TIR/Payback) ignorava por
+  completo `enquadramento`/`percentuaisFioBPorAno`, ao contrário da aba "Resumo".** A aba Resumo já
+  havia sido corrigida numa rodada anterior para checar `enquadramento?.elegivelArt26` (cliente
+  isento de Fio B até 2045 pela regra de transição do Art. 26) — mas a aba "FioB_Economia", cujas
+  células alimentam diretamente o Fluxo de Caixa/VPL/TIR/Payback "ao vivo", continuava assumindo o
+  escalonamento do Art. 27 (60%→100%) incondicionalmente. Resultado: para um cliente Art.26, o texto
+  do Resumo dizia corretamente "Fio B isento... sem escalonamento", mas os números "ao vivo" logo
+  abaixo (VPL, Economia 25 anos, TIR/Payback) eram calculados como se ele pagasse Fio B crescente —
+  contradição interna no mesmo documento. Corrigido replicando a mesma lógica já usada na aba Resumo
+  (decisão Art.26-vs-Art.27 tomada em JS na geração do arquivo, já que não há célula editável de
+  "elegível Art.26" nas Entradas) tanto na tabela de percentuais quanto na projeção de 25 anos —
+  mantendo a célula "Ano base" reativa dentro do caso Art.27, para não perder a promessa de "fórmula
+  viva" do cabeçalho do arquivo.
+- [x] **ALTO — HSP (Horas de Sol Pleno) fixo em 5,4 (valor de MG), ignorando `cliente.uf`.**
+  `const hsp = 5.4;`, apesar de `cliente` já estar disponível no escopo da função. O app real usa
+  `HSP_MEDIO_POR_UF[cliente.uf]` (varia de 4,4 no Amazonas a 5,8 no Rio Grande do Norte — ~30% de
+  variação entre estados). Para qualquer cliente fora de MG, a geração/dimensionamento estimados
+  nesta planilha divergiam do valor real do app. Corrigido lendo `HSP_MEDIO_POR_UF[cliente.uf]`, com
+  fallback para 5,4 (MG, mercado primário da Lumen) se a UF estiver ausente/desconhecida. A nota
+  estática da célula ("MG=5.4 | SP=5.2 | BA=5.8") também estava errada mesmo como referência (a
+  tabela real tem SP=5.0, BA=5.6) — corrigida para refletir a UF realmente usada.
+- [x] **MÉDIO — reajuste tarifário, TMA e taxas Solfácil 48×/60× fixos no código, ignorando os
+  campos reais e editáveis de `empresa` (aba Empresa da UI).** `reajuste=0.07` — mas o próprio
+  default real (`empresa.reajusteTarifarioAnual`) é **0,06**: nem o caso "sem nenhuma configuração
+  customizada" batia. `tma=0.08` e as duas taxas Solfácil coincidiam com o default real só por
+  acaso — qualquer empresa que configurasse valores diferentes (os 4 campos são editáveis na aba
+  Empresa) via essa configuração ignorada na planilha. Corrigido lendo
+  `empresa.reajusteTarifarioAnual`/`empresa.taxaMinimaAtratividadeAnual`/`empresa.taxaSolfacil48Mensal`/
+  `empresa.taxaSolfacil60Mensal`, mesmo padrão já usado corretamente para `empresa.fracaoTarifaFioB`
+  em outro ponto do mesmo arquivo.
+- [x] **MÉDIO — fallback de tarifa (`?? 1.18272801`) não cobria o caso real de campo vazio, e
+  assumia CEMIG fixo para qualquer distribuidora.** O operador `??` só cai no fallback quando o
+  valor é `null`/`undefined` — mas o default real do campo é `0` (número, não `undefined`; campo
+  opcional, deixado em branco com frequência), então sempre que o usuário não preenchia a tarifa, a
+  planilha usava tarifa=**0**, zerando a cadeia inteira (Entradas → FioB_Economia → Fluxo_Caixa →
+  VPL/TIR/Payback) — não o valor de referência pretendido. O fallback fixo (`1.18272801` ≈
+  `DISTRIBUIDORAS.CEMIG.tarifaKWhComICMS`) também assumia CEMIG mesmo para outra distribuidora
+  selecionada pelo cliente. Corrigido para o mesmo padrão já usado pelo app real
+  (`useProjetoStore.ts`): tarifa real se `> 0`, senão a tarifa de referência da distribuidora
+  selecionada (ou CEMIG, se nenhuma bater).
+
+10 novos testes de regressão em `gerarExcel.test.ts` (lendo o `.xlsx` gerado de volta via
+`XLSX.readFile`, checando valores/fórmulas reais das células — não só `expect(...).not.toThrow()`),
+todos confirmados falhando contra o código pré-fix (via `git stash`) antes de restaurar.
 
 ### Oitava rodada (ago/2026) — bug de renderização/paginação na capa do PDF Comercial (`PropostaComercialPDF.tsx`)
 

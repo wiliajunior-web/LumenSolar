@@ -152,3 +152,141 @@ describe('gerarExcelAuditoria — REGRESSÃO ago/2026: aba Resumo respeita o enq
     expect(pct).toBeCloseTo(0.15, 6);
   });
 });
+
+// [REGRESSÃO ago/2026 — rodada 10] 6 bugs encontrados por auditoria de
+// subagente e verificados manualmente linha a linha contra o payload real
+// enviado por App.tsx (gerarExcel(), que monta o objeto direto de
+// useProjetoStore.getState() — não passa por buildData()) antes de corrigir.
+describe('gerarExcelAuditoria — REGRESSÃO ago/2026 (rodada 10): 6 bugs de fórmula/campo', () => {
+  afterEach(() => limparArquivosGerados());
+
+  function planilha(dados: any, aba: string): any {
+    gerarExcelAuditoria(dados);
+    const gerados = readdirSync('.').filter(f => f.startsWith('Auditoria_') && f.endsWith('.xlsx'));
+    const wb = XLSX.readFile(gerados[0]);
+    return wb.Sheets[aba];
+  }
+
+  function valorPorLabel(ws: any, labelPrefix: string): any {
+    for (const key of Object.keys(ws)) {
+      if (/^A\d+$/.test(key) && ws[key].t === 's' && typeof ws[key].v === 'string' && ws[key].v.startsWith(labelPrefix)) {
+        return ws[`B${key.slice(1)}`]?.v;
+      }
+    }
+    return undefined;
+  }
+
+  function formulaPorLabel(ws: any, labelPrefix: string): string | undefined {
+    for (const key of Object.keys(ws)) {
+      if (/^A\d+$/.test(key) && ws[key].t === 's' && typeof ws[key].v === 'string' && ws[key].v.startsWith(labelPrefix)) {
+        return ws[`B${key.slice(1)}`]?.f;
+      }
+    }
+    return undefined;
+  }
+
+  // 1. Tcell = Tamb + (NOCT-20)×0.8 — mesmo bug de calcularPerdas.ts (mistura
+  // irradiância NOCT 800W/m² com STC 1000W/m²). NOCT/Tamb são constantes
+  // fixas no arquivo (45°C/24°C, não vêm de `dados`), então o valor
+  // esperado é sempre o mesmo, com ou sem input.
+  it('Tcell da aba Perdas usa Tamb+(NOCT-20) SEM o fator ×0.8 (49°C, não 44°C)', () => {
+    const ws = planilha({ cliente: { nome: 'X' } }, 'Perdas');
+    expect(valorPorLabel(ws, 'Tcell = Tamb + (NOCT-20)')).toBe(24 + (45 - 20));
+  });
+
+  // 2. Payback: MATCH(0,SIGN(...)) nunca acha o ano exato de cruzamento —
+  // corrigido para MATCH(1,SIGN(...)) (primeiro ano com fluxo acumulado
+  // positivo). Como setFrm() não avalia fórmulas (isso é trabalho do
+  // Excel/LibreOffice ao abrir o arquivo), o teste verifica a fórmula
+  // gravada em si, não um valor calculado.
+  it('fórmula de Payback simples usa MATCH(1,SIGN(...)), não MATCH(0,SIGN(...))', () => {
+    const ws = planilha({ cliente: { nome: 'X' } }, 'Fluxo_Caixa');
+    const f = formulaPorLabel(ws, 'Payback simples');
+    expect(f).toContain('MATCH(1,SIGN(');
+    expect(f).not.toContain('MATCH(0,SIGN(');
+  });
+
+  // 3. FioB_Economia (a aba que alimenta Fluxo_Caixa/VPL/TIR/Payback) —
+  // ao contrário da aba Resumo (já corrigida antes), continuava assumindo
+  // Art.27 sempre. Projeção de 25 anos com cliente Art.26 deve ter 0% em
+  // todos os anos até 2045.
+  it('FioB_Economia — cliente Art.26 (isento): projeção de 25 anos usa 0% em todo o período (2026-2045 incluso)', () => {
+    const dados = {
+      cliente: { nome: 'Cliente Art26' },
+      enquadramento: { classe: 'microgeracao', elegivelArt26: true, regraEspecialArt27Paragrafo1: false, observacoes: [] },
+      percentuaisFioBPorAno: { 2025: 0, 2026: 0, 2027: 0, 2028: 0, 2029: 0, 2030: 0, 2035: 0, 2040: 0, 2045: 0 },
+    };
+    const ws = planilha(dados, 'FioB_Economia');
+    // Acha todas as linhas da tabela de projeção (coluna A = ano entre
+    // 2020 e 2060, coluna C tem fórmula de economia — só a projeção tem
+    // as duas coisas juntas nessa faixa de linhas).
+    const linhasProjecao = Object.keys(ws)
+      .filter(k => /^A\d+$/.test(k) && ws[k].t === 'n' && ws[k].v >= 2020 && ws[k].v <= 2060 && ws[`C${k.slice(1)}`]?.f)
+      .map(k => ({ linha: k.slice(1), ano: ws[k].v as number }));
+    expect(linhasProjecao.length).toBeGreaterThan(0);
+    for (const { linha, ano } of linhasProjecao) {
+      const pct = ws[`B${linha}`]?.v;
+      if (ano <= 2045) expect(pct).toBe(0);
+    }
+  });
+
+  it('FioB_Economia — cliente Art.27 (não elegível): projeção de 25 anos ainda usa o escalonamento real (60% em 2026)', () => {
+    const dados = {
+      cliente: { nome: 'Cliente Art27' },
+      enquadramento: { classe: 'microgeracao', elegivelArt26: false, regraEspecialArt27Paragrafo1: false, observacoes: [] },
+      percentuaisFioBPorAno: { 2026: 0.60 },
+    };
+    const ws = planilha(dados, 'FioB_Economia');
+    const linha2026 = Object.keys(ws).find(k => /^A\d+$/.test(k) && ws[k].t === 'n' && ws[k].v === 2026 && ws[`C${k.slice(1)}`]?.f);
+    expect(linha2026).toBeTruthy();
+    expect(ws[`B${linha2026!.slice(1)}`]?.v).toBeCloseTo(0.60, 6);
+  });
+
+  // 4. HSP hardcoded em 5.4 (MG), ignorando cliente.uf.
+  it('HSP local usa a UF real do cliente (AM=4.4), não fixo 5.4 (MG)', () => {
+    const ws = planilha({ cliente: { nome: 'X', uf: 'AM' } }, 'Entradas');
+    expect(valorPorLabel(ws, 'HSP local')).toBeCloseTo(4.4, 6);
+  });
+
+  it('HSP local cai para 5.4 (MG) quando UF está ausente (fallback, não quebra)', () => {
+    const ws = planilha({ cliente: { nome: 'X' } }, 'Entradas');
+    expect(valorPorLabel(ws, 'HSP local')).toBeCloseTo(5.4, 6);
+  });
+
+  // 5. reajuste/TMA/taxas Solfácil hardcoded, ignorando os campos reais e
+  // editáveis de `empresa` (disponível no escopo da função).
+  it('Reajuste/TMA/Solfácil 48×/60× usam os valores reais de `empresa`, não os fixos do código', () => {
+    const dados = {
+      cliente: { nome: 'X' },
+      empresa: {
+        reajusteTarifarioAnual: 0.05,
+        taxaMinimaAtratividadeAnual: 0.10,
+        taxaSolfacil48Mensal: 0.0250,
+        taxaSolfacil60Mensal: 0.0270,
+      },
+    };
+    const ws = planilha(dados, 'Entradas');
+    expect(valorPorLabel(ws, 'Reajuste tarifário anual')).toBeCloseTo(0.05, 6);
+    expect(valorPorLabel(ws, 'TMA')).toBeCloseTo(0.10, 6);
+    expect(valorPorLabel(ws, 'Taxa Solfácil 48')).toBeCloseTo(0.0250, 6);
+    expect(valorPorLabel(ws, 'Taxa Solfácil 60')).toBeCloseTo(0.0270, 6);
+  });
+
+  it('Reajuste sem `empresa` cai no default real (0.06), não no valor antigo errado (0.07)', () => {
+    const ws = planilha({ cliente: { nome: 'X' } }, 'Entradas');
+    expect(valorPorLabel(ws, 'Reajuste tarifário anual')).toBeCloseTo(0.06, 6);
+  });
+
+  // 6. tarifa: `?? 1.18272801` não cai no fallback quando o valor é 0 (o
+  // default real do campo), e o fallback fixo assumia CEMIG mesmo para
+  // outra distribuidora.
+  it('Tarifa sem preenchimento (0, o default real) usa a tarifa de referência da distribuidora do cliente, não 0 nem CEMIG fixo', () => {
+    const ws = planilha({ cliente: { nome: 'X' }, consumo: { tarifaRealKWhComICMS: 0, codigoDistribuidora: 'COPEL' } }, 'Entradas');
+    expect(valorPorLabel(ws, 'Tarifa real')).toBeCloseTo(1.0304, 6); // COPEL, não 0 nem 1.1827 (CEMIG)
+  });
+
+  it('Tarifa preenchida pelo usuário (>0) continua tendo prioridade sobre a referência da distribuidora', () => {
+    const ws = planilha({ cliente: { nome: 'X' }, consumo: { tarifaRealKWhComICMS: 1.5, codigoDistribuidora: 'COPEL' } }, 'Entradas');
+    expect(valorPorLabel(ws, 'Tarifa real')).toBeCloseTo(1.5, 6);
+  });
+});
