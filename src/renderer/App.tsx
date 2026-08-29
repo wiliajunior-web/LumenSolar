@@ -254,7 +254,15 @@ const KPI = ({ label, val, sub, color }: { label: string; val: string; sub?: str
 // (ART, RG/CPF, INMETRO) são documentos de terceiro que o app não pode
 // gerar (ver checklist.ts) — o usuário confirma manualmente aqui.
 function ChecklistDocumentacaoCard({ checklist }: { checklist: ItemChecklistDocumentacao[] }) {
-  const [aberto, setAberto] = React.useState(false);
+  // BUG CORRIGIDO (ago/2026): o card começava FECHADO, mostrando só um
+  // contador ("3/8 — 37%") sem explicação nenhuma do que falta ou do que
+  // aqueles números significam — a única pista de que dava pra clicar era um
+  // "▼ ver detalhes" pequeno, fácil de perder no meio da tela (ainda mais
+  // antes da reorganização dos 17 botões de ação, ver auditoria "Resultado —
+  // layout"). Usuário relatou "checklist confuso, não sei o que acontece" —
+  // mesma classe de problema já corrigida no painel FDI (dado escondido por
+  // padrão em vez de explicado). Agora abre expandido por padrão.
+  const [aberto, setAberto] = React.useState(true);
   const resumo = resumoChecklist(checklist);
 
   return (
@@ -3000,38 +3008,9 @@ function TabResultado({ onPrev }: { onPrev:()=>void }) {
         </div>
       )}
       {/* Cabeçalho */}
-      {/* BUG CORRIGIDO (ago/2026): título e barra de 17 botões de ação
-          estavam lado a lado num mesmo flex row com justify-content:
-          space-between e sem flexWrap na barra de botões. Numa tela comum
-          (mesmo maximizada em Full HD) os botões sozinhos já passam de
-          1900px, e como o <div> do título não tinha flexShrink:0 nem
-          minWidth, o layout flex encolhia ele até quase zero — nomes de
-          cliente mais longos ("Ana Maria Vieira de Sá e Silva") quebravam
-          palavra por palavra numa coluna estreitíssima. Título e barra de
-          ações agora ficam em linhas separadas, e a barra de ações quebra
-          em várias linhas (flexWrap) em vez de espremer o vizinho. */}
       <div style={{ marginBottom: 16 }}>
         <h1 style={{ fontSize: 22, fontWeight: 800, color: D.text, marginBottom: 2 }}>{s.cliente.nome || 'Resultado'}</h1>
         <p style={{ fontSize: 13, color: D.textMuted }}>{s.cliente.cidade}{s.cliente.cidade && s.cliente.uf ? ` · ${s.cliente.uf}` : s.cliente.uf}</p>
-      </div>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 22 }}>
-              <Btn onClick={gerarPDFCliente} disabled={gerando}>{gerando ? '⏳...' : '📄 Proposta'}</Btn>
-              <Btn onClick={gerarMemorial}    disabled={gerando} variant="ghost">{gerando ? '⏳...' : '📋 Memorial'}</Btn>
-              <Btn onClick={gerarProcuracao}  disabled={gerando} variant="ghost">{gerando ? '⏳...' : '✍ Procuração'}</Btn>
-              <Btn onClick={gerarPDFTecnico}  disabled={gerando} variant="ghost">{gerando ? '⏳...' : '🔧 Técnica'}</Btn>
-              <Btn onClick={gerarExcel}       disabled={gerando} variant="ghost">{gerando ? '⏳...' : '📊 Excel'}</Btn>
-              <Btn onClick={abrirWhatsApp} variant="ghost">💬 WhatsApp</Btn>
-              <Btn onClick={abrirEmail}   variant="ghost">📧 E-mail</Btn>
-              <Btn onClick={abrirBelenus}  variant="ghost">🛒 Belenus</Btn>
-              <Btn onClick={gerarFormularioCemig} disabled={gerando} variant="ghost">📋 Form. CEMIG</Btn>
-              <Btn onClick={gerarCronograma} disabled={gerando} variant="ghost">📅 Cronograma</Btn>
-              <Btn onClick={abrirSolfacil}  variant="ghost">💳 Solfácil</Btn>
-              <Btn onClick={abrirGoogleMaps} variant="ghost">🗺️ Maps</Btn>
-              <Btn onClick={abrirAldoSolar}  variant="ghost">☀️ Aldo Solar</Btn>
-              <Btn onClick={abrirINMETRO}    variant="ghost">🏷️ INMETRO</Btn>
-              <Btn onClick={gerarDUB} disabled={gerando} variant="ghost">{gerando ? '⏳...' : '⚡ DUB'}</Btn>
-              <Btn onClick={gerarPlantaSituacao} disabled={gerando} variant="ghost">{gerando ? '⏳...' : '🛰️ Planta'}</Btn>
-              <Btn onClick={gerarPacoteCompleto} disabled={gerando}>{gerando ? '⏳...' : '📦 Pacote Completo'}</Btn>
       </div>
 
       {/* KPIs principais — linha única */}
@@ -3043,6 +3022,63 @@ function TabResultado({ onPrev }: { onPrev:()=>void }) {
       </div>
 
       <ChecklistDocumentacaoCard checklist={s.checklistDocumentacao} />
+
+      {/* BUG CORRIGIDO (ago/2026): título e barra de 17 botões de ação (documentos +
+          compartilhamento + links de terceiros, tudo misturado, sem rótulo) estavam
+          lado a lado num mesmo flex row com justify-content:space-between e sem
+          flexWrap na barra de botões. Numa tela comum (mesmo maximizada em Full HD)
+          os botões sozinhos já passam de 1900px, e como o <div> do título não tinha
+          flexShrink:0 nem minWidth, o layout flex encolhia ele até quase zero — nomes
+          de cliente mais longos ("Ana Maria Vieira de Sá e Silva") quebravam palavra
+          por palavra numa coluna estreitíssima. Corrigido: título isolado (acima), e
+          a barra de ações movida para depois dos KPIs/checklist (resultado primeiro,
+          ações depois) e reagrupada em 3 seções rotuladas — documentos gerados pelo
+          app, compartilhamento com o cliente, e links de terceiros — em vez de uma
+          lista plana de 17 botões sem hierarquia nenhuma. O bloco duplicado de 3
+          botões (Proposta/Memorial/Procuração) que existia de novo lá embaixo, ao
+          final da página, foi removido — pura repetição do que já está aqui. */}
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#6f6d63', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 8 }}>
+              Documentos
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              <Btn onClick={gerarPDFCliente} disabled={gerando}>{gerando ? '⏳...' : '📄 Proposta'}</Btn>
+              <Btn onClick={gerarMemorial}    disabled={gerando} variant="ghost">{gerando ? '⏳...' : '📋 Memorial'}</Btn>
+              <Btn onClick={gerarProcuracao}  disabled={gerando} variant="ghost">{gerando ? '⏳...' : '✍ Procuração'}</Btn>
+              <Btn onClick={gerarPDFTecnico}  disabled={gerando} variant="ghost">{gerando ? '⏳...' : '🔧 Técnica'}</Btn>
+              <Btn onClick={gerarDUB} disabled={gerando} variant="ghost">{gerando ? '⏳...' : '⚡ DUB'}</Btn>
+              <Btn onClick={gerarPlantaSituacao} disabled={gerando} variant="ghost">{gerando ? '⏳...' : '🛰️ Planta'}</Btn>
+              <Btn onClick={gerarFormularioCemig} disabled={gerando} variant="ghost">📋 Form. CEMIG</Btn>
+              <Btn onClick={gerarExcel}       disabled={gerando} variant="ghost">{gerando ? '⏳...' : '📊 Excel'}</Btn>
+              <Btn onClick={gerarCronograma} disabled={gerando} variant="ghost">📅 Cronograma</Btn>
+              <Btn onClick={gerarPacoteCompleto} disabled={gerando}>{gerando ? '⏳...' : '📦 Pacote Completo'}</Btn>
+            </div>
+          </div>
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#6f6d63', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 8 }}>
+              Compartilhar com o cliente
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              <Btn onClick={abrirWhatsApp} variant="ghost">💬 WhatsApp</Btn>
+              <Btn onClick={abrirEmail}   variant="ghost">📧 E-mail</Btn>
+            </div>
+          </div>
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#6f6d63', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 8 }}>
+              Links úteis (sites de terceiros)
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              <Btn onClick={abrirBelenus}  variant="ghost">🛒 Belenus</Btn>
+              <Btn onClick={abrirSolfacil}  variant="ghost">💳 Solfácil</Btn>
+              <Btn onClick={abrirGoogleMaps} variant="ghost">🗺️ Maps</Btn>
+              <Btn onClick={abrirAldoSolar}  variant="ghost">☀️ Aldo Solar</Btn>
+              <Btn onClick={abrirINMETRO}    variant="ghost">🏷️ INMETRO</Btn>
+            </div>
+          </div>
+        </div>
+      </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
 
@@ -3190,13 +3226,8 @@ function TabResultado({ onPrev }: { onPrev:()=>void }) {
 
       </div>
 
-      <div style={{ marginTop: 16, display: 'flex', gap: 10, justifyContent: 'space-between' }}>
+      <div style={{ marginTop: 16 }}>
         <Btn onClick={onPrev} variant="ghost">← Editar</Btn>
-        <div style={{ display: 'flex', gap: 8 }}>
-              <Btn onClick={gerarPDFCliente} disabled={gerando}>{gerando ? '⏳...' : '📄 Proposta'}</Btn>
-              <Btn onClick={gerarMemorial}    disabled={gerando} variant="ghost">{gerando ? '⏳...' : '📋 Memorial'}</Btn>
-              <Btn onClick={gerarProcuracao}  disabled={gerando} variant="ghost">{gerando ? '⏳...' : '✍ Procuração'}</Btn>
-            </div>
       </div>
     </div>
   );
