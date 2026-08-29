@@ -11,7 +11,7 @@ import { CHECKLIST_PADRAO_CEMIG_MICROGD, resumoChecklist, type ItemChecklistDocu
 import { latLonParaUTM } from '@domain/geografia/converterCoordenadas';
 import { calcularCaboCA } from '@domain/dimensionamento/calcularCaboCA';
 import { calcularDPSCA, calcularProtecaoCC } from '@domain/dimensionamento/calcularProtecaoCC';
-import { calcularFDI } from '@domain/dimensionamento/calcularFDI';
+import { calcularFDI, type ResultadoFDI } from '@domain/dimensionamento/calcularFDI';
 import { calcularBancoBaterias, type TipoBateria, type TipoSistema } from '@domain/dimensionamento/calcularBateria';
 // Excel gerarExcel importado dinamicamente para não impactar o bundle inicial
 
@@ -589,7 +589,7 @@ export default function App() {
           )}
           <div style={{ padding: '20px 24px', flex: 1 }}>
             {showEmpresa && <TabEmpresa onClose={() => { setShowEmpresa(false); salvarEmpresa(useProjetoStore.getState().empresa); }} />}
-            {!showEmpresa && aba === 'home' && <TabHome onNovaProposta={novaProposta} onAbrirProposta={abrirProposta} />}
+            {!showEmpresa && aba === 'home' && <TabHome onNovaProposta={novaProposta} onAbrirProposta={abrirProposta} onImportar={abrirImportado} />}
             {!showEmpresa && aba === 'cliente'   && <TabCliente   onNext={() => setAba('consumo')} />}
             {!showEmpresa && aba === 'consumo'   && <TabConsumo   onPrev={() => setAba('cliente')} onNext={() => setAba('local')} />}
             {!showEmpresa && aba === 'local'      && <TabLocal     onPrev={() => setAba('consumo')} onNext={() => setAba('kit')} />}
@@ -604,7 +604,17 @@ export default function App() {
 }
 
 // ─── Tab Home ─────────────────────────────────────────────────────────────────
-function TabHome({ onNovaProposta, onAbrirProposta }: { onNovaProposta: ()=>void; onAbrirProposta: (id:string)=>void }) {
+// BUG CORRIGIDO (ago/2026): não existia NENHUM jeito de importar um
+// .lumensolar salvo em disco a não ser clicando num card de "proposta
+// recente" já existente na lista (que só existe se os metadados ainda
+// estiverem no localStorage desta máquina/navegador). Um arquivo salvo e
+// levado para outra máquina, reaberto depois de limpar o navegador, ou
+// recebido de outra pessoa (o próprio texto de persistence.ts descreve isso
+// como recurso: "pode copiar, enviar por e-mail, Google Drive, múltiplas
+// máquinas") não tinha como ser importado — a função `abrirImportado()` já
+// existia e funcionava (seletor de arquivo + validação de checksum), só
+// faltava um botão que a chamasse fora do fluxo de "recentes".
+function TabHome({ onNovaProposta, onAbrirProposta, onImportar }: { onNovaProposta: ()=>void; onAbrirProposta: (id:string)=>void; onImportar: ()=>void }) {
   const [propostas, setPropostas] = React.useState<any[]>([]);
   const [carregando, setCarregando] = React.useState(true);
   const [excluindo, setExcluindo] = React.useState<string | null>(null);
@@ -672,7 +682,10 @@ function TabHome({ onNovaProposta, onAbrirProposta }: { onNovaProposta: ()=>void
           <h1 style={{ fontSize:24, fontWeight:800, color:D.text }}>Propostas</h1>
           <p style={{ fontSize:13, color:D.textMuted, marginTop:4 }}>Gerencie seus projetos fotovoltaicos</p>
         </div>
-        <Btn onClick={onNovaProposta}>+ Nova Proposta</Btn>
+        <div style={{ display:'flex', gap:8 }}>
+          <Btn onClick={onImportar} variant="ghost">📂 Importar arquivo</Btn>
+          <Btn onClick={onNovaProposta}>+ Nova Proposta</Btn>
+        </div>
       </div>
 
       {carregando && <p style={{ color:D.textMuted, textAlign:'center', padding:40 }}>Carregando...</p>}
@@ -681,8 +694,11 @@ function TabHome({ onNovaProposta, onAbrirProposta }: { onNovaProposta: ()=>void
         <div style={{ textAlign:'center', padding:'60px 0', background:D.card, borderRadius:16, border:`2px dashed ${D.border}` }}>
           <div style={{ fontSize:48, marginBottom:16 }}>☀️</div>
           <h2 style={{ fontSize:18, fontWeight:700, color:D.text, marginBottom:8 }}>Nenhuma proposta ainda</h2>
-          <p style={{ fontSize:14, color:D.textMuted, marginBottom:24 }}>Crie sua primeira proposta para um cliente</p>
-          <Btn onClick={onNovaProposta}>+ Nova Proposta</Btn>
+          <p style={{ fontSize:14, color:D.textMuted, marginBottom:24 }}>Crie sua primeira proposta para um cliente ou importe um arquivo .lumensolar salvo anteriormente</p>
+          <div style={{ display:'flex', gap:8, justifyContent:'center' }}>
+            <Btn onClick={onNovaProposta}>+ Nova Proposta</Btn>
+            <Btn onClick={onImportar} variant="ghost">📂 Importar arquivo</Btn>
+          </div>
         </div>
       )}
 
@@ -1234,6 +1250,26 @@ function TabConsumo({ onPrev, onNext }: { onPrev:()=>void; onNext:()=>void }) {
       <NavButtons onPrev={onPrev} onNext={onNext} nextLabel="Kit Solar →" />
     </div>
   );
+}
+
+// ADICIONADO (ago/2026): traduz o resultado técnico de calcularFDI() (3
+// critérios: potência/FDI, tensão/N_série, corrente/MPPT) para uma frase em
+// linguagem simples. Antes, o painel de FDI (TabKit) só mostrava os 3
+// critérios lado a lado com jargão técnico (FDI, N_série, MPPT) e um badge
+// "APROVADO"/"AJUSTAR" sem explicar o que fazer — extraído como função pura
+// para poder testar contra saídas reais de calcularFDI(), não fixtures
+// inventadas do zero.
+export function resumoFDI(r: Pick<ResultadoFDI, 'aprovado' | 'statusFDI' | 'criterio1Ok' | 'criterio2Ok' | 'criterio3Avaliado' | 'criterio3Ok'>): string {
+  if (r.aprovado) return '✓ Este inversor está bem dimensionado para este conjunto de módulos — nenhum ajuste necessário.';
+  const problemas: string[] = [];
+  if (!r.criterio1Ok) problemas.push(
+    r.statusFDI === 'baixo'
+      ? 'o inversor está grande demais para os módulos (vai ficar ocioso)'
+      : 'os módulos geram mais do que o inversor aguenta (risco de perda por clipping)'
+  );
+  if (!r.criterio2Ok) problemas.push('o número de módulos em série está fora da faixa de tensão que o inversor aceita');
+  if (r.criterio3Avaliado && !r.criterio3Ok) problemas.push('há strings demais ligadas na mesma entrada MPPT para a corrente que ela suporta');
+  return `✗ Ajuste necessário: ${problemas.join('; ')}.`;
 }
 
 // ADICIONADO (ago/2026): checagem de plausibilidade para os campos UTM E/N
@@ -1801,12 +1837,19 @@ function ComponentesRecomendados({ kit, tipoLigacao }: { kit: any; tipoLigacao?:
 
       {/* ── FDI — 3 critérios ── */}
       {kit.vocV > 0 && kit.faixaMpptMinV > 0 && kit.potenciaInversorKW > 0 && (() => {
+        // ADICIONADO (ago/2026): quando o campo Vmpp do datasheet não está
+        // preenchido, este painel silenciosamente usava uma ESTIMATIVA
+        // (85% de Voc) sem avisar — um usuário lendo "FDI = 1,082" ou
+        // "Faixa: 8–14 módulos" não tinha como saber que esses números vêm
+        // de um valor chutado, não do datasheet real do módulo.
+        const vmppReal = (kit as any).vmppV || (kit as any).vmpV || 0;
+        const vmppEstimado = vmppReal <= 0;
         try {
           const r = calcularFDI({
             potenciaModuloWp: kit.potenciaModuloWp,
             quantidade: kit.quantidade,
             vocV: kit.vocV,
-            vmpV: (kit as any).vmppV || (kit as any).vmpV || kit.vocV * 0.85,
+            vmpV: vmppReal || kit.vocV * 0.85,
             iscA: kit.iscA,
             potenciaInversorKW: kit.potenciaInversorKW,
             faixaMpptMinV: kit.faixaMpptMinV,
@@ -1826,10 +1869,17 @@ function ComponentesRecomendados({ kit, tipoLigacao }: { kit: any; tipoLigacao?:
           const corStatus: Record<string,string> = {
             ideal:'#22c55e', aceitavel:'#f59e0b', alto:'#f97316', baixo:'#f97316', invalido:'#ef4444',
           };
+          // ADICIONADO (ago/2026): resumo em linguagem simples do que os 3
+          // critérios técnicos (①②③) significam na prática, para quem não
+          // decora a nomenclatura FDI/N_série/MPPT de cabeça — a pergunta
+          // que este painel deve responder de cara é "esse inversor serve
+          // para esse conjunto de módulos, ou preciso trocar algo?" (ver
+          // resumoFDI(), testado em App.resumoFDI.test.ts).
+          const resumo = resumoFDI(r);
           return (
             <div style={{ marginTop:16, padding:'14px 16px', background:'#f7f6f1',
               border:`1px solid ${r.aprovado ? '#22c55e44' : '#ef444444'}`, borderRadius:10 }}>
-              <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:12 }}>
+              <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6 }}>
                 <span style={{ fontSize:12, fontWeight:800, color:'#c9a227', textTransform:'uppercase', letterSpacing:'.05em' }}>
                   FDI — Fator de Dimensionamento do Inversor
                 </span>
@@ -1839,6 +1889,14 @@ function ComponentesRecomendados({ kit, tipoLigacao }: { kit: any; tipoLigacao?:
                   {r.aprovado ? '✓ APROVADO' : '✗ AJUSTAR'}
                 </span>
               </div>
+              <div style={{ fontSize:12, color: r.aprovado ? '#166534' : '#991b1b', marginBottom:10, lineHeight:1.5 }}>
+                {resumo}
+              </div>
+              {vmppEstimado && (
+                <div style={{ fontSize:11, color:'#92400e', marginBottom:12, padding:'5px 10px', background:'#3b2a0a', borderRadius:6 }}>
+                  ⚠ Vmpp do módulo não preenchido — os números abaixo usam uma ESTIMATIVA (85% de Voc), não o valor real do datasheet. Preencha "Tensão de Máxima Potência (Vmpp)" no kit para um resultado preciso.
+                </div>
+              )}
               <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:10, marginBottom:10 }}>
                 {[
                   {
@@ -1888,7 +1946,20 @@ function ComponentesRecomendados({ kit, tipoLigacao }: { kit: any; tipoLigacao?:
               </div>
             </div>
           );
-        } catch { return null; }
+        } catch (e) {
+          // BUG CORRIGIDO (ago/2026): qualquer erro no cálculo do FDI fazia
+          // o painel inteiro desaparecer em silêncio (return null), sem
+          // nenhuma indicação do motivo — exatamente o tipo de comportamento
+          // que faz um painel parecer "quebrado sem explicação". Agora mostra
+          // o motivo real em vez de sumir.
+          return (
+            <div style={{ marginTop:16, padding:'10px 14px', background:'#3b0a0a', border:'1px solid #ef444444', borderRadius:10 }}>
+              <span style={{ fontSize:11, color:'#fca5a5' }}>
+                ⚠️ Não foi possível calcular o FDI: {e instanceof Error ? e.message : String(e)}. Confira os dados do módulo e do inversor (Voc, Vmpp, Isc, faixa MPPT).
+              </span>
+            </div>
+          );
+        }
       })()}
     </div>
   );
@@ -2222,7 +2293,23 @@ function TabKit({ onPrev, onNext }: { onPrev:()=>void; onNext:()=>void }) {
       <ComponentesRecomendados kit={s.kit} tipoLigacao={s.consumo?.tipoLigacao} />
 
       {/* ── Dimensionamento de Bateria (opcional) ── */}
-      {mediaKWh > 0 && (() => {
+      {/* BUG CORRIGIDO (ago/2026): este painel (configuração + resultados de
+          banco de baterias) aparecia em TODO projeto com consumo médio
+          preenchido — inclusive na grande maioria dos casos, que são
+          on-grid comuns sem bateria nenhuma. Isso empurra pra baixo o resto
+          da tela do Kit com um bloco irrelevante na maior parte das vezes.
+          Agora fica escondido atrás de um checkbox explícito, que só quem
+          está de fato projetando um sistema com backup/híbrido ou off-grid
+          precisa marcar. */}
+      <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom: (s.kit as any).temBancoBaterias ? 10 : 16 }}>
+        <input type="checkbox" id="temBancoBaterias" checked={!!(s.kit as any).temBancoBaterias}
+          onChange={e => s.atualizarKit({ temBancoBaterias: e.target.checked } as any)}
+          style={{ width:16, height:16, cursor:'pointer' }} />
+        <label htmlFor="temBancoBaterias" style={{ fontSize:13, color:D.textSub, cursor:'pointer' }}>
+          🔋 Este projeto inclui banco de baterias (backup/híbrido ou off-grid)
+        </label>
+      </div>
+      {mediaKWh > 0 && (s.kit as any).temBancoBaterias && (() => {
         // CORRIGIDO (ago/2026): este painel reimplementava as fórmulas de
         // calcularBancoBaterias() (@domain/dimensionamento/calcularBateria.ts)
         // inline, à parte do módulo de domínio testado — divergindo dele e
@@ -2913,12 +3000,21 @@ function TabResultado({ onPrev }: { onPrev:()=>void }) {
         </div>
       )}
       {/* Cabeçalho */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 22 }}>
-        <div>
-          <h1 style={{ fontSize: 22, fontWeight: 800, color: D.text, marginBottom: 2 }}>{s.cliente.nome || 'Resultado'}</h1>
-          <p style={{ fontSize: 13, color: D.textMuted }}>{s.cliente.cidade}{s.cliente.cidade && s.cliente.uf ? ` · ${s.cliente.uf}` : s.cliente.uf}</p>
-        </div>
-        <div style={{ display: 'flex', gap: 8 }}>
+      {/* BUG CORRIGIDO (ago/2026): título e barra de 17 botões de ação
+          estavam lado a lado num mesmo flex row com justify-content:
+          space-between e sem flexWrap na barra de botões. Numa tela comum
+          (mesmo maximizada em Full HD) os botões sozinhos já passam de
+          1900px, e como o <div> do título não tinha flexShrink:0 nem
+          minWidth, o layout flex encolhia ele até quase zero — nomes de
+          cliente mais longos ("Ana Maria Vieira de Sá e Silva") quebravam
+          palavra por palavra numa coluna estreitíssima. Título e barra de
+          ações agora ficam em linhas separadas, e a barra de ações quebra
+          em várias linhas (flexWrap) em vez de espremer o vizinho. */}
+      <div style={{ marginBottom: 16 }}>
+        <h1 style={{ fontSize: 22, fontWeight: 800, color: D.text, marginBottom: 2 }}>{s.cliente.nome || 'Resultado'}</h1>
+        <p style={{ fontSize: 13, color: D.textMuted }}>{s.cliente.cidade}{s.cliente.cidade && s.cliente.uf ? ` · ${s.cliente.uf}` : s.cliente.uf}</p>
+      </div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 22 }}>
               <Btn onClick={gerarPDFCliente} disabled={gerando}>{gerando ? '⏳...' : '📄 Proposta'}</Btn>
               <Btn onClick={gerarMemorial}    disabled={gerando} variant="ghost">{gerando ? '⏳...' : '📋 Memorial'}</Btn>
               <Btn onClick={gerarProcuracao}  disabled={gerando} variant="ghost">{gerando ? '⏳...' : '✍ Procuração'}</Btn>
@@ -2936,7 +3032,6 @@ function TabResultado({ onPrev }: { onPrev:()=>void }) {
               <Btn onClick={gerarDUB} disabled={gerando} variant="ghost">{gerando ? '⏳...' : '⚡ DUB'}</Btn>
               <Btn onClick={gerarPlantaSituacao} disabled={gerando} variant="ghost">{gerando ? '⏳...' : '🛰️ Planta'}</Btn>
               <Btn onClick={gerarPacoteCompleto} disabled={gerando}>{gerando ? '⏳...' : '📦 Pacote Completo'}</Btn>
-            </div>
       </div>
 
       {/* KPIs principais — linha única */}
