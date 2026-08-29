@@ -60,11 +60,81 @@ describe('MemorialDescritivo — citação normativa', () => {
   // (linha 4, comentário) já citava corretamente "REN ANEEL 1000/2021", uma
   // inconsistência entre o comentário interno e o texto realmente impresso
   // no documento entregue à distribuidora.
-  it('não cita mais "RN no 482" — cita REN ANEEL 1.000/2021', () => {
+  it('não cita mais "RN no 482" — cita REN ANEEL nº 1.000/2021', () => {
     const data = dataBase();
     const texto = extractPdfTextJoined(MemorialDescritivo({ data }));
     expect(texto).not.toContain('RN no 482');
     expect(texto).not.toContain('RN nº 482');
-    expect(texto).toContain('REN ANEEL no 1.000/2021');
+    // BUG CORRIGIDO (ago/2026): "no" (ASCII puro) em vez do símbolo "nº" —
+    // ver mesma classe de bug em Procuracao.tsx.
+    expect(texto).toContain('REN ANEEL nº 1.000/2021');
+    expect(texto).not.toContain('REN ANEEL no 1.000/2021');
+  });
+});
+
+describe('MemorialDescritivo — rodapé com cadastro de empresa incompleto', () => {
+  // BUG CORRIGIDO (ago/2026): quando empresa.cnpj/responsavelTecnico/crea
+  // estavam vazios, o rodapé de toda página imprimia o separador " - " nu,
+  // sem o valor ("LUMEN SOLUÇÕES LTDA - CNPJ: -" / "- CREA-MG"). Ver
+  // auditoria "geração de documentos" (ago/2026), item 11.
+
+  it('empresa com CNPJ/responsavelTecnico/CREA vazios não deixa traço solto no rodapé', () => {
+    const data = dataBase({ empresa: { razaoSocial: 'Lumen Soluções Ltda' } });
+    const texto = extractPdfTextJoined(MemorialDescritivo({ data }));
+    expect(texto).not.toContain('CNPJ: -');
+    expect(texto).not.toContain('- CREA-MG ');
+    expect(texto).not.toMatch(/-\s+-/); // dois separadores colados sem conteúdo entre eles
+  });
+
+  it('empresa completa mostra CNPJ e CREA normalmente no rodapé e na tabela de cabeçalho', () => {
+    const data = dataBase();
+    const texto = extractPdfTextJoined(MemorialDescritivo({ data }));
+    expect(texto).toContain('CNPJ: 11.111.111/0001-11');
+    expect(texto).toContain('CREA-MG 123456');
+    expect(texto).toContain('CREA 123456'); // tabela "Empresa responsável" (sem hífen antes de CREA)
+  });
+});
+
+describe('MemorialDescritivo — formatação numérica e símbolos', () => {
+  // BUG CORRIGIDO (ago/2026): valores elétricos do datasheet (Vmpp, Impp,
+  // Voc, Isc, peso, eficiência) eram interpolados direto no template sem
+  // passar pela localização pt-BR (fmtN/toLocaleString), saindo com ponto
+  // decimal ("41.06 V") em vez de vírgula, mesmo com o resto do documento
+  // (área, potência, geração) corretamente em pt-BR. E "m2"/"°C" saíam sem
+  // o símbolo correto. Ver auditoria "geração de documentos", itens 9 e 10.
+
+  it('Vmpp/Impp/Voc/Isc/peso/eficiência saem em pt-BR (vírgula), não em formato americano', () => {
+    const data = dataBase({
+      kit: {
+        ...dataBase().kit,
+        vmppV: 41.06, imppA: 15.01, vocV: 49.5, iscA: 13.85,
+        pesoKgModulo: 34.5, corrMaxSaidaA: 13.6,
+      },
+    });
+    const texto = extractPdfTextJoined(MemorialDescritivo({ data }));
+    expect(texto).toContain('41,06 V');
+    expect(texto).toContain('15,01 A');
+    expect(texto).toContain('49,50 V');
+    expect(texto).toContain('13,85 A');
+    expect(texto).toContain('34,5 kg');
+    expect(texto).toContain('13,60 A');
+    expect(texto).toContain('97,6%'); // eficienciaInversorPercent do dataBase()
+    expect(texto).not.toContain('41.06');
+    expect(texto).not.toContain('15.01');
+    expect(texto).not.toContain('34.5 kg');
+  });
+
+  it('área do telhado e área do módulo saem com "m²" (sobrescrito), não "m2"', () => {
+    const data = dataBase();
+    const texto = extractPdfTextJoined(MemorialDescritivo({ data }));
+    expect(texto).toContain('m²');
+    expect(texto).not.toContain('m2');
+  });
+
+  it('coeficiente de temperatura sai com "°C", não "oC"', () => {
+    const data = dataBase();
+    const texto = extractPdfTextJoined(MemorialDescritivo({ data }));
+    expect(texto).toContain('%/°C');
+    expect(texto).not.toContain('%/oC');
   });
 });

@@ -85,11 +85,24 @@ function PageHeader({ title, empresa, logo }: { title:string; empresa:any; logo?
   );
 }
 
+// BUG CORRIGIDO (ago/2026): quando empresa.cnpj/responsavelTecnico/crea
+// estavam vazios (cadastro incompleto), o rodape imprimia o separador " - "
+// nu, sem o valor: "LUMEN SOLUCOES LTDA - CNPJ: -" e "- CREA-MG". Agora só
+// monta cada segmento quando o dado existe, e só junta com " - " os
+// segmentos realmente presentes.
+const juntar = (...partes: (string | false | undefined | null)[]) =>
+  partes.filter((p): p is string => !!p && p.trim() !== '').join(' - ');
+
 function Footer({ empresa }: { empresa:any }) {
+  const linha1 = juntar(empresa.razaoSocial, empresa.cnpj ? `CNPJ: ${empresa.cnpj}` : '');
+  const linha2 = juntar(
+    empresa.responsavelTecnico,
+    empresa.crea ? `CREA-${empresa.uf || 'MG'} ${empresa.crea}` : '',
+  );
   return (
     <View style={S.footer} fixed>
-      <Text style={S.footerTxt}>{empresa.razaoSocial} - CNPJ: {empresa.cnpj}</Text>
-      <Text style={S.footerTxt}>{empresa.responsavelTecnico} - CREA-{empresa.uf} {empresa.crea}</Text>
+      <Text style={S.footerTxt}>{linha1}</Text>
+      <Text style={S.footerTxt}>{linha2}</Text>
     </View>
   );
 }
@@ -193,7 +206,7 @@ export function MemorialDescritivo({ data }: { data:any }) {
               </View>
               <View style={S.empCellLast}>
                 <Text style={S.empLabel}>Responsável:</Text>
-                <Text style={S.empVal}>{empresa.responsavelTecnico} - CREA {empresa.crea}</Text>
+                <Text style={S.empVal}>{juntar(empresa.responsavelTecnico, empresa.crea ? `CREA ${empresa.crea}` : '')}</Text>
               </View>
             </View>
             <View style={S.empRow}>
@@ -240,11 +253,11 @@ export function MemorialDescritivo({ data }: { data:any }) {
           <Text style={S.secNum}>OBJETIVO DO PROJETO</Text>
           <Text style={S.para}>
             O objetivo deste projeto é a INSTALAÇÃO DE UMA UNIDADE DE {classeGD.toUpperCase()} DE ENERGIA SOLAR FOTOVOLTAICA CONECTADA À REDE ELÉTRICA COM POTÊNCIA INSTALADA DE{' '}
-            <Text style={S.bold}>{fmtN(potKWp)} kWp</Text>, cuja finalidade é a geração de energia elétrica e injeção do excedente de energia, se houver, na rede de {nivelTensao === 'MT' ? 'Média Tensão' : 'Baixa Tensão'} da concessionária distribuidora de energia, caracterizando o sistema de compensação de energia elétrica previsto na Lei no 14.300/2022 e na REN ANEEL no 1.000/2021.
+            <Text style={S.bold}>{fmtN(potKWp)} kWp</Text>, cuja finalidade é a geração de energia elétrica e injeção do excedente de energia, se houver, na rede de {nivelTensao === 'MT' ? 'Média Tensão' : 'Baixa Tensão'} da concessionária distribuidora de energia, caracterizando o sistema de compensação de energia elétrica previsto na Lei nº 14.300/2022 e na REN ANEEL nº 1.000/2021.
           </Text>
           <Text style={S.para}>
             O presente documento descreve os principais aspectos técnicos deste sistema fotovoltaico de capacidade já referida a ser instalado, daqui em diante denominado "UFV (Unidade Fotovoltaica) <Text style={S.bold}>{cliente.nome}</Text>", para fins de consulta de acesso junto à{' '}
-            <Text style={S.bold}>{distrib.nome || distrib.nomeAbreviado}</Text>, considerando o disposto na Lei no 14.300, de 6 de janeiro de 2022, e nas normas da distribuidora local.
+            <Text style={S.bold}>{distrib.nome || distrib.nomeAbreviado}</Text>, considerando o disposto na Lei nº 14.300, de 6 de janeiro de 2022, e nas normas da distribuidora local.
           </Text>
         </View>
         <Footer empresa={empresa} />
@@ -257,7 +270,7 @@ export function MemorialDescritivo({ data }: { data:any }) {
 
           <Text style={S.secNum}>1  LOCALIZAÇÃO DO SISTEMA FOTOVOLTAICO</Text>
           <Text style={S.para}>
-            A instalação irá ocupar aproximadamente <Text style={S.bold}>{area} m2</Text> do telhado, área esta a ser coberta pelos módulos fotovoltaicos que estarão distribuídos em um arranjo com{' '}
+            A instalação irá ocupar aproximadamente <Text style={S.bold}>{area} m²</Text> do telhado, área esta a ser coberta pelos módulos fotovoltaicos que estarão distribuídos em um arranjo com{' '}
             <Text style={S.bold}>{dim.numeroModulos} módulos</Text>. A instalação será realizada no{' '}
             <Text style={S.bold}>{TIPO_TELHADO_LABELS[localizacao.tipoTelhado] ?? localizacao.tipoTelhado}</Text> do(a){' '}
             <Text style={S.bold}>{cliente.nome}</Text>, no município de{' '}
@@ -275,7 +288,7 @@ export function MemorialDescritivo({ data }: { data:any }) {
             </Text>
           )}
           {localizacao.numeroUC && (
-            <Text style={S.para}>Número da Unidade Consumidora (UC): <Text style={S.bold}>{localizacao.numeroUC}</Text>{localizacao.numeroMedidor ? ` - No do medidor: ${localizacao.numeroMedidor}` : ''}.</Text>
+            <Text style={S.para}>Número da Unidade Consumidora (UC): <Text style={S.bold}>{localizacao.numeroUC}</Text>{localizacao.numeroMedidor ? ` - Nº do medidor: ${localizacao.numeroMedidor}` : ''}.</Text>
           )}
 
           <Text style={S.secNum}>2  DESCRIÇÃO GERAL DO SISTEMA SOLAR FOTOVOLTAICO</Text>
@@ -328,15 +341,15 @@ export function MemorialDescritivo({ data }: { data:any }) {
               ['Marca',                           kit.marcaModulo || '-'],
               ['Modelo',                           kit.modeloModulo || '-'],
               ['Potencia Nominal (Pmax)',           `${kit.potenciaModuloWp} Wp`],
-              ['Tensao de Maxima Potencia (Vmpp)', kit.vmppV > 0 ? `${kit.vmppV} V` : '-'],
-              ['Corrente de Maxima Potencia (Impp)',kit.imppA > 0 ? `${kit.imppA} A` : '-'],
-              ['Tensao de Circuito Aberto (Voc)',  kit.vocV > 0 ? `${kit.vocV} V` : '-'],
-              ['Corrente de Curto-Circuito (Isc)', kit.iscA > 0 ? `${kit.iscA} A` : '-'],
+              ['Tensao de Maxima Potencia (Vmpp)', kit.vmppV > 0 ? `${fmtN(kit.vmppV,2)} V` : '-'],
+              ['Corrente de Maxima Potencia (Impp)',kit.imppA > 0 ? `${fmtN(kit.imppA,2)} A` : '-'],
+              ['Tensao de Circuito Aberto (Voc)',  kit.vocV > 0 ? `${fmtN(kit.vocV,2)} V` : '-'],
+              ['Corrente de Curto-Circuito (Isc)', kit.iscA > 0 ? `${fmtN(kit.iscA,2)} A` : '-'],
               ['Comprimento',                      kit.comprimentoMm > 0 ? `${kit.comprimentoMm} mm` : '-'],
               ['Largura',                          kit.larguraMm > 0 ? `${kit.larguraMm} mm` : '-'],
-              ['Area do Modulo',                   kit.comprimentoMm > 0 && kit.larguraMm > 0 ? `${fmtN((kit.comprimentoMm*kit.larguraMm)/1e6,4)} m2` : '-'],
-              ['Peso',                             kit.pesoKgModulo > 0 ? `${kit.pesoKgModulo} kg` : '-'],
-              ['Coef. Temperatura Pmax',           `${PRESETS_MODULO[kit.tipoModulo as keyof typeof PRESETS_MODULO]?.coef ?? -0.34}%/oC`],
+              ['Area do Modulo',                   kit.comprimentoMm > 0 && kit.larguraMm > 0 ? `${fmtN((kit.comprimentoMm*kit.larguraMm)/1e6,4)} m²` : '-'],
+              ['Peso',                             kit.pesoKgModulo > 0 ? `${fmtN(kit.pesoKgModulo,1)} kg` : '-'],
+              ['Coef. Temperatura Pmax',           `${PRESETS_MODULO[kit.tipoModulo as keyof typeof PRESETS_MODULO]?.coef ?? -0.34}%/°C`],
               ['Garantia de Potencia',             kit.garantiaPotenciaAnos > 0 ? `${kit.garantiaPotenciaAnos} anos (${kit.potenciaGarantidaPercent}%)` : '25 anos'],
               ['Garantia do Produto',              kit.garantiaProdutoAnos > 0 ? `${kit.garantiaProdutoAnos} anos` : '10 anos'],
               ['Certificacoes',                    kit.certificacoes || 'INMETRO, IEC 61215, IEC 61730'],
@@ -362,11 +375,11 @@ export function MemorialDescritivo({ data }: { data:any }) {
               ['Tensao Maxima de Entrada', kit.tensaoMaxEntradaV > 0 ? `${kit.tensaoMaxEntradaV} V` : '-'],
               ['Numero de MPPTs',          `${kit.numMppt}`],
               ['Tensao Nominal de Saida',  `${kit.tensaoSaidaV} V CA`],
-              ['Corrente Maxima de Saida', kit.corrMaxSaidaA > 0 ? `${kit.corrMaxSaidaA} A` : '-'],
+              ['Corrente Maxima de Saida', kit.corrMaxSaidaA > 0 ? `${fmtN(kit.corrMaxSaidaA,2)} A` : '-'],
               ['Frequencia Nominal',       '60 Hz'],
               ['Fator de Potencia',        kit.fatorPotencia || '>0.99'],
               ['Distorcao Harmonica (THD)', kit.thd || '<3%'],
-              ['Eficiencia Maxima',        `${kit.eficienciaInversorPercent}%`],
+              ['Eficiencia Maxima',        kit.eficienciaInversorPercent > 0 ? `${fmtN(kit.eficienciaInversorPercent,1)}%` : '-'],
               ['Classificacao do Gabinete', kit.ipGabinete || 'IP65'],
               ['Tensao Max. CC do Sistema',tensaoSistCC > 0 ? `${fmtN(tensaoSistCC,0)} V` : '-'],
             ].map(([lbl,val],i) => <SpecRow key={i} label={lbl} val={val} alt={i%2===1} />)}

@@ -1236,6 +1236,21 @@ function TabConsumo({ onPrev, onNext }: { onPrev:()=>void; onNext:()=>void }) {
   );
 }
 
+// ADICIONADO (ago/2026): checagem de plausibilidade para os campos UTM E/N
+// digitados manualmente (ver comentário em BuscadorCoordenadas acima do uso).
+// UTM E (Easting) válido numa zona fica entre ~100.000 e ~900.000; UTM N
+// (Northing) no hemisfério sul (Brasil) fica entre ~7.000.000 e ~9.999.000.
+// Latitude/longitude decimais nunca passam de 180 em módulo — por isso um
+// limiar de 1.000 já separa com folga um valor de coordenada geográfica
+// colado por engano num campo UTM, sem falso positivo em nenhum caso real.
+export function utmValorPlausivel(v: string): boolean {
+  const s = String(v).trim();
+  if (s === '') return true; // campo vazio — não acusa erro aqui
+  const n = Number(s.replace(',', '.'));
+  if (!Number.isFinite(n)) return true; // valor não numérico/em edição (ex: "-", ".") — não acusa erro aqui
+  return Math.abs(n) >= 1000;
+}
+
 // ─── Tab Local ───────────────────────────────────────────────────────────────
 function TabLocal({ onPrev, onNext }: { onPrev:()=>void; onNext:()=>void }) {
   const s = useProjetoStore();
@@ -1278,14 +1293,38 @@ function TabLocal({ onPrev, onNext }: { onPrev:()=>void; onNext:()=>void }) {
         <div className="card-head">Coordenadas e identificação da UC</div>
         <div className="card-body">
           <div className="info-box info-box-blue" style={{ marginBottom: 14 }}>
-            💡 Coordenadas UTM são necessárias para o Memorial Descritivo. Obtenha no Google Maps (botão direito → "O que há aqui?") ou GPS. Use o conversor online de lat/long para UTM.
+            💡 Coordenadas UTM são necessárias para o Memorial Descritivo. Use o botão abaixo para converter automaticamente (endereço → UTM). Preencha manualmente só se o endereço não for encontrado — não cole latitude/longitude direto nos campos UTM, são grandezas diferentes.
           </div>
+          {/* BUG CORRIGIDO (ago/2026): este botão calcula UTM real (via geocodificação +
+              latLonParaUTM, mesma função testada em @domain/geografia/converterCoordenadas)
+              mas nunca era renderizado em lugar nenhum da UI — só existia como componente
+              morto (BuscadorCoordenadas, definido mais abaixo neste arquivo). O único caminho
+              que o usuário tinha era digitar manualmente nos campos abaixo, sem validação
+              nenhuma — foi assim que uma lat/long do Google Maps (-18,63.../-48,20...) foi
+              parar direto nos campos utmE/utmN de um caso real, e saiu impressa no Memorial
+              Descritivo como se fosse UTM (ver auditoria "geração de documentos", item 1). */}
+          <BuscadorCoordenadas
+            endereco={loc.enderecoInstalacao || s.cliente.endereco || ''}
+            cidade={s.cliente.cidade || ''}
+            uf={s.cliente.uf || ''}
+            onEncontrado={(utmE, utmN, fuso) => upd({ utmE: utmE.toFixed(2), utmN: utmN.toFixed(2), utmFuso: fuso })}
+          />
           <div className="g2" style={{ rowGap: 14 }}>
-            <Campo label="UTM E — Abscissa" hint="Ex: 795209" tip="Coordenada UTM Leste (Easting). Obtida convertendo latitude/longitude para UTM. Necessária para o memorial.">
+            <Campo label="UTM E — Abscissa" hint="Ex: 795209" tip="Coordenada UTM Leste (Easting). Preenchida automaticamente pelo botão acima; se digitar manualmente, é o resultado da conversão lat/long → UTM, não a longitude em si.">
               <input className="inp" value={loc.utmE} onChange={e => upd({ utmE: e.target.value })} placeholder="Ex: 795209" />
+              {loc.utmE && !utmValorPlausivel(loc.utmE) && (
+                <div style={{ fontSize: 11, color: '#dc2626', marginTop: 4 }}>
+                  ⚠ Este valor parece ser uma latitude/longitude, não uma coordenada UTM (que tem 6-7 dígitos, ex: 795209). Use o botão "Buscar coordenadas UTM" acima.
+                </div>
+              )}
             </Campo>
-            <Campo label="UTM N — Ordenada" hint="Ex: 7933873" tip="Coordenada UTM Norte (Northing).">
+            <Campo label="UTM N — Ordenada" hint="Ex: 7933873" tip="Coordenada UTM Norte (Northing). Preenchida automaticamente pelo botão acima.">
               <input className="inp" value={loc.utmN} onChange={e => upd({ utmN: e.target.value })} placeholder="Ex: 7933873" />
+              {loc.utmN && !utmValorPlausivel(loc.utmN) && (
+                <div style={{ fontSize: 11, color: '#dc2626', marginTop: 4 }}>
+                  ⚠ Este valor parece ser uma latitude/longitude, não uma coordenada UTM (que tem 6-7 dígitos, ex: 7933873). Use o botão "Buscar coordenadas UTM" acima.
+                </div>
+              )}
             </Campo>
             <Campo label="Fuso UTM" hint="MG/GO/SP: Fuso 22 ou 23" tip="Zona UTM. Minas Gerais e Goiás usam fuso 22 ou 23 dependendo da longitude.">
               <input className="inp inp-num" type="number" value={loc.utmFuso} onChange={e => upd({ utmFuso: Number(e.target.value) })} />

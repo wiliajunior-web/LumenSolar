@@ -1,6 +1,6 @@
 /**
  * PROCURAÇÃO — Instrumento Particular de Mandato
- * Folha única (A4). Apenas ASCII para garantir renderização.
+ * Folha única (A4).
  */
 import { Document, Page, Text, View, StyleSheet, Image } from '@react-pdf/renderer';
 import { DISTRIBUIDORAS } from '../../data/distribuidoras';
@@ -32,6 +32,9 @@ const S = StyleSheet.create({
   bold:       { fontFamily:'Helvetica-Bold' },
   validBox:   { marginTop:12, padding:'7 12', backgroundColor:'#f5f5f5',
                 borderRadius:5, borderLeftWidth:3, borderLeftColor:GOLD },
+  avisoBox:   { marginTop:8, marginBottom:4, padding:'7 12', backgroundColor:'#fef2f2',
+                borderRadius:5, borderLeftWidth:3, borderLeftColor:'#dc2626' },
+  avisoTxt:   { fontSize:8.5, color:'#991b1b', lineHeight:1.4, fontFamily:'Helvetica-Bold' },
   localData:  { textAlign:'center', marginTop:18, fontSize:10, color:MUTED },
   assinatRow: { flexDirection:'row', justifyContent:'space-around', marginTop:30 },
   assinatBox: { alignItems:'center', width:'44%' },
@@ -45,18 +48,20 @@ const S = StyleSheet.create({
   rodapeTxt:  { fontSize:7, color:'#aaaaaa' },
 });
 
-// Converte acentuados para ASCII (react-pdf com Helvetica nao suporta Unicode completo)
-const safe = (s?: string) => (s || '')
-  .replace(/[ÀÁÂÃÄ]/g,'A').replace(/[àáâãä]/g,'a')
-  .replace(/Ç/g,'C').replace(/ç/g,'c')
-  .replace(/[ÈÉÊË]/g,'E').replace(/[èéêë]/g,'e')
-  .replace(/[ÌÍÎÏ]/g,'I').replace(/[ìíîï]/g,'i')
-  .replace(/[ÒÓÔÕÖ]/g,'O').replace(/[òóôõö]/g,'o')
-  .replace(/[ÙÚÛÜ]/g,'U').replace(/[ùúûü]/g,'u')
-  .replace(/Ñ/g,'N').replace(/ñ/g,'n')
-  .replace(/°/g,'o').replace(/²/g,'2').replace(/³/g,'3')
-  .replace(/\u00d7/g,'x').replace(/\u2013/g,'-').replace(/\u2014/g,'-')
-  .replace(/[\u201c\u201d]/g,'"').replace(/[\u2018\u2019]/g,"'");
+// BUG CORRIGIDO (ago/2026): esta função convertia todo acentuado (e nº, °,
+// ², ³, travessão, aspas curvas) para ASCII, sob a premissa afirmada no
+// comentário original do topo do arquivo de que "react-pdf com Helvetica
+// nao suporta Unicode completo". Essa premissa é falsa: o Helvetica padrão
+// do @react-pdf/renderer é embutido com /Encoding WinAnsiEncoding (cp1252,
+// grep em node_modules/@react-pdf/pdfkit/lib/pdfkit.js), que cobre toda a
+// acentuação PT-BR e os demais símbolos citados — MemorialDescritivo.tsx e
+// PropostaComercialPDF.tsx já usam a mesma fontFamily:'Helvetica' sem
+// nenhum stripping e renderizam acento corretamente. Verificado de forma
+// empírica (não só por leitura do código-fonte do pdfkit): gerado um PDF
+// real via @react-pdf/renderer com uma amostra de todos esses caracteres e
+// extraído de volta com `pdftotext -layout` — todos os glifos saíram
+// corretos, byte a byte. Mantida só como guarda contra undefined/null.
+const safe = (s?: string) => s || '';
 
 const fmtCPF = (v?: string) => {
   const d = (v || '').replace(/\D/g, '');
@@ -67,7 +72,7 @@ const fmtCPF = (v?: string) => {
 
 const hoje = () => {
   const d = new Date();
-  const M = ['janeiro','fevereiro','marco','abril','maio','junho',
+  const M = ['janeiro','fevereiro','março','abril','maio','junho',
              'julho','agosto','setembro','outubro','novembro','dezembro'];
   return `${d.getDate()} de ${M[d.getMonth()]} de ${d.getFullYear()}`;
 };
@@ -80,7 +85,7 @@ export function Procuracao({ data }: { data: any }) {
   const enquadramento = data?.enquadramento || {};
 
   const distrib = DISTRIBUIDORAS.find((d: any) => d.codigo === consumo.codigoDistribuidora);
-  const distribNome = safe(distrib?.nome?.toUpperCase() || 'CEMIG - COMPANHIA ENERGETICA DE MINAS GERAIS');
+  const distribNome = safe(distrib?.nome?.toUpperCase() || 'CEMIG - COMPANHIA ENERGÉTICA DE MINAS GERAIS');
 
   // BUG CORRIGIDO (ago/2026): 'outro' mapeava para '' (falsy) e caia no
   // fallback '|| solteiro(a)' — e o mesmo fallback também cobria
@@ -109,7 +114,7 @@ export function Procuracao({ data }: { data: any }) {
   const ucNum       = loc.numeroUC || '';
 
   // Dados do OUTORGADO (empresa/engenheiro)
-  const razaoSoc  = safe(empresa.razaoSocial || 'Lumen Solucoes Ltda');
+  const razaoSoc  = safe(empresa.razaoSocial || 'Lumen Soluções Ltda');
   const cnpjEmp   = empresa.cnpj || '__.___.___/____-__';
   const cidadeEmp = safe([empresa.cidade, empresa.uf].filter(Boolean).join(' - ') || '');
   const nomeEng   = safe(empresa.responsavelTecnico || '___________________________');
@@ -121,10 +126,21 @@ export function Procuracao({ data }: { data: any }) {
   // mesmo quando enquadramento.classe (LIMITE_MICROGERACAO_KW=75kWp, ver
   // fioB/types.ts) classificava o projeto como minigeração — uma procuração
   // com objeto juridico diferente do enquadramento real do projeto.
-  const classeGD = enquadramento.classe === 'minigeracao' ? 'minigeracao' : 'microgeracao';
+  const classeGD = enquadramento.classe === 'minigeracao' ? 'minigeração' : 'microgeração';
+
+  // ADICIONADO (ago/2026): uma procuração (instrumento de representação
+  // legal) sem outorgado pessoa física identificável saía sem aviso nenhum
+  // — só com os placeholders em branco ('___________'), fáceis de passar
+  // despercebidos numa revisão rápida antes de assinar/protocolar. CNPJ da
+  // empresa também é exigido no corpo do texto (cláusula de qualificação do
+  // outorgado). Em vez de emitir silenciosamente um documento com efeito
+  // jurídico incompleto, um aviso visível é estampado no topo do PDF
+  // enquanto o cadastro da empresa (aba Empresa) não tiver
+  // responsavelTecnico + CREA + CNPJ preenchidos.
+  const cadastroIncompleto = !empresa.responsavelTecnico || !empresa.crea || !empresa.cnpj;
 
   return (
-    <Document title={`Procuracao - ${cliente.nome || ''}`} author={razaoSoc}>
+    <Document title={`Procuração - ${cliente.nome || ''}`} author={razaoSoc}>
       <Page size="A4" style={S.page}>
 
         {/* ─ Cabeçalho compacto ─ */}
@@ -141,34 +157,42 @@ export function Procuracao({ data }: { data: any }) {
         </View>
 
         {/* ─ Título ─ */}
-        <Text style={S.titulo}>PROCURACAO</Text>
+        <Text style={S.titulo}>PROCURAÇÃO</Text>
         <Text style={S.subtit}>INSTRUMENTO PARTICULAR DE MANDATO</Text>
+
+        {cadastroIncompleto && (
+          <View style={S.avisoBox}>
+            <Text style={S.avisoTxt}>
+              ATENÇÃO — CADASTRO DA EMPRESA INCOMPLETO: preencha nome do responsável técnico, CREA e CNPJ na aba Empresa antes de assinar ou protocolar este documento. Sem esses dados o outorgado não está identificado e a procuração é juridicamente incompleta.
+            </Text>
+          </View>
+        )}
 
         {/* ─ OUTORGANTE ─ */}
         <Text style={S.secLabel}>Outorgante (Cliente):</Text>
         <Text style={S.corpo}>
           <Text style={S.bold}>{nomeCliente}</Text>
-          {`, brasileiro(a), ${ecCivil}, ${profissao}, portador(a) do RG no `}
+          {`, brasileiro(a), ${ecCivil}, ${profissao}, portador(a) do RG nº `}
           <Text style={S.bold}>{rgCliente}</Text>
-          {` e do CPF no `}
+          {` e do CPF nº `}
           <Text style={S.bold}>{cpfCliente}</Text>
           {`, residente e domiciliado(a) na `}
           <Text style={S.bold}>{endCliente}</Text>
-          {`, municipio de `}
+          {`, município de `}
           <Text style={S.bold}>{cidadeCliente}</Text>
           {'.'}
         </Text>
 
         {/* ─ OUTORGADO ─ */}
-        <Text style={S.secLabel}>Outorgado(s) (Empresa Responsavel):</Text>
+        <Text style={S.secLabel}>Outorgado(s) (Empresa Responsável):</Text>
         <Text style={S.corpo}>
           <Text style={S.bold}>{razaoSoc}</Text>
-          {`, CNPJ no `}
+          {`, CNPJ nº `}
           <Text style={S.bold}>{cnpjEmp}</Text>
           {cidadeEmp ? `, com sede em ${cidadeEmp}` : ''}
           {', na pessoa do(a) Engenheiro(a) '}
           <Text style={S.bold}>{nomeEng}</Text>
-          {cpfEng !== '___.___.___-__' ? `, CPF no ${cpfEng},` : ','}
+          {cpfEng !== '___.___.___-__' ? `, CPF nº ${cpfEng},` : ','}
           {` inscrito(a) no `}
           <Text style={S.bold}>{creaEng}</Text>
           {'.'}
@@ -177,21 +201,21 @@ export function Procuracao({ data }: { data: any }) {
         {/* ─ PODERES ─ */}
         <Text style={S.secLabel}>Poderes Outorgados:</Text>
         <Text style={S.corpo}>
-          {'Atraves do presente instrumento particular de mandato, o(a) OUTORGANTE nomeia e constitui como seu(s) procurador(es) o(s) OUTORGADO(S), conferindo-lhe(s) '}
+          {'Através do presente instrumento particular de mandato, o(a) OUTORGANTE nomeia e constitui como seu(s) procurador(es) o(s) OUTORGADO(S), conferindo-lhe(s) '}
           <Text style={S.bold}>amplos poderes</Text>
-          {' para efetuar requerimentos, juntar documentos, verificar andamento de processos, solicitar informacoes, satisfazer exigencias, retirar copias, certidoes e documentos, praticar todos os atos necessarios para representar o(a) OUTORGANTE perante a '}
+          {' para efetuar requerimentos, juntar documentos, verificar andamento de processos, solicitar informações, satisfazer exigências, retirar cópias, certidões e documentos, praticar todos os atos necessários para representar o(a) OUTORGANTE perante a '}
           <Text style={S.bold}>{distribNome}</Text>
-          {`, referentes ao acesso ao Sistema de Compensacao de Energia Eletrica (SCEE) e a instalacao do sistema de ${classeGD} fotovoltaica localizado em `}
+          {`, referentes ao acesso ao Sistema de Compensação de Energia Elétrica (SCEE) e à instalação do sistema de ${classeGD} fotovoltaica localizado em `}
           <Text style={S.bold}>{endInstalacao}</Text>
-          {ucNum ? `, UC no ${ucNum}` : ''}
-          {', conforme Lei no 14.300/2022 e normas da ANEEL.'}
+          {ucNum ? `, UC nº ${ucNum}` : ''}
+          {', conforme Lei nº 14.300/2022 e normas da ANEEL.'}
         </Text>
 
         {/* ─ Validade ─ */}
         <View style={S.validBox}>
           <Text style={S.corpo}>
             <Text style={S.bold}>Validade: </Text>
-            {'Esta Procuracao tem validade indeterminada, permanecendo em vigor ate o cumprimento integral do seu objeto ou ate revogacao expressa pelo(a) Outorgante.'}
+            {'Esta Procuração tem validade indeterminada, permanecendo em vigor até o cumprimento integral do seu objeto ou até revogação expressa pelo(a) Outorgante.'}
           </Text>
         </View>
 

@@ -4,7 +4,7 @@
  * Foco: benefícios, economia, sistema, financiamento, validade.
  */
 import {
-  Document, Page, Text, View, StyleSheet, Image, Svg, Rect, G,
+  Document, Page, Text, View, StyleSheet, Image, Svg, Rect, G, Path, Line, Circle, Polyline,
 } from '@react-pdf/renderer';
 import { DISTRIBUIDORAS } from '../../data/distribuidoras';
 import { IMG_CAPA, IMG_APOIO } from '../../assets/imagens';
@@ -99,7 +99,7 @@ const S = StyleSheet.create({
   finOptDetail: { fontSize: 8, color: C.muted, marginBottom: 2 },
 
   // ── Serviços ──
-  svcRow: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 8, gap: 8 },
+  svcRow: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 8, gap: 8, width: '47%' },
   svcDot: { width: 18, height: 18, borderRadius: 9, backgroundColor: C.gold, alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1 },
   svcDotTxt: { color: C.dark, fontSize: 8, fontFamily: 'Helvetica-Bold' },
   svcTxt: { flex: 1, fontSize: 9, color: C.text, lineHeight: 1.5 },
@@ -115,11 +115,72 @@ const R = (v: number) => `R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits
 const N = (v: number, d = 1) => v.toLocaleString('pt-BR', { minimumFractionDigits: d, maximumFractionDigits: d });
 const hoje = () => new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
 
+// BUG CORRIGIDO (ago/2026): quando telefone/email da empresa estavam vazios,
+// o rodapé e a faixa da capa imprimiam o separador " - " nu, sem o valor —
+// ex: "Lumen Solar - - " e "Válida por 15 dias - 28 de agosto de 2026 - -".
+// juntar() só inclui no resultado os segmentos realmente preenchidos.
+const juntar = (...partes: (string | false | undefined | null)[]) =>
+  partes.filter((p): p is string => !!p && p.trim() !== '').join(' - ');
+
 const Footer = ({ empresa }: { empresa: any }) => (
   <View style={S.footer} fixed>
-    <Text style={S.footerTxt}>{empresa.nomeFantasia || empresa.razaoSocial} - {empresa.telefone} - {empresa.email}</Text>
+    <Text style={S.footerTxt}>{juntar(empresa.nomeFantasia || empresa.razaoSocial, empresa.telefone, empresa.email)}</Text>
     <Text style={S.pageNum} render={({ pageNumber, totalPages }) => `${pageNumber}/${totalPages}`} />
   </View>
+);
+
+// BUG CORRIGIDO (ago/2026): os círculos de "Por que investir em energia
+// solar?" mostravam texto cru como se fosse ícone ("R$", "%", "UP", "CO",
+// "60x", "25") — não havia nenhuma fonte de ícones tentada nem quebrada,
+// o texto abreviado sempre foi o conteúdo real do círculo. Substituído por
+// ícones vetoriais de verdade (Svg/Path do próprio @react-pdf/renderer, já
+// importado neste arquivo para o gráfico de geração — sem fonte externa,
+// sem risco de não embutir). Estilo de traço simples (stroke, sem fill),
+// mesmo padrão usado por bibliotecas de ícone open-source comuns (Feather).
+// Ver auditoria "geração de documentos", item 3.
+const ICON_PROPS = { stroke: '#fff', strokeWidth: 2, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const, fill: 'none' };
+
+const IconEconomia = () => (
+  <Svg viewBox="0 0 24 24" width={18} height={18}>
+    <Line x1={12} y1={1} x2={12} y2={23} {...ICON_PROPS} />
+    <Path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" {...ICON_PROPS} />
+  </Svg>
+);
+const IconProtecao = () => (
+  <Svg viewBox="0 0 24 24" width={18} height={18}>
+    <Path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" {...ICON_PROPS} />
+  </Svg>
+);
+const IconValorizacao = () => (
+  <Svg viewBox="0 0 24 24" width={18} height={18}>
+    <Path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" {...ICON_PROPS} />
+    <Polyline points="9 22 9 12 15 12 15 22" {...ICON_PROPS} />
+  </Svg>
+);
+const IconSustentabilidade = () => (
+  <Svg viewBox="0 0 24 24" width={18} height={18}>
+    <Circle cx={12} cy={12} r={4} {...ICON_PROPS} />
+    <Line x1={12} y1={1} x2={12} y2={4} {...ICON_PROPS} />
+    <Line x1={12} y1={20} x2={12} y2={23} {...ICON_PROPS} />
+    <Line x1={3} y1={12} x2={6} y2={12} {...ICON_PROPS} />
+    <Line x1={18} y1={12} x2={21} y2={12} {...ICON_PROPS} />
+    <Line x1={5.6} y1={5.6} x2={7.7} y2={7.7} {...ICON_PROPS} />
+    <Line x1={16.3} y1={16.3} x2={18.4} y2={18.4} {...ICON_PROPS} />
+    <Line x1={5.6} y1={18.4} x2={7.7} y2={16.3} {...ICON_PROPS} />
+    <Line x1={16.3} y1={7.7} x2={18.4} y2={5.6} {...ICON_PROPS} />
+  </Svg>
+);
+const IconFinanciamento = () => (
+  <Svg viewBox="0 0 24 24" width={18} height={18}>
+    <Rect x={1} y={4} width={22} height={16} rx={2} ry={2} {...ICON_PROPS} />
+    <Line x1={1} y1={10} x2={23} y2={10} {...ICON_PROPS} />
+  </Svg>
+);
+const IconVidaUtil = () => (
+  <Svg viewBox="0 0 24 24" width={18} height={18}>
+    <Circle cx={12} cy={12} r={10} {...ICON_PROPS} />
+    <Polyline points="12 6 12 12 16 14" {...ICON_PROPS} />
+  </Svg>
 );
 
 const SectionHeader = ({ title, sub }: { title: string; sub?: string }) => (
@@ -238,6 +299,18 @@ export function PropostaComercialPDF({ data }: { data: any }) {
   const simul = ind?.simulacoesFinanciamento ?? [];
   const mostrarAvisoGrupoA = data.consumo?.grupoTensao === 'A' && !!data.resultadoGrupoA;
 
+  // BUG CORRIGIDO (ago/2026): ver auditoria "geração de documentos", item 5.
+  // dim.percentualCompensacaoReal é a razão geração/consumo anual — pode
+  // passar de 100% num sistema superdimensionado (kit.percentualCompensacaoDesejado
+  // > 100%) e NÃO é a mesma grandeza que "reduza sua conta em até X%". A
+  // redução real de conta é economia/conta-antes, com teto em 100% (não dá
+  // para reduzir a conta em mais que o valor da própria conta). Verificado
+  // com os valores reais do caso auditado: economiaMensalRS=204,97 /
+  // contaAntesRS=360,24 => 56,9%, contra os 228% que saíam daqui antes.
+  const percReducaoConta = cr?.contaAntesRS > 0
+    ? Math.min(100, (cr.economiaMensalRS / cr.contaAntesRS) * 100)
+    : 0;
+
   return (
     <Document title={`Proposta Solar - ${cliente.nome}`} author={empresa.razaoSocial}>
 
@@ -273,7 +346,7 @@ export function PropostaComercialPDF({ data }: { data: any }) {
             ))}
           </View>
           <Text style={{ color: '#666688', fontSize: 8 }}>
-            Válida por {empresa.validadeProposta} dias - {hoje()} - {empresa.email} - {empresa.telefone}
+            {juntar(`Válida por ${empresa.validadeProposta} dias`, hoje(), empresa.email, empresa.telefone)}
           </Text>
         </View>
       </Page>
@@ -288,16 +361,16 @@ export function PropostaComercialPDF({ data }: { data: any }) {
             <SectionHeader title="Por que investir em energia solar?" sub="Energia solar é o investimento mais rentável da atualidade - protege contra reajustes tarifários e gera retorno por décadas." />
             <View style={S.benefGrid}>
               {[
-                { cor:'#c9a227', letra:'R$', title:'Economia imediata',         text:`Reduza sua conta de energia em ate ${N(dim.percentualCompensacaoReal * 100, 0)}%. A partir do primeiro mes apos a conexao.` },
-                { cor:'#2563eb', letra:'%',  title:'Protecao contra reajustes', text:'A ANEEL reajusta as tarifas anualmente. Com energia solar, voce gera sua propria energia e fica protegido.' },
-                { cor:'#16a34a', letra:'UP', title:'Valorizacao do imovel',     text:'Imoveis com sistema fotovoltaico valem em media 5-8% a mais no mercado. E uma benfeitoria permanente.' },
-                { cor:'#059669', letra:'CO', title:'Sustentabilidade',          text:'Energia 100% renovavel, sem emissoes de CO2. Cada kWh solar substitui energia de fontes fosseis.' },
-                { cor:'#7c3aed', letra:'60x',title:'Financiamento facilitado',  text:'Parcele em ate 60x com carencia de 60 dias. O sistema se paga com a economia antes de terminar de pagar.' },
-                { cor:'#dc2626', letra:'25', title:'Vida util de 25+ anos',     text:'Modulos modernos tem garantia de 25 anos de potencia linear. O sistema continua gerando por decadas.' },
+                { cor:'#c9a227', Icone:IconEconomia,         title:'Economia imediata',         text:`Reduza sua conta de energia em ate ${N(percReducaoConta, 0)}%. A partir do primeiro mes apos a conexao.` },
+                { cor:'#2563eb', Icone:IconProtecao,         title:'Protecao contra reajustes', text:'A ANEEL reajusta as tarifas anualmente. Com energia solar, voce gera sua propria energia e fica protegido.' },
+                { cor:'#16a34a', Icone:IconValorizacao,      title:'Valorizacao do imovel',     text:'Imoveis com sistema fotovoltaico valem em media 5-8% a mais no mercado. E uma benfeitoria permanente.' },
+                { cor:'#059669', Icone:IconSustentabilidade, title:'Sustentabilidade',          text:'Energia 100% renovavel, sem emissoes de CO2. Cada kWh solar substitui energia de fontes fosseis.' },
+                { cor:'#7c3aed', Icone:IconFinanciamento,    title:'Financiamento facilitado',  text:'Parcele em ate 60x com carencia de 60 dias. O sistema se paga com a economia antes de terminar de pagar.' },
+                { cor:'#dc2626', Icone:IconVidaUtil,         title:'Vida util de 25+ anos',     text:'Modulos modernos tem garantia de 25 anos de potencia linear. O sistema continua gerando por decadas.' },
               ].map((b, i) => (
                 <View key={i} style={S.benefCard}>
                   <View style={{ width:36, height:36, borderRadius:8, backgroundColor:b.cor, alignItems:'center', justifyContent:'center', marginBottom:8 }}>
-                    <Text style={{ color:'#fff', fontSize:10, fontFamily:'Helvetica-Bold', textAlign:'center' }}>{b.letra}</Text>
+                    <b.Icone />
                   </View>
                   <Text style={S.benefTitle}>{b.title}</Text>
                   <Text style={S.benefText}>{b.text}</Text>
@@ -322,7 +395,7 @@ export function PropostaComercialPDF({ data }: { data: any }) {
                 [N(dim.potenciaInstaladaRealKWp) + ' kWp', 'Potencia instalada'],
                 [dim.numeroModulos + ' modulos', kit.marcaModulo || 'Fotovoltaicos'],
                 [N(dim.geracaoMensalEstimadaKWh, 0) + ' kWh/mes', 'Geracao estimada'],
-                [N(ind?.areaNecessariaM2 ?? 0) + ' m2', 'Area no telhado'],
+                [N(ind?.areaNecessariaM2 ?? 0) + ' m²', 'Area no telhado'],
               ].map(([val, lbl], i) => (
                 <View key={i} style={S.sysStat}>
                   <Text style={S.sysStatVal}>{val}</Text>
@@ -343,7 +416,7 @@ export function PropostaComercialPDF({ data }: { data: any }) {
                 ['Modulo fotovoltaico', `${kit.marcaModulo} ${kit.modeloModulo} - ${kit.potenciaModuloWp}Wp ${kit.tipoModulo}`, `${kit.quantidade} un.`],
                 ['Inversor solar', `${kit.marcaInversor} ${kit.modeloInversor} - ${kit.potenciaInversorKW} kW`, '1 un.'],
                 ['Estrutura de fixacao', 'Aluminio anodizado - adequada ao tipo de telhado', '1 cj.'],
-                ['Cabeamento e protecoes', 'Cabos solar 6mm2, DPS, disjuntores, conectores MC4', '1 cj.'],
+                ['Cabeamento e protecoes', 'Cabos solar 6mm², DPS, disjuntores, conectores MC4', '1 cj.'],
                 ['Projeto + documentacao', 'Projeto eletrico, ART, memorial descritivo', '1 cj.'],
               ].map(([comp, spec, qty], i) => (
                 <View key={i} style={i % 2 === 0 ? S.tblRow : S.tblRowAlt}>
