@@ -90,8 +90,26 @@ describe('MemorialDescritivo — rodapé com cadastro de empresa incompleto', ()
     const data = dataBase();
     const texto = extractPdfTextJoined(MemorialDescritivo({ data }));
     expect(texto).toContain('CNPJ: 11.111.111/0001-11');
+    // BUG CORRIGIDO (ago/2026): auditoria de design encontrou 3 formatos
+    // DIFERENTES de CREA no mesmo documento — rodapé "CREA-MG 123456",
+    // tabela "Empresa responsável" sem hífen "CREA 123456", e um caso real
+    // que duplicava tudo ("CREA-MG CREA-MG 123456") quando o usuário já
+    // digitava o prefixo. Unificado via formatarCrea() — mesmo formato em
+    // TODO lugar do documento agora, sem duplicar se o valor já vier com o
+    // prefixo. Ver domain/empresa/cadastroEmpresa.ts.
     expect(texto).toContain('CREA-MG 123456');
-    expect(texto).toContain('CREA 123456'); // tabela "Empresa responsável" (sem hífen antes de CREA)
+    expect(texto).not.toContain('CREA-MG CREA-MG');
+  });
+
+  it('caso real que motivou a correção: usuário já digita "CREA-MG 123456" no cadastro — nenhuma das 3 ocorrências duplica', () => {
+    const data = dataBase({ empresa: {
+      razaoSocial: 'Lumen Soluções Ltda', cnpj: '11.111.111/0001-11',
+      responsavelTecnico: 'Eng. João Silva', crea: 'CREA-MG 123456', uf: 'MG',
+    } });
+    const texto = extractPdfTextJoined(MemorialDescritivo({ data }));
+    expect(texto).toContain('CREA-MG 123456');
+    expect(texto).not.toContain('CREA-MG CREA-MG');
+    expect(texto).not.toContain('CREA CREA-MG');
   });
 });
 

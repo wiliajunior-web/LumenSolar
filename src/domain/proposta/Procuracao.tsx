@@ -4,7 +4,7 @@
  */
 import { Document, Page, Text, View, StyleSheet, Image } from '@react-pdf/renderer';
 import { DISTRIBUIDORAS } from '../../data/distribuidoras';
-import { cadastroEmpresaIncompleto } from '../empresa/cadastroEmpresa';
+import { cadastroEmpresaIncompleto, formatarCrea } from '../empresa/cadastroEmpresa';
 
 const GOLD = '#c9a227';
 const BLUE = '#1a3a6e';
@@ -120,7 +120,10 @@ export function Procuracao({ data }: { data: any }) {
   const cidadeEmp = safe([empresa.cidade, empresa.uf].filter(Boolean).join(' - ') || '');
   const nomeEng   = safe(empresa.responsavelTecnico || '___________________________');
   const cpfEng    = fmtCPF(empresa.cpfEngenheiro);
-  const creaEng   = empresa.crea ? `CREA-${empresa.uf || 'MG'} ${empresa.crea}` : '____________';
+  // BUG CORRIGIDO (ago/2026): auditoria de design dos documentos encontrou
+  // "CREA-MG CREA-MG 123456" na assinatura — ver comentário completo em
+  // `formatarCrea()` (domain/empresa/cadastroEmpresa.ts).
+  const creaEng   = empresa.crea ? formatarCrea(empresa) : '____________';
   const cidadeLoc = safe(cliente.cidade || empresa.cidade || '_________________');
 
   // BUG CORRIGIDO (ago/2026): texto sempre dizia "sistema de microgeracao",

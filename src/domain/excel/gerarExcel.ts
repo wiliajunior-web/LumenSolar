@@ -25,6 +25,8 @@
 const XLSX: typeof import('xlsx') = require('xlsx');
 import { DISTRIBUIDORAS } from '@data/distribuidoras';
 import { HSP_MEDIO_POR_UF } from '@data/hspPorUF';
+import { formatarNomeModulo } from '@domain/kit/formatarModulo';
+import { formatarCrea } from '@domain/empresa/cadastroEmpresa';
 
 // ── Tipos SheetJS ─────────────────────────────────────────────────────────────
 type WS  = Record<string, any>;
@@ -320,7 +322,7 @@ export function gerarExcelAuditoria(dados: any): void {
   setStr(ws0, r0, 2, 'Área necessária (m²)');      setNum(ws0, r0, 3, areaNec,   '#,##0.0'); r0++;
   setStr(ws0, r0, 2, 'Módulos');  setNum(ws0, r0, 3, kit?.quantidade ?? 0, F_INT);
   setStr(ws0, r0, 4, (kit?.potenciaModuloWp ?? 0) + ' Wp cada'); r0++;
-  setStr(ws0, r0, 2, 'Modelo módulo');  setStr(ws0, r0, 3, `${kit?.marcaModulo ?? ''} ${kit?.modeloModulo ?? ''}`); r0++;
+  setStr(ws0, r0, 2, 'Modelo módulo');  setStr(ws0, r0, 3, formatarNomeModulo(kit?.marcaModulo, kit?.modeloModulo)); r0++;
   setStr(ws0, r0, 2, 'Inversor');       setStr(ws0, r0, 3, `${kit?.marcaInversor ?? ''} ${kit?.modeloInversor ?? ''}`); r0+=2;
 
   // ── Conta de energia ──────────────────────────────────────────────────────
@@ -429,7 +431,12 @@ export function gerarExcelAuditoria(dados: any): void {
   r0++;
 
   // ── Rodapé ────────────────────────────────────────────────────────────────
-  setStr(ws0, r0, 2, `${dados.empresa?.razaoSocial ?? 'Lumen Soluções Ltda'}  |  ${dados.empresa?.responsavelTecnico ?? ''}  |  CREA-MG ${dados.empresa?.crea ?? ''}  |  Gerado pelo LumenSolar`);
+  // BUG CORRIGIDO (ago/2026): auditoria de design encontrou dois problemas
+  // aqui — "CREA-MG" estava fixo no código (ignorava empresa.uf; um cliente
+  // fora de MG saía com o estado errado no rodapé) e duplicava o prefixo
+  // quando empresa.crea já vinha com ele — ver `formatarCrea()`
+  // (domain/empresa/cadastroEmpresa.ts).
+  setStr(ws0, r0, 2, `${dados.empresa?.razaoSocial ?? 'Lumen Soluções Ltda'}  |  ${dados.empresa?.responsavelTecnico ?? ''}  |  ${formatarCrea(dados.empresa)}  |  Gerado pelo LumenSolar`);
   r0++;
   setStr(ws0, r0, 2, 'Os valores de VPL e Economia 25 anos são calculados ao vivo pela aba Fluxo_Caixa — altere qualquer premissa em Entradas para ver o impacto.');
   r0++;

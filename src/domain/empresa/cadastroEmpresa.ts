@@ -57,3 +57,25 @@ export function mensagemCadastroEmpresaIncompleto(empresa: EmpresaCadastro | und
     'invalida os documentos para protocolo.'
   );
 }
+
+/**
+ * Formata o CREA do responsável técnico para exibição em documentos
+ * (Procuração, Proposta Comercial).
+ *
+ * BUG CORRIGIDO (ago/2026): auditoria de design/conteúdo dos documentos
+ * gerados encontrou "CREA-MG CREA-MG 123456" na assinatura da Proposta
+ * Comercial e da Procuração — `Procuracao.tsx`/`PropostaComercialPDF.tsx`
+ * sempre prefixavam `CREA-${empresa.uf} ` na frente do valor de
+ * `empresa.crea`, mas o campo "CREA" em ⚙ Configurações (App.tsx) não tem
+ * hint nenhum dizendo para digitar só o número — é comum (e foi o caso real
+ * que revelou isto) o usuário digitar o registro como normalmente aparece em
+ * carimbos/ARTs, já com o prefixo ("CREA-MG 123456"). Esta função central
+ * evita duplicar o prefixo quando o valor já vem com ele.
+ */
+export function formatarCrea(empresa: { crea?: string; uf?: string } | undefined | null): string {
+  const crea = String(empresa?.crea ?? '').trim();
+  if (!crea) return '';
+  if (/^crea[\s-]/i.test(crea)) return crea;
+  const uf = String(empresa?.uf ?? '').trim() || 'MG';
+  return `CREA-${uf} ${crea}`;
+}

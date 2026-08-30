@@ -51,6 +51,22 @@ describe('Procuracao — estado civil (ecCivil)', () => {
     const texto = extractPdfTextJoined(Procuracao({ data }));
     expect(texto).toContain('solteiro(a)');
   });
+
+  // ADICIONADO (ago/2026): auditoria de design encontrou que, na prática,
+  // TabCliente (App.tsx) nunca tinha campo pra estado civil — então
+  // clientePadrao() sempre iniciava com estadoCivil='solteiro' (o valor
+  // literalmente RECONHECIDO por ecMap) e a Procuração afirmava
+  // "solteiro(a)" pra TODO cliente, sempre, mesmo com o "fix" acima já
+  // aplicado (que só cobria 'outro'/ausente, não o valor-padrão real usado
+  // por toda proposta nova). Corrigido de raiz: o padrão agora é `''`
+  // (estado real "não perguntado ainda"), e TabCliente ganhou um <select>
+  // com opção em branco — ver useProjetoStore.ts `clientePadrao()`.
+  it('estadoCivil="" (o padrão real de clientePadrao() após a correção) mostra placeholder em branco', () => {
+    const data = dataBase({ cliente: { ...dataBase().cliente, estadoCivil: '' } });
+    const texto = extractPdfTextJoined(Procuracao({ data }));
+    expect(texto).not.toContain('solteiro(a)');
+    expect(texto).toContain('____________');
+  });
 });
 
 describe('Procuracao — classe de geração (microgeração vs minigeração)', () => {

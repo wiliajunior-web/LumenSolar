@@ -9,6 +9,9 @@ import {
 import { DISTRIBUIDORAS } from '../../data/distribuidoras';
 import { IMG_CAPA, IMG_APOIO } from '../../assets/imagens';
 import { MESES_LABELS } from '../../data/hspMensal';
+import { PRESETS_MODULO } from '../../data/presetsModulo';
+import { formatarNomeModulo, formatarTipoModulo } from '../kit/formatarModulo';
+import { formatarCrea } from '../empresa/cadastroEmpresa';
 
 // ── Paleta Lumen ─────────────────────────────────────────────────────────────
 const C = {
@@ -66,10 +69,19 @@ const S = StyleSheet.create({
   benefIcon: { fontSize: 16, marginBottom: 8 },
 
   // ── Tabela de equipamentos ──
-  tblHead: { flexDirection: 'row', backgroundColor: C.dark, padding: '7 10' },
+  // BUG CORRIGIDO (ago/2026): auditoria de design encontrou a coluna
+  // ESPECIFICAÇÃO colidindo visualmente com QUANTIDADE ("(TOP-7 un.\nCon)")
+  // sempre que o texto da especificação precisa quebrar em 2 linhas — as 3
+  // colunas (flex 2/3/1) ficavam coladas, sem nenhum espaçamento entre elas,
+  // então uma leve imprecisão do motor de layout do react-pdf-renderer ao
+  // quebrar uma "palavra" sem espaço (ex.: "(TOPCon)") bastava para o texto
+  // invadir visualmente a coluna vizinha. `gap` reserva uma margem fixa
+  // entre colunas — corrige este caso e protege qualquer texto de
+  // especificação futuro que também precise quebrar linha.
+  tblHead: { flexDirection: 'row', backgroundColor: C.dark, padding: '7 10', gap: 10 },
   tblHeadTxt: { color: C.white, fontSize: 8, fontFamily: 'Helvetica-Bold', letterSpacing: 0.5 },
-  tblRow: { flexDirection: 'row', padding: '7 10', borderBottomWidth: 1, borderBottomColor: C.border },
-  tblRowAlt: { flexDirection: 'row', padding: '7 10', borderBottomWidth: 1, borderBottomColor: C.border, backgroundColor: C.card },
+  tblRow: { flexDirection: 'row', padding: '7 10', borderBottomWidth: 1, borderBottomColor: C.border, gap: 10 },
+  tblRowAlt: { flexDirection: 'row', padding: '7 10', borderBottomWidth: 1, borderBottomColor: C.border, backgroundColor: C.card, gap: 10 },
   tblCell: { fontSize: 9, color: C.text },
   tblCellB: { fontSize: 9, fontFamily: 'Helvetica-Bold', color: C.text },
 
@@ -361,12 +373,12 @@ export function PropostaComercialPDF({ data }: { data: any }) {
             <SectionHeader title="Por que investir em energia solar?" sub="Energia solar é o investimento mais rentável da atualidade - protege contra reajustes tarifários e gera retorno por décadas." />
             <View style={S.benefGrid}>
               {[
-                { cor:'#c9a227', Icone:IconEconomia,         title:'Economia imediata',         text:`Reduza sua conta de energia em ate ${N(percReducaoConta, 0)}%. A partir do primeiro mes apos a conexao.` },
-                { cor:'#2563eb', Icone:IconProtecao,         title:'Protecao contra reajustes', text:'A ANEEL reajusta as tarifas anualmente. Com energia solar, voce gera sua propria energia e fica protegido.' },
-                { cor:'#16a34a', Icone:IconValorizacao,      title:'Valorizacao do imovel',     text:'Imoveis com sistema fotovoltaico valem em media 5-8% a mais no mercado. E uma benfeitoria permanente.' },
-                { cor:'#059669', Icone:IconSustentabilidade, title:'Sustentabilidade',          text:'Energia 100% renovavel, sem emissoes de CO2. Cada kWh solar substitui energia de fontes fosseis.' },
-                { cor:'#7c3aed', Icone:IconFinanciamento,    title:'Financiamento facilitado',  text:'Parcele em ate 60x com carencia de 60 dias. O sistema se paga com a economia antes de terminar de pagar.' },
-                { cor:'#dc2626', Icone:IconVidaUtil,         title:'Vida util de 25+ anos',     text:'Modulos modernos tem garantia de 25 anos de potencia linear. O sistema continua gerando por decadas.' },
+                { cor:'#c9a227', Icone:IconEconomia,         title:'Economia imediata',         text:`Reduza sua conta de energia em até ${N(percReducaoConta, 0)}%. A partir do primeiro mês após a conexão.` },
+                { cor:'#2563eb', Icone:IconProtecao,         title:'Proteção contra reajustes', text:'A ANEEL reajusta as tarifas anualmente. Com energia solar, você gera sua própria energia e fica protegido.' },
+                { cor:'#16a34a', Icone:IconValorizacao,      title:'Valorização do imóvel',     text:'Imóveis com sistema fotovoltaico valem em média 5-8% a mais no mercado. É uma benfeitoria permanente.' },
+                { cor:'#059669', Icone:IconSustentabilidade, title:'Sustentabilidade',          text:'Energia 100% renovável, sem emissões de CO2. Cada kWh solar substitui energia de fontes fósseis.' },
+                { cor:'#7c3aed', Icone:IconFinanciamento,    title:'Financiamento facilitado',  text:'Parcele em até 60x com carência de 60 dias. O sistema se paga com a economia antes de terminar de pagar.' },
+                { cor:'#dc2626', Icone:IconVidaUtil,         title:'Vida útil de 25+ anos',     text:'Módulos modernos têm garantia de 25 anos de potência linear. O sistema continua gerando por décadas.' },
               ].map((b, i) => (
                 <View key={i} style={S.benefCard}>
                   <View style={{ width:36, height:36, borderRadius:8, backgroundColor:b.cor, alignItems:'center', justifyContent:'center', marginBottom:8 }}>
@@ -387,15 +399,15 @@ export function PropostaComercialPDF({ data }: { data: any }) {
         <View style={S.row}>
           <View style={S.band} />
           <View style={S.body}>
-            <SectionHeader title="Seu sistema personalizado" sub={`Dimensionado especificamente para compensar o consumo medio de ${N(consumoMedioMensalKWh, 0)} kWh/mes.`} />
+            <SectionHeader title="Seu sistema personalizado" sub={`Dimensionado especificamente para compensar o consumo médio de ${N(consumoMedioMensalKWh, 0)} kWh/mês.`} />
 
             {/* Métricas do sistema */}
             <View style={S.sysGrid}>
               {[
-                [N(dim.potenciaInstaladaRealKWp) + ' kWp', 'Potencia instalada'],
-                [dim.numeroModulos + ' modulos', kit.marcaModulo || 'Fotovoltaicos'],
-                [N(dim.geracaoMensalEstimadaKWh, 0) + ' kWh/mes', 'Geracao estimada'],
-                [N(ind?.areaNecessariaM2 ?? 0) + ' m²', 'Area no telhado'],
+                [N(dim.potenciaInstaladaRealKWp) + ' kWp', 'Potência instalada'],
+                [dim.numeroModulos + ' módulos', kit.marcaModulo || 'Fotovoltaicos'],
+                [N(dim.geracaoMensalEstimadaKWh, 0) + ' kWh/mês', 'Geração estimada'],
+                [N(ind?.areaNecessariaM2 ?? 0) + ' m²', 'Área no telhado'],
               ].map(([val, lbl], i) => (
                 <View key={i} style={S.sysStat}>
                   <Text style={S.sysStatVal}>{val}</Text>
@@ -413,11 +425,11 @@ export function PropostaComercialPDF({ data }: { data: any }) {
                 <Text style={[S.tblHeadTxt, { flex: 1 }]}>QUANTIDADE</Text>
               </View>
               {[
-                ['Modulo fotovoltaico', `${kit.marcaModulo} ${kit.modeloModulo} - ${kit.potenciaModuloWp}Wp ${kit.tipoModulo}`, `${kit.quantidade} un.`],
+                ['Módulo fotovoltaico', `${formatarNomeModulo(kit.marcaModulo, kit.modeloModulo)} - ${kit.potenciaModuloWp}Wp ${formatarTipoModulo(kit.tipoModulo, PRESETS_MODULO)}`, `${kit.quantidade} un.`],
                 ['Inversor solar', `${kit.marcaInversor} ${kit.modeloInversor} - ${kit.potenciaInversorKW} kW`, '1 un.'],
-                ['Estrutura de fixacao', 'Aluminio anodizado - adequada ao tipo de telhado', '1 cj.'],
-                ['Cabeamento e protecoes', 'Cabos solar 6mm², DPS, disjuntores, conectores MC4', '1 cj.'],
-                ['Projeto + documentacao', 'Projeto eletrico, ART, memorial descritivo', '1 cj.'],
+                ['Estrutura de fixação', 'Alumínio anodizado - adequada ao tipo de telhado', '1 cj.'],
+                ['Cabeamento e proteções', 'Cabos solar 6mm², DPS, disjuntores, conectores MC4', '1 cj.'],
+                ['Projeto + documentação', 'Projeto elétrico, ART, memorial descritivo', '1 cj.'],
               ].map(([comp, spec, qty], i) => (
                 <View key={i} style={i % 2 === 0 ? S.tblRow : S.tblRowAlt}>
                   <Text style={[S.tblCellB, { flex: 2 }]}>{comp}</Text>
@@ -466,9 +478,9 @@ export function PropostaComercialPDF({ data }: { data: any }) {
               {[
                 ['Payback simples', ind?.paybackSimples ?? '-', C.success],
                 ['TIR - Taxa interna de retorno', ind?.tirAnualPercent != null ? `${N(ind.tirAnualPercent, 1)}% ao ano` : '-', C.success],
-                ['Economia anual estimada (1o ano)', R(cr.economiaMensalRS * 12), C.success],
+                ['Economia anual estimada (1º ano)', R(cr.economiaMensalRS * 12), C.success],
                 ['Economia total em 25 anos', R(ind?.economia25Anos ?? 0), C.success],
-                ['Conta minima mensal apos o solar', R(cr.totalFixoMensalRS), C.text],
+                ['Conta mínima mensal após o solar', R(cr.totalFixoMensalRS), C.text],
               ].map(([lbl, val, col], i) => (
                 <View key={i} style={S.fRow}>
                   <Text style={S.fRowLbl}>{lbl}</Text>
@@ -481,8 +493,8 @@ export function PropostaComercialPDF({ data }: { data: any }) {
             <View style={{ backgroundColor: enq?.elegivelArt26 ? '#f0fdf4' : '#fffbeb', borderRadius: 8, padding: '10 12', borderLeftWidth: 3, borderLeftColor: enq?.elegivelArt26 ? C.success : C.gold }}>
               <Text style={{ fontSize: 9, color: enq?.elegivelArt26 ? '#14532d' : '#78350f', lineHeight: 1.5 }}>
                 {enq?.elegivelArt26
-                  ? '[OK] Componente Fio B isenta sobre a energia compensada ate 31/12/2045 (Lei 14.300/2022, art. 26). Maxima economia ao longo da vida util do sistema.'
-                  : `! Componente Fio B (Lei 14.300/2022): custo gradual de ${N((pfb[anoAtual] ?? 0)*100,0)}% em ${anoAtual}, aumentando ate 100% em 2029. Ja considerado na projecao financeira.`}
+                  ? '[OK] Componente Fio B isento sobre a energia compensada até 31/12/2045 (Lei 14.300/2022, art. 26). Máxima economia ao longo da vida útil do sistema.'
+                  : `! Componente Fio B (Lei 14.300/2022): custo gradual de ${N((pfb[anoAtual] ?? 0)*100,0)}% em ${anoAtual}, aumentando até 100% em 2029. Já considerado na projeção financeira.`}
               </Text>
             </View>
           </View>
@@ -554,14 +566,14 @@ export function PropostaComercialPDF({ data }: { data: any }) {
             <Text style={{ fontSize: 12, fontFamily: 'Helvetica-Bold', color: C.dark, marginBottom: 12 }}>O que está incluso</Text>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
               {[
-                'Fornecimento e instalacao de todos os equipamentos',
-                'Estrutura de fixacao adequada ao seu telhado',
-                'Cabeamento e protecoes eletricas (DPS, disjuntores)',
-                'Projeto eletrico e ART do engenheiro responsavel',
-                'Registro e aprovacao junto a distribuidora local',
+                'Fornecimento e instalação de todos os equipamentos',
+                'Estrutura de fixação adequada ao seu telhado',
+                'Cabeamento e proteções elétricas (DPS, disjuntores)',
+                'Projeto elétrico e ART do engenheiro responsável',
+                'Registro e aprovação junto à distribuidora local',
                 'Comissionamento e testes do sistema',
-                'Suporte tecnico pos-instalacao',
-                'Documentacao completa do projeto',
+                'Suporte técnico pós-instalação',
+                'Documentação completa do projeto',
               ].map((svc, i) => (
                 <View key={i} style={S.svcRow}>
                   <View style={S.svcDot}><Text style={S.svcDotTxt}>{i+1}</Text></View>
@@ -583,10 +595,10 @@ export function PropostaComercialPDF({ data }: { data: any }) {
 
             <View style={{ backgroundColor: C.card, borderRadius: 10, padding: '16 20', marginBottom: 20, borderWidth: 1, borderColor: C.border }}>
               {[
-                'Os valores de geracao de energia sao estimativas baseadas no Atlas Solarimetrico CRESESB. A geracao real varia conforme condicoes climaticas, sombreamento e manutencao.',
-                'O sistema foi dimensionado para o perfil de consumo atual. Alteracoes significativas no consumo podem exigir reavaliacao do dimensionamento.',
-                'Nao estao inclusos eventuais servicos de alvenaria, reforco estrutural do telhado ou adequacoes na rede da distribuidora.',
-                'Apos aprovacao da proposta, sera realizada vistoria tecnica para confirmacao das condicoes de instalacao.',
+                'Os valores de geração de energia são estimativas baseadas no Atlas Solarimétrico CRESESB. A geração real varia conforme condições climáticas, sombreamento e manutenção.',
+                'O sistema foi dimensionado para o perfil de consumo atual. Alterações significativas no consumo podem exigir reavaliação do dimensionamento.',
+                'Não estão inclusos eventuais serviços de alvenaria, reforço estrutural do telhado ou adequações na rede da distribuidora.',
+                'Após aprovação da proposta, será realizada vistoria técnica para confirmação das condições de instalação.',
               ].map((obs, i) => (
                 <View key={i} style={{ flexDirection: 'row', marginBottom: 10, gap: 8 }}>
                   <Text style={{ fontSize: 9, color: C.gold, fontFamily: 'Helvetica-Bold', width: 14 }}>{i+1}.</Text>
@@ -606,7 +618,7 @@ export function PropostaComercialPDF({ data }: { data: any }) {
                 <View style={{ borderTopWidth: 1.5, borderTopColor: C.dark, width: '100%', paddingTop: 10, marginTop: 40 }}>
                   <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: C.text, textAlign: 'center' }}>{empresa.razaoSocial}</Text>
                   {empresa.responsavelTecnico && <Text style={{ fontSize: 9, color: C.muted, textAlign: 'center', marginTop: 3 }}>{empresa.responsavelTecnico}</Text>}
-                  {empresa.crea && <Text style={{ fontSize: 8, color: C.muted, textAlign: 'center', marginTop: 2 }}>CREA-{empresa.uf} {empresa.crea}</Text>}
+                  {empresa.crea && <Text style={{ fontSize: 8, color: C.muted, textAlign: 'center', marginTop: 2 }}>{formatarCrea(empresa)}</Text>}
                 </View>
               </View>
               <View style={{ flex: 1, alignItems: 'center' }}>

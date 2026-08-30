@@ -3,6 +3,7 @@ import React from 'react';
 import { pdf } from '@react-pdf/renderer';
 import { PropostaPDF, type PropostaData } from './PropostaPDF';
 import { PropostaComercialPDF } from './PropostaComercialPDF';
+import { extractPdfTextJoined } from './pdfTextTestHelper';
 import type { ResultadoGrupoA } from '@domain/dimensionamento/calcularGrupoA';
 
 // PropostaPDF.tsx e PropostaComercialPDF.tsx (os dois PDFs de proposta —
@@ -95,6 +96,41 @@ describe('PropostaPDF — página AvisoGrupoA', () => {
     };
     const buf = await pdf(React.createElement(PropostaPDF, { data }) as any).toBuffer();
     expect(buf).toBeTruthy();
+  });
+});
+
+describe('PropostaPDF — "Valor médio da conta atual"', () => {
+  // BUG CORRIGIDO (ago/2026): auditoria de design encontrou "R$ 0,00" aqui
+  // no caso real da Ana Maria Vieira de Sá e Silva — este card usava
+  // `data.valorMedioMensalRS` (média dos valores em R$ que o usuário digita
+  // por mês na aba Consumo), que fica 0 quando o usuário só preenche o kWh
+  // de cada mês (comum). A Proposta Comercial (PropostaComercialPDF.tsx,
+  // card "Sua conta hoje") usa um valor CALCULADO
+  // (custosRecorrentes.contaAntesRS = consumoMedioMensalKWh × tarifa + CIP)
+  // e por isso mostrava um número diferente e correto pro MESMO cliente no
+  // MESMO pacote de documentos. Corrigido para preferir o valor calculado,
+  // com o valor digitado como fallback só se o calculado não existir.
+  it('caso real que motivou a correção: valorMedioMensalRS=0 (usuário só preencheu kWh) usa o valor CALCULADO, não R$ 0,00', () => {
+    const data: PropostaData = {
+      ...propostaDataBase,
+      consumo: { grupoTensao: 'B' },
+      valorMedioMensalRS: 0,
+      // custosRecorrentes.contaAntesRS=800 vem de propostaDataBase — ver topo do arquivo.
+    };
+    const texto = extractPdfTextJoined(PropostaPDF({ data }));
+    expect(texto).toContain('R$ 800,00');
+    expect(texto).not.toContain('R$ 0,00');
+  });
+
+  it('contaAntesRS calculado é 0 (caso extremo): cai de volta no valor digitado pelo usuário (valorMedioMensalRS)', () => {
+    const data: PropostaData = {
+      ...propostaDataBase,
+      consumo: { grupoTensao: 'B' },
+      custosRecorrentes: { ...propostaDataBase.custosRecorrentes, contaAntesRS: 0 },
+      valorMedioMensalRS: 590,
+    };
+    const texto = extractPdfTextJoined(PropostaPDF({ data }));
+    expect(texto).toContain('R$ 590,00');
   });
 });
 

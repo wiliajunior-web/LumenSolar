@@ -1146,6 +1146,31 @@ function TabCliente({ onNext }: { onNext: () => void }) {
             <Campo label="CEP">
               <input className="inp" value={cliente.cep} onChange={e => atualizarCliente({ cep: e.target.value })} placeholder="00000-000" maxLength={9} />
             </Campo>
+            {/*
+              CORRIGIDO (ago/2026): mesma classe de bug de bairro/CEP acima —
+              RG/Profissão/Estado civil já existiam em DadosCliente e já eram
+              lidos por Procuracao.tsx, mas sem nenhum input aqui. Resultado:
+              a Procuração saía SEMPRE com "______________" no RG/profissão
+              (nunca havia como preencher) e afirmava "solteiro(a)" pra todo
+              cliente sem exceção (valor-padrão do store, nunca escolhido de
+              fato). Ver comentário de `estadoCivil` em useProjetoStore.ts.
+            */}
+            <Campo label="RG" hint="Obrigatório para a Procuração">
+              <input className="inp" value={cliente.rg} onChange={e => atualizarCliente({ rg: e.target.value })} placeholder="00.000.000-0" />
+            </Campo>
+            <Campo label="Profissão" hint="Obrigatório para a Procuração">
+              <input className="inp" value={cliente.profissao} onChange={e => atualizarCliente({ profissao: e.target.value })} placeholder="Ex: Professora, Comerciante" />
+            </Campo>
+            <Campo label="Estado civil" hint="Obrigatório para a Procuração">
+              <select className="inp" value={cliente.estadoCivil} onChange={e => atualizarCliente({ estadoCivil: e.target.value as typeof cliente.estadoCivil })}>
+                <option value="">Selecione...</option>
+                <option value="solteiro">Solteiro(a)</option>
+                <option value="casado">Casado(a)</option>
+                <option value="divorciado">Divorciado(a)</option>
+                <option value="viuvo">Viúvo(a)</option>
+                <option value="outro">Outro / não informar</option>
+              </select>
+            </Campo>
           </div>
         </div>
       </div>

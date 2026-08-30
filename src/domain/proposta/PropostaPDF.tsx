@@ -14,6 +14,9 @@ import { ResultadoEnquadramento } from '@domain/fioB/calculoFioB';
 import { EspecificacaoKit } from '@domain/precificacao/types';
 import { DISTRIBUIDORAS } from '@data/distribuidoras';
 import type { ResultadoGrupoA } from '@domain/dimensionamento/calcularGrupoA';
+import { PRESETS_MODULO } from '@data/presetsModulo';
+import { formatarNomeModulo, formatarTipoModulo } from '@domain/kit/formatarModulo';
+import { formatarCrea } from '@domain/empresa/cadastroEmpresa';
 
 // Cores institucionais
 const COR_PRIMARIA = '#1a5276';
@@ -265,7 +268,7 @@ export function PropostaPDF({ data }: { data: PropostaData }) {
               <View style={S.capaRodape}>
                 <Text style={S.capaEmpresa}>{empresa.razaoSocial}</Text>
                 <Text style={S.capaEmpresaInfo}>
-                  {[empresa.cnpj && `CNPJ: ${empresa.cnpj}`, empresa.crea && `CREA: ${empresa.crea}`, empresa.telefone, empresa.email].filter(Boolean).join('  -  ')}
+                  {[empresa.cnpj && `CNPJ: ${empresa.cnpj}`, formatarCrea(empresa), empresa.telefone, empresa.email].filter(Boolean).join('  -  ')}
                 </Text>
                 <Text style={{ fontSize: 9, color: '#7fb3d3', marginTop: 6 }}>
                   Esta proposta é válida por {empresa.validadeProposta} dias a partir da data de emissão.
@@ -310,7 +313,7 @@ export function PropostaPDF({ data }: { data: PropostaData }) {
             </View>
             <View style={S.tabelaRow}>
               <Text style={[S.tabelaCell, { flex: 1 }]}>Módulo fotovoltaico</Text>
-              <Text style={[S.tabelaCellBold, { flex: 2 }]}>{kit.marcaModulo} {kit.modeloModulo} - {kit.potenciaModuloWp}Wp {kit.tipoModulo}</Text>
+              <Text style={[S.tabelaCellBold, { flex: 2 }]}>{formatarNomeModulo(kit.marcaModulo, kit.modeloModulo)} - {kit.potenciaModuloWp}Wp {formatarTipoModulo(kit.tipoModulo, PRESETS_MODULO)}</Text>
               <Text style={[S.tabelaCell, { flex: 1, textAlign: 'right' }]}>{kit.quantidade} un.</Text>
             </View>
             <View style={S.tabelaRowAlt}>
@@ -342,7 +345,22 @@ export function PropostaPDF({ data }: { data: PropostaData }) {
           </View>
           <View style={S.linhaItem}>
             <Text style={S.linhaItemLabel}>Valor médio da conta atual</Text>
-            <Text style={S.linhaItemValor}>{R(data.valorMedioMensalRS)}</Text>
+            {/* BUG CORRIGIDO (ago/2026): auditoria de design encontrou "R$
+                0,00" aqui no caso real da Ana Maria — `valorMedioMensalRS` é
+                a MÉDIA DOS VALORES QUE O USUÁRIO DIGITOU na aba Consumo
+                (campo "Valor da fatura"), não um valor calculado; quando o
+                usuário preenche só o kWh de cada mês (comum — é o dado mais
+                importante para o dimensionamento) e deixa o valor em R$
+                zerado, este card mostrava "R$ 0,00" mesmo com a Proposta
+                Comercial (PropostaComercialPDF.tsx, "Sua conta hoje")
+                mostrando corretamente um valor estimado (R$360,24) — dois
+                documentos do mesmo pacote, sobre o mesmo cliente, com
+                números conflitantes para "quanto o cliente paga hoje".
+                Corrigido para preferir o mesmo valor CALCULADO
+                (consumoMedioMensalKWh × tarifa + CIP) que a Proposta
+                Comercial já usa, caindo no valor digitado pelo usuário só se
+                o calculado não existir (custosRecorrentes ausente). */}
+            <Text style={S.linhaItemValor}>{R(custosRecorrentes?.contaAntesRS || data.valorMedioMensalRS)}</Text>
           </View>
           <View style={S.linhaItem}>
             <Text style={S.linhaItemLabel}>Distribuidora</Text>

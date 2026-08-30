@@ -187,6 +187,14 @@ describe('Fábricas de estado padrão — clientePadrao/consumoPadrao/kitPadrao/
     expect(c.demandaMedidaFPkW).toBe(0);
   });
 
+  it('clientePadrao() inicia estadoCivil="" — não mais "solteiro" (auditoria de design, ago/2026)', () => {
+    // BUG CORRIGIDO: com o padrão antigo ('solteiro'), TODA Procuração
+    // gerada afirmava "solteiro(a)" como estado civil do cliente mesmo sem
+    // o usuário ter informado nada — não havia campo na UI pra mudar isso.
+    // Ver comentário completo em DadosCliente.estadoCivil.
+    expect(clientePadrao().estadoCivil).toBe('');
+  });
+
   it('kitPadrao() inclui os campos formalizados em ago/2026 (antes só existiam via "as any")', () => {
     const k = kitPadrao();
     expect(k.comprimentoCaboCAm).toBe(10);

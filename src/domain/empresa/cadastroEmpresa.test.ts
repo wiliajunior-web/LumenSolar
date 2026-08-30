@@ -3,6 +3,7 @@ import {
   camposFaltantesCadastroEmpresa,
   cadastroEmpresaIncompleto,
   mensagemCadastroEmpresaIncompleto,
+  formatarCrea,
 } from './cadastroEmpresa';
 
 describe('cadastroEmpresaIncompleto', () => {
@@ -58,5 +59,33 @@ describe('mensagemCadastroEmpresaIncompleto', () => {
     expect(msg).toContain('Configurações');
     expect(msg).toContain('Procuração');
     expect(msg).toContain('Formulário CEMIG');
+  });
+});
+
+// ADICIONADO (ago/2026): ver comentário completo em cadastroEmpresa.ts —
+// bug real encontrado na auditoria de design dos documentos gerados (caso
+// Ana Maria Vieira de Sá e Silva): assinatura da Proposta Comercial saiu
+// "CREA-MG CREA-MG 123456".
+describe('formatarCrea', () => {
+  it('caso real que motivou a correção: usuário já digitou "CREA-MG 123456" — não duplica o prefixo', () => {
+    expect(formatarCrea({ crea: 'CREA-MG 123456', uf: 'MG' })).toBe('CREA-MG 123456');
+  });
+
+  it('usuário digitou só o número: adiciona o prefixo CREA-{UF}', () => {
+    expect(formatarCrea({ crea: '123456', uf: 'MG' })).toBe('CREA-MG 123456');
+  });
+
+  it('sem UF cadastrada: usa MG como padrão (mesmo fallback já usado em Procuracao.tsx)', () => {
+    expect(formatarCrea({ crea: '123456' })).toBe('CREA-MG 123456');
+  });
+
+  it('detecta o prefixo "CREA " com espaço, não só "CREA-" com hífen', () => {
+    expect(formatarCrea({ crea: 'CREA MG 123456', uf: 'MG' })).toBe('CREA MG 123456');
+  });
+
+  it('CREA vazio ou empresa undefined/null: string vazia, sem lançar exceção', () => {
+    expect(formatarCrea({ crea: '' })).toBe('');
+    expect(formatarCrea(undefined)).toBe('');
+    expect(formatarCrea(null)).toBe('');
   });
 });

@@ -7,6 +7,8 @@ import { Document, Page, Text, View, StyleSheet, Image } from '@react-pdf/render
 import { DISTRIBUIDORAS } from '../../data/distribuidoras';
 import { PRESETS_MODULO } from '../../data/presetsModulo';
 import { TIPO_TELHADO_LABELS } from '../../data/localizacao';
+import { formatarNomeModulo, formatarTipoModulo } from '../kit/formatarModulo';
+import { formatarCrea } from '../empresa/cadastroEmpresa';
 
 const DARK = '#0a0a1e';
 const GOLD = '#c9a227';
@@ -95,9 +97,12 @@ const juntar = (...partes: (string | false | undefined | null)[]) =>
 
 function Footer({ empresa }: { empresa:any }) {
   const linha1 = juntar(empresa.razaoSocial, empresa.cnpj ? `CNPJ: ${empresa.cnpj}` : '');
+  // BUG CORRIGIDO (ago/2026): auditoria de design encontrou "CREA-MG CREA-MG
+  // 123456" no rodapé — ver comentário completo em `formatarCrea()`
+  // (domain/empresa/cadastroEmpresa.ts).
   const linha2 = juntar(
     empresa.responsavelTecnico,
-    empresa.crea ? `CREA-${empresa.uf || 'MG'} ${empresa.crea}` : '',
+    formatarCrea(empresa),
   );
   return (
     <View style={S.footer} fixed>
@@ -206,7 +211,7 @@ export function MemorialDescritivo({ data }: { data:any }) {
               </View>
               <View style={S.empCellLast}>
                 <Text style={S.empLabel}>Responsável:</Text>
-                <Text style={S.empVal}>{juntar(empresa.responsavelTecnico, empresa.crea ? `CREA ${empresa.crea}` : '')}</Text>
+                <Text style={S.empVal}>{juntar(empresa.responsavelTecnico, formatarCrea(empresa))}</Text>
               </View>
             </View>
             <View style={S.empRow}>
@@ -320,18 +325,18 @@ export function MemorialDescritivo({ data }: { data:any }) {
           <Text style={S.para}>
             O sistema fotovoltaico terá uma potência de pico de <Text style={S.bold}>{fmtN(potKWp)} kWp</Text>, composto por{' '}
             <Text style={S.bold}>{dim.numeroModulos} módulos fotovoltaicos</Text> com potência de{' '}
-            <Text style={S.bold}>{kit.potenciaModuloWp} Wp</Text> cada um (modelo <Text style={S.bold}>{kit.marcaModulo} {kit.modeloModulo}</Text>).
-            {kit.numStrings > 0 && ` O arranjo e composto por ${kit.numStrings} fileira(s) (string) de ${kit.modulosPorString} modulos cada.`}
+            <Text style={S.bold}>{kit.potenciaModuloWp} Wp</Text> cada um (modelo <Text style={S.bold}>{formatarNomeModulo(kit.marcaModulo, kit.modeloModulo)}</Text>).
+            {kit.numStrings > 0 && ` O arranjo é composto por ${kit.numStrings} fileira(s) (string) de ${kit.modulosPorString} módulos cada.`}
           </Text>
 
           <Text style={S.secNumSub}>3.1  Módulos fotovoltaicos</Text>
           <Text style={S.para}>
-            Os módulos fotovoltaicos são do tipo <Text style={S.bold}>{PRESETS_MODULO[kit.tipoModulo as keyof typeof PRESETS_MODULO]?.label ?? kit.tipoModulo}</Text>, protegidos por vidro antirreflexo texturizado.
-            {kit.garantiaPotenciaAnos > 0 && ` A garantia de potencia tem duracao de ${kit.garantiaPotenciaAnos} anos, com ${kit.potenciaGarantidaPercent}% de potencia garantida ao final do periodo.`}
-            {kit.garantiaProdutoAnos > 0 && ` Garantia contra defeitos de fabricacao: ${kit.garantiaProdutoAnos} anos.`}
+            Os módulos fotovoltaicos são do tipo <Text style={S.bold}>{formatarTipoModulo(kit.tipoModulo, PRESETS_MODULO)}</Text>, protegidos por vidro antirreflexo texturizado.
+            {kit.garantiaPotenciaAnos > 0 && ` A garantia de potência tem duração de ${kit.garantiaPotenciaAnos} anos, com ${kit.potenciaGarantidaPercent}% de potência garantida ao final do período.`}
+            {kit.garantiaProdutoAnos > 0 && ` Garantia contra defeitos de fabricação: ${kit.garantiaProdutoAnos} anos.`}
           </Text>
 
-          <Text style={S.tblTitle}>Tabela I - Características técnicas do módulo {kit.marcaModulo} {kit.modeloModulo}</Text>
+          <Text style={S.tblTitle}>Tabela I - Características técnicas do módulo {formatarNomeModulo(kit.marcaModulo, kit.modeloModulo)}</Text>
           <View style={S.tbl}>
             <View style={S.tblHead}>
               <Text style={[S.tblHeadCell,{flex:2}]}>CARACTERÍSTICA TÉCNICA</Text>
@@ -340,19 +345,19 @@ export function MemorialDescritivo({ data }: { data:any }) {
             {[
               ['Marca',                           kit.marcaModulo || '-'],
               ['Modelo',                           kit.modeloModulo || '-'],
-              ['Potencia Nominal (Pmax)',           `${kit.potenciaModuloWp} Wp`],
-              ['Tensao de Maxima Potencia (Vmpp)', kit.vmppV > 0 ? `${fmtN(kit.vmppV,2)} V` : '-'],
-              ['Corrente de Maxima Potencia (Impp)',kit.imppA > 0 ? `${fmtN(kit.imppA,2)} A` : '-'],
-              ['Tensao de Circuito Aberto (Voc)',  kit.vocV > 0 ? `${fmtN(kit.vocV,2)} V` : '-'],
+              ['Potência Nominal (Pmax)',           `${kit.potenciaModuloWp} Wp`],
+              ['Tensão de Máxima Potência (Vmpp)', kit.vmppV > 0 ? `${fmtN(kit.vmppV,2)} V` : '-'],
+              ['Corrente de Máxima Potência (Impp)',kit.imppA > 0 ? `${fmtN(kit.imppA,2)} A` : '-'],
+              ['Tensão de Circuito Aberto (Voc)',  kit.vocV > 0 ? `${fmtN(kit.vocV,2)} V` : '-'],
               ['Corrente de Curto-Circuito (Isc)', kit.iscA > 0 ? `${fmtN(kit.iscA,2)} A` : '-'],
               ['Comprimento',                      kit.comprimentoMm > 0 ? `${kit.comprimentoMm} mm` : '-'],
               ['Largura',                          kit.larguraMm > 0 ? `${kit.larguraMm} mm` : '-'],
-              ['Area do Modulo',                   kit.comprimentoMm > 0 && kit.larguraMm > 0 ? `${fmtN((kit.comprimentoMm*kit.larguraMm)/1e6,4)} m²` : '-'],
+              ['Área do Módulo',                   kit.comprimentoMm > 0 && kit.larguraMm > 0 ? `${fmtN((kit.comprimentoMm*kit.larguraMm)/1e6,4)} m²` : '-'],
               ['Peso',                             kit.pesoKgModulo > 0 ? `${fmtN(kit.pesoKgModulo,1)} kg` : '-'],
               ['Coef. Temperatura Pmax',           `${PRESETS_MODULO[kit.tipoModulo as keyof typeof PRESETS_MODULO]?.coef ?? -0.34}%/°C`],
-              ['Garantia de Potencia',             kit.garantiaPotenciaAnos > 0 ? `${kit.garantiaPotenciaAnos} anos (${kit.potenciaGarantidaPercent}%)` : '25 anos'],
+              ['Garantia de Potência',             kit.garantiaPotenciaAnos > 0 ? `${kit.garantiaPotenciaAnos} anos (${kit.potenciaGarantidaPercent}%)` : '25 anos'],
               ['Garantia do Produto',              kit.garantiaProdutoAnos > 0 ? `${kit.garantiaProdutoAnos} anos` : '10 anos'],
-              ['Certificacoes',                    kit.certificacoes || 'INMETRO, IEC 61215, IEC 61730'],
+              ['Certificações',                    kit.certificacoes || 'INMETRO, IEC 61215, IEC 61730'],
             ].map(([lbl,val],i) => <SpecRow key={i} label={lbl} val={val} alt={i%2===1} />)}
           </View>
 
@@ -434,7 +439,7 @@ export function MemorialDescritivo({ data }: { data:any }) {
             <View style={{borderTopWidth:1,borderTopColor:TEXT,width:250,paddingTop:8,alignItems:'center',marginTop:20}}>
               <Text style={{fontSize:9,fontFamily:'Helvetica-Bold'}}>{empresa.responsavelTecnico}</Text>
               <Text style={{fontSize:8,color:MUTED}}>{empresa.razaoSocial}</Text>
-              {empresa.crea && <Text style={{fontSize:8,color:MUTED}}>CREA-{empresa.uf} {empresa.crea}</Text>}
+              {empresa.crea && <Text style={{fontSize:8,color:MUTED}}>{formatarCrea(empresa)}</Text>}
             </View>
           </View>
         </View>

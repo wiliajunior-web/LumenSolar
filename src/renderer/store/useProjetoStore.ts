@@ -34,7 +34,20 @@ export interface DadosCliente {
   nome: string;
   cpf: string;
   rg: string;
-  estadoCivil: 'solteiro' | 'casado' | 'divorciado' | 'viuvo' | 'outro';
+  /**
+   * BUG CORRIGIDO (ago/2026): auditoria de design dos documentos gerados
+   * encontrou que a Procuração afirma "solteiro(a)" como fato jurídico do
+   * cliente em TODA geração — não porque o usuário informou isso, mas
+   * porque `estadoCivil` sempre iniciava como `'solteiro'` (valor-padrão
+   * do store) e NENHUMA aba da UI tinha campo para alterá-lo (mesma classe
+   * de bug já corrigida para `bairro`/`cep` — ver comentário abaixo). Um
+   * documento com efeito legal não deve afirmar um dado nunca confirmado
+   * pelo usuário. `''` (vazio) agora é um estado real e distinto de
+   * "solteiro" — TabCliente (App.tsx) tem um <select> com opção em branco,
+   * e Procuracao.tsx já cai no placeholder "____________" para qualquer
+   * valor fora do mapa (`''` incluso), sem precisar de nenhuma mudança lá.
+   */
+  estadoCivil: '' | 'solteiro' | 'casado' | 'divorciado' | 'viuvo' | 'outro';
   profissao: string;
   endereco: string;   // rua e número (logradouro) — bairro/CEP são campos próprios abaixo
   /**
@@ -209,7 +222,7 @@ export const MESES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out
 // estado inicial da store quanto por `novaProposta()` em App.tsx — agora é
 // impossível as duas divergirem de novo.
 export function clientePadrao(): DadosCliente {
-  return { nome:'', cpf:'', rg:'', estadoCivil:'solteiro', profissao:'', endereco:'', bairro:'', cep:'', telefone:'', email:'', cidade:'', uf:'MG' };
+  return { nome:'', cpf:'', rg:'', estadoCivil:'', profissao:'', endereco:'', bairro:'', cep:'', telefone:'', email:'', cidade:'', uf:'MG' };
 }
 
 export function consumoPadrao(): EntradaConsumo {
