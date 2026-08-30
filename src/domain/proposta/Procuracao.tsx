@@ -4,6 +4,7 @@
  */
 import { Document, Page, Text, View, StyleSheet, Image } from '@react-pdf/renderer';
 import { DISTRIBUIDORAS } from '../../data/distribuidoras';
+import { cadastroEmpresaIncompleto } from '../empresa/cadastroEmpresa';
 
 const GOLD = '#c9a227';
 const BLUE = '#1a3a6e';
@@ -128,16 +129,21 @@ export function Procuracao({ data }: { data: any }) {
   // com objeto juridico diferente do enquadramento real do projeto.
   const classeGD = enquadramento.classe === 'minigeracao' ? 'minigeração' : 'microgeração';
 
-  // ADICIONADO (ago/2026): uma procuração (instrumento de representação
+  // BUG CORRIGIDO (ago/2026): uma procuração (instrumento de representação
   // legal) sem outorgado pessoa física identificável saía sem aviso nenhum
   // — só com os placeholders em branco ('___________'), fáceis de passar
-  // despercebidos numa revisão rápida antes de assinar/protocolar. CNPJ da
-  // empresa também é exigido no corpo do texto (cláusula de qualificação do
-  // outorgado). Em vez de emitir silenciosamente um documento com efeito
-  // jurídico incompleto, um aviso visível é estampado no topo do PDF
-  // enquanto o cadastro da empresa (aba Empresa) não tiver
-  // responsavelTecnico + CREA + CNPJ preenchidos.
-  const cadastroIncompleto = !empresa.responsavelTecnico || !empresa.crea || !empresa.cnpj;
+  // despercebidos numa revisão rápida antes de assinar/protocolar. Caso real
+  // relatado pelo usuário (Ana Maria Vieira de Sá e Silva): "Engenheiro(a)
+  // ___________________________" saiu assim mesmo depois do primeiro aviso
+  // (banner dentro do PDF) — usuário deixou claro que aviso depois de gerado
+  // não basta: "todos os documentos devem estar preenchidos, nada de
+  // _________". A geração em si agora é BLOQUEADA antes de chegar aqui
+  // (App.tsx `buildData()`, usando a mesma regra de `cadastroEmpresaIncompleto`
+  // — fonte única em `domain/empresa/cadastroEmpresa.ts`). Este banner fica
+  // como segunda camada de defesa, para o caso deste componente ser
+  // renderizado por um caminho que não passe pelo guard (ex.:
+  // `scripts/testarGeracaoPdf.tsx`, usado só para conferir layout).
+  const cadastroIncompleto = cadastroEmpresaIncompleto(empresa);
 
   return (
     <Document title={`Procuração - ${cliente.nome || ''}`} author={razaoSoc}>

@@ -8,6 +8,7 @@ import { TIPO_TELHADO_LABELS, ORIENTACOES, type TipoTelhado, LOCALIZACAO_PADRAO 
 import { HSP_MEDIO_POR_UF } from '@data/hspPorUF';
 import { PropostaPDF } from '@domain/proposta/PropostaPDF';
 import { CHECKLIST_PADRAO_CEMIG_MICROGD, resumoChecklist, type ItemChecklistDocumentacao } from '@domain/documentacaoCemig/checklist';
+import { cadastroEmpresaIncompleto, mensagemCadastroEmpresaIncompleto } from '@domain/empresa/cadastroEmpresa';
 import { latLonParaUTM } from '@domain/geografia/converterCoordenadas';
 import { calcularCaboCA } from '@domain/dimensionamento/calcularCaboCA';
 import { calcularDPSCA, calcularProtecaoCC } from '@domain/dimensionamento/calcularProtecaoCC';
@@ -603,7 +604,7 @@ export default function App() {
             {!showEmpresa && aba === 'local'      && <TabLocal     onPrev={() => setAba('consumo')} onNext={() => setAba('kit')} />}
             {!showEmpresa && aba === 'kit'        && <TabKit       onPrev={() => setAba('local')} onNext={() => { useProjetoStore.getState().recalcularDefaultsPreco(); setAba('preco'); }} />}
             {!showEmpresa && aba === 'preco'      && <TabPreco     onPrev={() => setAba('kit')} onCalc={tentarCalcular} />}
-            {!showEmpresa && aba === 'resultado'  && <TabResultado onPrev={() => setAba('preco')} />}
+            {!showEmpresa && aba === 'resultado'  && <TabResultado onPrev={() => setAba('preco')} onEmpresa={() => setShowEmpresa(true)} />}
           </div>
         </main>
       </div>
@@ -2602,10 +2603,11 @@ function calculoDesatualizado(s: Pick<ReturnType<typeof useProjetoStore.getState
 }
 
 // ─── Tab Resultado ────────────────────────────────────────────────────────────
-function TabResultado({ onPrev }: { onPrev:()=>void }) {
+function TabResultado({ onPrev, onEmpresa }: { onPrev:()=>void; onEmpresa:()=>void }) {
   const s = useProjetoStore();
   const [gerando, setGerando] = React.useState(false);
   const desatualizado = calculoDesatualizado(s);
+  const empresaIncompleta = cadastroEmpresaIncompleto(s.empresa);
 
   function buildData() {
     const { empresa, cliente, consumo, kit, dimensionamento, custosRecorrentes,
@@ -2613,6 +2615,17 @@ function TabResultado({ onPrev }: { onPrev:()=>void }) {
       valorMedioMensalRS, preco, indicadores, resultadoGrupoA } = s;
     if (!dimensionamento || !custosRecorrentes || !precificacao || !enquadramento || !indicadores) {
       throw new Error('Calcule o projeto (aba Preço → "Calcular resultado completo") antes de gerar documentos.');
+    }
+    // BUG CORRIGIDO (ago/2026): documentos saíam com Responsável Técnico/CREA/
+    // CNPJ em branco ("___________________________") sempre que o cadastro da
+    // empresa (⚙ Configurações) não estava preenchido — sem bloqueio nenhum,
+    // só um aviso dentro do próprio PDF já gerado (Procuracao.tsx). Usuário
+    // relatou o caso real e foi direto: "todos os documentos devem estar
+    // preenchidos, nada de _________". Geração agora é bloqueada aqui, antes
+    // de qualquer PDF/planilha ser montado — mesmo padrão do guard de
+    // `calculoDesatualizado` abaixo. Ver `domain/empresa/cadastroEmpresa.ts`.
+    if (cadastroEmpresaIncompleto(empresa)) {
+      throw new Error(mensagemCadastroEmpresaIncompleto(empresa));
     }
     if (calculoDesatualizado(s)) {
       throw new Error(
@@ -2870,6 +2883,13 @@ function TabResultado({ onPrev }: { onPrev:()=>void }) {
           'Volte à aba Preço e clique em "Calcular resultado completo" novamente antes de gerar o Excel.'
         );
       }
+      // BUG CORRIGIDO (ago/2026): mesmo guard de cadastro de empresa incompleto
+      // de `buildData()` — precisa estar duplicado aqui porque gerarExcel() é o
+      // único gerador que não passa por buildData() (monta o payload direto do
+      // store, ver comentário logo abaixo). Ver `domain/empresa/cadastroEmpresa.ts`.
+      if (cadastroEmpresaIncompleto(st.empresa)) {
+        throw new Error(mensagemCadastroEmpresaIncompleto(st.empresa));
+      }
       gerarExcelAuditoria({
         empresa: st.empresa, cliente: st.cliente, consumo: st.consumo,
         localizacao: st.localizacao, kit: st.kit, preco: st.preco,
@@ -3005,6 +3025,28 @@ function TabResultado({ onPrev }: { onPrev:()=>void }) {
           <Btn onClick={() => { try { useProjetoStore.getState().calcularTudo(); } catch (e) { alert('Erro ao recalcular: ' + (e instanceof Error ? e.message : String(e))); } }}>
             🔄 Recalcular agora
           </Btn>
+        </div>
+      )}
+      {/* BUG CORRIGIDO (ago/2026): antes disto, o único aviso de cadastro de
+          empresa incompleto ficava dentro do PDF da Procuração, depois de já
+          gerado. Usuário relatou o caso real (engenheiro saindo em branco na
+          Procuração) e foi direto: documento nenhum deve sair com campo
+          vazio. A geração agora é bloqueada de verdade (buildData()/
+          gerarExcel() lançam erro — ver `domain/empresa/cadastroEmpresa.ts`);
+          este banner avisa ANTES de clicar em qualquer botão de documento,
+          em vez do usuário só descobrir pelo alert() de erro. */}
+      {empresaIncompleta && (
+        <div style={{
+          marginBottom: 18, padding: '12px 16px', background: '#3a1414',
+          border: '1px solid #dc2626', borderRadius: 8, color: '#fca5a5',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap',
+        }}>
+          <span style={{ fontSize: 13, lineHeight: 1.5 }}>
+            ⚠️ <strong>Cadastro da empresa incompleto</strong> — Responsável Técnico, CREA e/ou CNPJ não
+            preenchidos. Nenhum documento pode ser gerado até isso ser corrigido — a Procuração e o
+            Formulário CEMIG dependem desses dados para identificar o outorgado/engenheiro responsável.
+          </span>
+          <Btn onClick={onEmpresa}>⚙ Abrir Configurações</Btn>
         </div>
       )}
       {/* Cabeçalho */}
