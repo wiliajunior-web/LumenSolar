@@ -100,7 +100,7 @@ function Footer({ empresa }: FooterProps) {
   return (
     <View style={S.footer} fixed>
       <Text style={S.footerTexto}>{empresa.nomeFantasia || empresa.razaoSocial} - {empresa.telefone} - {empresa.email}</Text>
-      <Text style={S.pageNumber} render={({ pageNumber, totalPages }) => `Pagina ${pageNumber} de ${totalPages}`} />
+      <Text style={S.pageNumber} render={({ pageNumber, totalPages }) => `Página ${pageNumber} de ${totalPages}`} />
     </View>
   );
 }
@@ -419,7 +419,7 @@ export function PropostaPDF({ data }: { data: PropostaData }) {
             </View>
           </View>
 
-          <Text style={S.secaoTitulo}>Impacto do Fio B - Lei no 14.300/2022</Text>
+          <Text style={S.secaoTitulo}>Impacto do Fio B - Lei nº 14.300/2022</Text>
           {enquadramento.elegivelArt26 ? (
             <View style={S.alertaVerde}>
               <Text style={S.alertaTexto}>
@@ -479,11 +479,11 @@ export function PropostaPDF({ data }: { data: PropostaData }) {
               <Text style={[S.tabelaHeaderCell, { flex: 1, textAlign: 'right' }]}>Valor</Text>
             </View>
             {[
-              ['Kit solar (modulos + inversor)', precificacao.custoKit],
-              ['Estrutura de fixacao', precificacao.custoEstrutura],
-              ['Materiais eletricos', precificacao.custoMateriais],
-              ['Mao de obra de instalacao', precificacao.custoMaoDeObra],
-              ['Projeto eletrico + ART CREA', precificacao.custoProjetoArt],
+              ['Kit solar (módulos + inversor)', precificacao.custoKit],
+              ['Estrutura de fixação', precificacao.custoEstrutura],
+              ['Materiais elétricos', precificacao.custoMateriais],
+              ['Mão de obra de instalação', precificacao.custoMaoDeObra],
+              ['Projeto elétrico + ART CREA', precificacao.custoProjetoArt],
               ...(precificacao.custoOutros > 0 ? [['Outros', precificacao.custoOutros]] as [string, number][] : []),
             ].map(([label, valor], idx) => (
               <View key={idx} style={idx % 2 === 0 ? S.tabelaRow : S.tabelaRowAlt}>
@@ -540,7 +540,7 @@ export function PropostaPDF({ data }: { data: PropostaData }) {
               <View style={{ borderTopWidth: 1, borderTopColor: '#ccc', width: 200, paddingTop: 8, alignItems: 'center' }}>
                 <Text style={{ fontSize: 9, color: COR_TEXTO }}>{empresa.responsavelTecnico}</Text>
                 <Text style={{ fontSize: 8, color: COR_CINZA }}>{empresa.razaoSocial}</Text>
-                {empresa.crea && <Text style={{ fontSize: 8, color: COR_CINZA }}>CREA-{empresa.uf} no {empresa.crea}</Text>}
+                {empresa.crea && <Text style={{ fontSize: 8, color: COR_CINZA }}>CREA-{empresa.uf} nº {empresa.crea}</Text>}
               </View>
             </View>
           )}

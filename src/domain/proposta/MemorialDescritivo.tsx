@@ -282,7 +282,7 @@ export function MemorialDescritivo({ data }: { data:any }) {
             <Text style={S.bold}>{cliente.cidade}, {cliente.uf}</Text>, com inclinação de{' '}
             <Text style={S.bold}>{localizacao.inclinacaoGraus}°</Text> e orientada ao{' '}
             <Text style={S.bold}>{localizacao.orientacaoPrincipal}</Text>
-            {localizacao.desvioAzimuthalGraus !== 0 ? ` com desvio azimutal de ${Math.abs(localizacao.desvioAzimuthalGraus)}o` : ''}.
+            {localizacao.desvioAzimuthalGraus !== 0 ? ` com desvio azimutal de ${Math.abs(localizacao.desvioAzimuthalGraus)}°` : ''}.
           </Text>
           {(localizacao.utmE || localizacao.utmN) && (
             <Text style={S.para}>
@@ -375,18 +375,18 @@ export function MemorialDescritivo({ data }: { data:any }) {
             {[
               ['Marca',                    kit.marcaInversor || '-'],
               ['Modelo',                   kit.modeloInversor || '-'],
-              ['Potencia Nominal de Saida', `${kit.potenciaInversorKW} kW`],
-              ['Faixa de Tensao MPPT',     kit.faixaMpptMinV > 0 ? `${kit.faixaMpptMinV}V - ${kit.faixaMpptMaxV}V` : '-'],
-              ['Tensao Maxima de Entrada', kit.tensaoMaxEntradaV > 0 ? `${kit.tensaoMaxEntradaV} V` : '-'],
-              ['Numero de MPPTs',          `${kit.numMppt}`],
-              ['Tensao Nominal de Saida',  `${kit.tensaoSaidaV} V CA`],
-              ['Corrente Maxima de Saida', kit.corrMaxSaidaA > 0 ? `${fmtN(kit.corrMaxSaidaA,2)} A` : '-'],
-              ['Frequencia Nominal',       '60 Hz'],
-              ['Fator de Potencia',        kit.fatorPotencia || '>0.99'],
-              ['Distorcao Harmonica (THD)', kit.thd || '<3%'],
-              ['Eficiencia Maxima',        kit.eficienciaInversorPercent > 0 ? `${fmtN(kit.eficienciaInversorPercent,1)}%` : '-'],
-              ['Classificacao do Gabinete', kit.ipGabinete || 'IP65'],
-              ['Tensao Max. CC do Sistema',tensaoSistCC > 0 ? `${fmtN(tensaoSistCC,0)} V` : '-'],
+              ['Potência Nominal de Saída', `${kit.potenciaInversorKW} kW`],
+              ['Faixa de Tensão MPPT',     kit.faixaMpptMinV > 0 ? `${kit.faixaMpptMinV}V - ${kit.faixaMpptMaxV}V` : '-'],
+              ['Tensão Máxima de Entrada', kit.tensaoMaxEntradaV > 0 ? `${kit.tensaoMaxEntradaV} V` : '-'],
+              ['Número de MPPTs',          `${kit.numMppt}`],
+              ['Tensão Nominal de Saída',  `${kit.tensaoSaidaV} V CA`],
+              ['Corrente Máxima de Saída', kit.corrMaxSaidaA > 0 ? `${fmtN(kit.corrMaxSaidaA,2)} A` : '-'],
+              ['Frequência Nominal',       '60 Hz'],
+              ['Fator de Potência',        kit.fatorPotencia || '>0.99'],
+              ['Distorção Harmônica (THD)', kit.thd || '<3%'],
+              ['Eficiência Máxima',        kit.eficienciaInversorPercent > 0 ? `${fmtN(kit.eficienciaInversorPercent,1)}%` : '-'],
+              ['Classificação do Gabinete', kit.ipGabinete || 'IP65'],
+              ['Tensão Máx. CC do Sistema',tensaoSistCC > 0 ? `${fmtN(tensaoSistCC,0)} V` : '-'],
             ].map(([lbl,val],i) => <SpecRow key={i} label={lbl} val={val} alt={i%2===1} />)}
           </View>
         </View>

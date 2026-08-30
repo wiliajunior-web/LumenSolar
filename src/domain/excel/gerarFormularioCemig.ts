@@ -201,7 +201,7 @@ export function gerarFormularioCemigMicroGD(dados: any): void {
 
   ws['!ref'] = 'A1:AT295';
 
-  XLSX.utils.book_append_sheet(wb, ws, 'Formulario_Preenchido');
+  XLSX.utils.book_append_sheet(wb, ws, 'Formulário_Preenchido');
 
   // Aba de instruções
   const wsInst: Record<string, any> = {};
@@ -209,7 +209,7 @@ export function gerarFormularioCemigMicroGD(dados: any): void {
     ['INSTRUÇÕES DE USO — Formulário CEMIG MicroGD'],
     [''],
     ['1. Abra o arquivo ORIGINAL do formulário CEMIG (Formulario-MicroGD_Rev_N4.xlsx)'],
-    ['2. Copie os valores da aba "Formulario_Preenchido" para as células correspondentes no formulário original'],
+    ['2. Copie os valores da aba "Formulário_Preenchido" para as células correspondentes no formulário original'],
     ['3. Verifique os campos de dropdown (Tipo de Solicitação, Tipo de Edificação) — selecionar na lista'],
     ['4. Assine digitalmente ou imprima para assinatura manual (Seção 9)'],
     [''],
@@ -231,7 +231,7 @@ export function gerarFormularioCemigMicroGD(dados: any): void {
     if (row[0]) wsInst[`A${i+1}`] = { t: 's', v: row[0] };
   });
   wsInst['!ref'] = `A1:A${instrucoes.length}`;
-  XLSX.utils.book_append_sheet(wb, wsInst, 'Instrucoes');
+  XLSX.utils.book_append_sheet(wb, wsInst, 'Instruções');
 
   // Download
   const nomeCliente = (cliente?.nome || 'Cliente').replace(/\s+/g,'_').replace(/[^a-zA-Z0-9_]/g,'');

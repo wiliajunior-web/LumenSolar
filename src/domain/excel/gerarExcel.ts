@@ -697,7 +697,7 @@ export function gerarExcelAuditoria(dados: any): void {
   const PR_MARG = r; setStr(ws5, r, 1, 'Margem de lucro desejada'); setFrm(ws5, r, 2, `=${E(ROW_MARG)}`, F_PCT); r++;
   const PR_DIV  = r; setStr(ws5, r, 1, 'Divisor (1 − imp − margem)'); setFrm(ws5, r, 2, `=1-B${PR_IMP}-B${PR_MARG}`); r++;
   const PR_VER  = r; setStr(ws5, r, 1, 'VERIFICAÇÃO: divisor > 0');
-  setFrm(ws5, r, 2, `=IF(B${PR_DIV}>0,"OK","IMPOSSIVEL — IMP+MARGEM >= 100%")`); r++;
+  setFrm(ws5, r, 2, `=IF(B${PR_DIV}>0,"OK","IMPOSSÍVEL — IMP+MARGEM >= 100%")`); r++;
   const PR_PREC = r; setStr(ws5, r, 1, 'PREÇO DE VENDA (R$)');
   setFrm(ws5, r, 2, `=IF(B${PR_DIV}>0,B${PR_TOT}/B${PR_DIV},0)`, F_BRL); setStr(ws5, r, 3, 'Preço = Custo / (1 − Impostos − Margem)'); r++;
   const PR_TIMPO= r; setStr(ws5, r, 1, 'Imposto sobre a venda (R$)'); setFrm(ws5, r, 2, `=B${PR_PREC}*B${PR_IMP}`, F_BRL); setStr(ws5, r, 3, 'Imposto = Preço × Alíquota'); r++;
@@ -710,7 +710,7 @@ export function gerarExcelAuditoria(dados: any): void {
   setStr(ws5, r, 1, 'BALANÇO'); setFrm(ws5, r, 2, `=IF(B${r-1}<0.01,"OK","VERIFICAR")`); r++;
 
   updateRef(ws5, r, 3);
-  XLSX.utils.book_append_sheet(wb, ws5, 'Precificacao');
+  XLSX.utils.book_append_sheet(wb, ws5, 'Precificação');
 
   // ═══════════════════════════════════════════════════════════════════════════
   // ABA 6 — TABELA PRICE
@@ -720,7 +720,7 @@ export function gerarExcelAuditoria(dados: any): void {
   r = 1;
   setStr(ws6, r, 1, 'TABELA PRICE — PMT = PV × i × (1+i)^n / ((1+i)^n − 1)'); r+=2;
 
-  setStr(ws6, r, 1, 'Valor financiado (R$)'); setFrm(ws6, r, 2, `=Precificacao!B${PR_PREC}`, F_BRL); r++;
+  setStr(ws6, r, 1, 'Valor financiado (R$)'); setFrm(ws6, r, 2, `=Precificação!B${PR_PREC}`, F_BRL); r++;
   const PRC_TAX= r; setStr(ws6, r, 1, 'Taxa mensal (Solfácil 48×)'); setFrm(ws6, r, 2, `=${E(ROW_SOLF48)}`, F_PCT); r++;
   const PRC_N  = r; setStr(ws6, r, 1, 'Número de parcelas'); setNum(ws6, r, 2, 48, F_INT); r+=2;
   const PRC_PMT= r; setStr(ws6, r, 1, 'PARCELA MENSAL');
@@ -751,7 +751,7 @@ export function gerarExcelAuditoria(dados: any): void {
   r = 1;
   setStr(ws7, r, 1, 'FLUXO DE CAIXA — 25 anos — TIR | VPL | Payback'); r+=2;
 
-  const FC_INV = r; setStr(ws7, r, 1, 'Investimento (R$)'); setFrm(ws7, r, 2, `=Precificacao!B${PR_PREC}`, F_BRL); r++;
+  const FC_INV = r; setStr(ws7, r, 1, 'Investimento (R$)'); setFrm(ws7, r, 2, `=Precificação!B${PR_PREC}`, F_BRL); r++;
   const FC_ECO = r; setStr(ws7, r, 1, 'Economia mensal Ano 1 (R$/mês)'); setFrm(ws7, r, 2, `=FioB_Economia!B${FE_ECO}`, F_BRL); r++;
   const FC_DEG = r; setStr(ws7, r, 1, 'Degradação anual'); setFrm(ws7, r, 2, `=${E(ROW_DEG)}`, F_PCT); r++;
   const FC_REA = r; setStr(ws7, r, 1, 'Reajuste tarifário anual'); setFrm(ws7, r, 2, `=${E(ROW_REA)}`, F_PCT); r++;

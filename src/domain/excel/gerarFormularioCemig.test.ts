@@ -83,7 +83,7 @@ describe('gerarFormularioCemigMicroGD — exercitando a função real de produç
     const gerados = readdirSync('.').filter(f => f.startsWith('FormularioCEMIG_MicroGD_') && f.endsWith('.xlsx'));
     expect(gerados.length).toBeGreaterThan(0);
     const wb = XLSX.readFile(gerados[0]);
-    const ws = wb.Sheets['Formulario_Preenchido'];
+    const ws = wb.Sheets['Formulário_Preenchido'];
 
     expect(ws[MAPA_CELULAS.uc_cpf]?.v).toBe('123.456.789-00');
     expect(ws[MAPA_CELULAS.uc_bairro]?.v).toBe('Centro');

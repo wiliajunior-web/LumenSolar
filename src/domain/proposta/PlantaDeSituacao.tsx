@@ -18,16 +18,16 @@ const GOLD = '#c9a227';
 const TEXT = '#1a1a1a';
 const MUTED = '#666';
 
-const safe = (s?: string) => (s || '')
-  .replace(/[ÀÁÂÃÄ]/g,'A').replace(/[àáâãä]/g,'a')
-  .replace(/Ç/g,'C').replace(/ç/g,'c')
-  .replace(/[ÈÉÊË]/g,'E').replace(/[èéêë]/g,'e')
-  .replace(/[ÌÍÎÏ]/g,'I').replace(/[ìíîï]/g,'i')
-  .replace(/[ÒÓÔÕÖ]/g,'O').replace(/[òóôõö]/g,'o')
-  .replace(/[ÙÚÛÜ]/g,'U').replace(/[ùúûü]/g,'u')
-  .replace(/Ñ/g,'N').replace(/ñ/g,'n')
-  .replace(/°/g,'o').replace(/²/g,'2').replace(/³/g,'3')
-  .replace(/×/g,'x').replace(/–/g,'-').replace(/—/g,'-');
+// BUG CORRIGIDO (ago/2026): esta função convertia todo acentuado (e °, ², ³,
+// travessão) para ASCII, sob a premissa de que "react-pdf com Helvetica não
+// cobre todo Unicode". Premissa falsa — ver o comentário completo em
+// `Procuracao.tsx` (mesma correção aplicada lá primeiro): o Helvetica padrão
+// do @react-pdf/renderer usa WinAnsiEncoding (cp1252), que cobre acentuação
+// PT-BR e esses símbolos; MemorialDescritivo.tsx e PropostaComercialPDF.tsx
+// já renderizavam acentos corretamente com a mesma fontFamily. Isso fazia o
+// nome do cliente sair sem acento na Planta de Situação, mesmo com o dado de
+// origem correto. Mantida só como guarda contra undefined/null.
+const safe = (s?: string) => s || '';
 
 const S = StyleSheet.create({
   page: { fontFamily:'Helvetica', fontSize:9, color:TEXT, backgroundColor:'#fff', padding:'26 30 40 30' },
@@ -90,7 +90,7 @@ export function PlantaDeSituacao({ data, mosaico }: { data: any; mosaico: Result
       <Page size="A4" style={S.page}>
         <View style={S.header}>
           <View>
-            <Text style={S.titulo}>PLANTA DE SITUACAO</Text>
+            <Text style={S.titulo}>PLANTA DE SITUAÇÃO</Text>
             <Text style={S.subtitulo}>{safe(cliente.nome || 'Cliente')} - {safe(cliente.cidade||'')}{cliente.uf?`/${cliente.uf}`:''} {localizacao.numeroUC?`- UC ${localizacao.numeroUC}`:''}</Text>
           </View>
           <Text style={{ fontSize:8, color:MUTED }}>{safe(empresa.nomeFantasia || empresa.razaoSocial || '')}</Text>
@@ -100,12 +100,12 @@ export function PlantaDeSituacao({ data, mosaico }: { data: any; mosaico: Result
           <Image src={mosaico.dataUri} style={S.img} />
         </View>
         <Text style={S.legendaImg}>
-          {`Imagem de satelite: Esri World Imagery (fonte publica, sem chave de API) — zoom ${mosaico.zoom}. Marcador vermelho: local do padrao de entrada / medidor (referencia: endereco geocodificado da UC).`}
+          {`Imagem de satélite: Esri World Imagery (fonte pública, sem chave de API) — zoom ${mosaico.zoom}. Marcador vermelho: local do padrão de entrada / medidor (referência: endereço geocodificado da UC).`}
         </Text>
 
         <View style={S.avisoBox}>
           <Text style={S.avisoTxt}>
-            {'IMPORTANTE (conforme modelos de planta de situacao da CEMIG): o marcador vermelho indica o endereco da UC, usado aqui como referencia para o local do padrao de entrada. A CEMIG tambem exige a demarcacao do local de instalacao das placas solares (e, em caso de mudanca de local do padrao, a distancia entre o local atual e o novo local) — este software nao tem como inferir automaticamente o poligono do telhado/area de instalacao a partir apenas do endereco. Demarque manualmente essas areas sobre esta imagem (ex.: em um editor de PDF/imagem) antes de enviar este documento a distribuidora.'}
+            {'IMPORTANTE (conforme modelos de planta de situação da CEMIG): o marcador vermelho indica o endereço da UC, usado aqui como referência para o local do padrão de entrada. A CEMIG também exige a demarcação do local de instalação das placas solares (e, em caso de mudança de local do padrão, a distância entre o local atual e o novo local) — este software não tem como inferir automaticamente o polígono do telhado/área de instalação a partir apenas do endereço. Demarque manualmente essas áreas sobre esta imagem (ex.: em um editor de PDF/imagem) antes de enviar este documento à distribuidora.'}
           </Text>
         </View>
 
@@ -115,11 +115,11 @@ export function PlantaDeSituacao({ data, mosaico }: { data: any; mosaico: Result
             <Text style={S.tblHeadCell}>VALOR</Text>
           </View>
           {[
-            ['Endereco buscado', safe(mosaico.enderecoEncontrado)],
+            ['Endereço buscado', safe(mosaico.enderecoEncontrado)],
             ['Latitude / Longitude', `${N6(mosaico.latitude)}, ${N6(mosaico.longitude)}`],
-            ['UTM (do endereco geocodificado)', `Fuso ${utmGeocodificado.fuso}${utmGeocodificado.hemisferio} — E=${utmGeocodificado.utmE.toLocaleString('pt-BR')} N=${utmGeocodificado.utmN.toLocaleString('pt-BR')}`],
-            ['UTM digitada no projeto (passo Local)', temUtmDigitada ? `Fuso ${utmDigitada!.fuso}${utmDigitada!.hemisferio} — E=${fmtUtm(utmDigitada!.utmE)} N=${fmtUtm(utmDigitada!.utmN)}` : 'nao preenchida'],
-            ['No da UC', localizacao.numeroUC || '-'],
+            ['UTM (do endereço geocodificado)', `Fuso ${utmGeocodificado.fuso}${utmGeocodificado.hemisferio} — E=${utmGeocodificado.utmE.toLocaleString('pt-BR')} N=${utmGeocodificado.utmN.toLocaleString('pt-BR')}`],
+            ['UTM digitada no projeto (passo Local)', temUtmDigitada ? `Fuso ${utmDigitada!.fuso}${utmDigitada!.hemisferio} — E=${fmtUtm(utmDigitada!.utmE)} N=${fmtUtm(utmDigitada!.utmN)}` : 'não preenchida'],
+            ['Nº da UC', localizacao.numeroUC || '-'],
           ].map(([lbl,val],i) => (
             <View key={i} style={i%2===1?S.tblRowAlt:S.tblRow}>
               <Text style={S.tblCellLeft}>{lbl}</Text>
@@ -131,16 +131,16 @@ export function PlantaDeSituacao({ data, mosaico }: { data: any; mosaico: Result
         {divergenciaSuspeita && (
           <View style={S.avisoBox}>
             <Text style={S.avisoTxt}>
-              {`ATENCAO: a UTM digitada no projeto esta a aproximadamente ${Math.round(divergenciaM!)}m da UTM do endereco geocodificado (mesmo fuso). Isso pode indicar UTM digitada incorretamente, ou apenas que o endereco textual (geocodificacao por rua) nao aponta para o ponto exato da instalacao dentro do lote — confira antes de enviar a distribuidora.`}
+              {`ATENÇÃO: a UTM digitada no projeto está a aproximadamente ${Math.round(divergenciaM!)}m da UTM do endereço geocodificado (mesmo fuso). Isso pode indicar UTM digitada incorretamente, ou apenas que o endereço textual (geocodificação por rua) não aponta para o ponto exato da instalação dentro do lote — confira antes de enviar à distribuidora.`}
             </Text>
           </View>
         )}
 
         <View style={S.avisoBox}>
           <Text style={S.avisoTxt}>
-            AVISO: imagem de satelite e geocodificacao de fontes publicas gratuitas (Esri World Imagery + OpenStreetMap
-            Nominatim), sem garantia de atualizacao recente da imagem nem de precisao abaixo de poucos metros. Confira
-            visualmente que o marcador esta sobre o imovel correto antes de anexar este documento.
+            AVISO: imagem de satélite e geocodificação de fontes públicas gratuitas (Esri World Imagery + OpenStreetMap
+            Nominatim), sem garantia de atualização recente da imagem nem de precisão abaixo de poucos metros. Confira
+            visualmente que o marcador está sobre o imóvel correto antes de anexar este documento.
           </Text>
         </View>
 

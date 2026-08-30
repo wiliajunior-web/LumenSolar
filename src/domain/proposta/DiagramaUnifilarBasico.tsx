@@ -28,17 +28,17 @@ const TEXT = '#1a1a1a';
 const MUTED = '#666';
 const LINE = '#2a2a2a';
 
-// Converte acentuados para ASCII (react-pdf com Helvetica não cobre todo Unicode)
-const safe = (s?: string) => (s || '')
-  .replace(/[ÀÁÂÃÄ]/g,'A').replace(/[àáâãä]/g,'a')
-  .replace(/Ç/g,'C').replace(/ç/g,'c')
-  .replace(/[ÈÉÊË]/g,'E').replace(/[èéêë]/g,'e')
-  .replace(/[ÌÍÎÏ]/g,'I').replace(/[ìíîï]/g,'i')
-  .replace(/[ÒÓÔÕÖ]/g,'O').replace(/[òóôõö]/g,'o')
-  .replace(/[ÙÚÛÜ]/g,'U').replace(/[ùúûü]/g,'u')
-  .replace(/Ñ/g,'N').replace(/ñ/g,'n')
-  .replace(/°/g,'o').replace(/²/g,'2').replace(/³/g,'3')
-  .replace(/×/g,'x').replace(/–/g,'-').replace(/—/g,'-');
+// BUG CORRIGIDO (ago/2026): esta função convertia todo acentuado (e °, ², ³,
+// travessão) para ASCII, sob a premissa de que "react-pdf com Helvetica não
+// cobre todo Unicode". Premissa falsa — ver o comentário completo em
+// `Procuracao.tsx` (mesma correção aplicada lá primeiro): o Helvetica padrão
+// do @react-pdf/renderer usa WinAnsiEncoding (cp1252), que cobre acentuação
+// PT-BR e esses símbolos; MemorialDescritivo.tsx e PropostaComercialPDF.tsx
+// já renderizavam acentos corretamente com a mesma fontFamily. Isso fazia o
+// nome do cliente ("Ana Maria Vieira de Sá e Silva"), a distribuidora, a
+// descrição do DPS e os alertas saírem sem acento no DUB, mesmo com o dado
+// de origem correto. Mantida só como guarda contra undefined/null.
+const safe = (s?: string) => s || '';
 
 const S = StyleSheet.create({
   page: { fontFamily:'Helvetica', fontSize:9, color:TEXT, backgroundColor:'#fff', padding:'26 30 40 30' },
@@ -146,8 +146,8 @@ function DiagramaSvg({ dados }: { dados: ReturnType<typeof montarDadosDiagrama> 
         {'ACESSANTE'}
       </Text>
 
-      <Bloco x={xs[0]} y={yLine} w={bW} h={bH} label={`REDE ${nomeDistribuidora}`} sub="Concessionaria" />
-      <Bloco x={xs[1]} y={yLine} w={bW} h={bH} label="PADRAO DE ENTRADA" sub="Medidor bidirecional" />
+      <Bloco x={xs[0]} y={yLine} w={bW} h={bH} label={`REDE ${nomeDistribuidora}`} sub="Concessionária" />
+      <Bloco x={xs[1]} y={yLine} w={bW} h={bH} label="PADRÃO DE ENTRADA" sub="Medidor bidirecional" />
       <Bloco x={xs[2]} y={yLine} w={bW} h={bH} label={`INVERSOR${potCA?` ${N(potCA,1)}kW`:''}`} sub={dados.marcaInversor} />
       <Bloco x={xs[3]} y={yLine} w={bW} h={bH} label={`STRING(S) FV (CC)`} sub={`${nStrings}x${modPorString}=${qtdModulos} mod. ${potModulo?`${potModulo}Wp`:''}`} />
 
@@ -162,7 +162,7 @@ function DiagramaSvg({ dados }: { dados: ReturnType<typeof montarDadosDiagrama> 
       {/* Rótulos de proteção — sempre centrados sob o segmento a que se referem, nunca sobre um bloco */}
       <RotuloSegmento entreIdx={1} offsetY={-16} texto={`Disjuntor ${disjCA}A`} cor={BLUE} bold />
       <RotuloSegmento entreIdx={1} offsetY={4} texto={`Cabo CA ${secaoCA}mm2`} cor={MUTED} />
-      <RotuloSegmento entreIdx={2} offsetY={-16} texto={`Fusivel ${fusivel||'-'}A`} cor={BLUE} bold />
+      <RotuloSegmento entreIdx={2} offsetY={-16} texto={`Fusível ${fusivel||'-'}A`} cor={BLUE} bold />
       <RotuloSegmento entreIdx={2} offsetY={4} texto={`Cabo CC ${secaoCC}mm2`} cor={MUTED} />
       <RotuloSegmento entreIdx={2} offsetY={17} texto={`DPS CC ${dpsCC}kA`} cor={BLUE} />
 
@@ -237,7 +237,7 @@ export function DiagramaUnifilarBasico({ data }: { data: any }) {
       <Page size="A4" style={S.page}>
         <View style={S.header}>
           <View>
-            <Text style={S.titulo}>DIAGRAMA UNIFILAR BASICO (DUB)</Text>
+            <Text style={S.titulo}>DIAGRAMA UNIFILAR BÁSICO (DUB)</Text>
             <Text style={S.subtitulo}>{safe(cliente.nome || 'Cliente')} - {safe(cliente.cidade||'')}{cliente.uf?`/${cliente.uf}`:''} {localizacao.numeroUC?`- UC ${localizacao.numeroUC}`:''}</Text>
           </View>
           <Text style={{ fontSize:8, color:MUTED }}>{safe(empresa.nomeFantasia || empresa.razaoSocial || '')}</Text>
@@ -245,19 +245,19 @@ export function DiagramaUnifilarBasico({ data }: { data: any }) {
 
         <View style={S.avisoBox}>
           <Text style={S.avisoTxt}>
-            AVISO: Diagrama unifilar SIMPLIFICADO gerado automaticamente a partir dos dados do projeto (potencias,
-            correntes, protecoes calculadas conforme NBR 5410 e NBR 16690). Nao substitui um projeto eletrico
-            completo com simbologia normalizada (NBR 5444) e exige revisao e assinatura (ART) de um responsavel
-            tecnico habilitado antes de submissao a distribuidora. Conforme exemplo oficial de DUB da CEMIG (Anexo
-            1), o diagrama deve representar TODOS os modulos fotovoltaicos e inversores da central geradora — para
+            AVISO: Diagrama unifilar SIMPLIFICADO gerado automaticamente a partir dos dados do projeto (potências,
+            correntes, proteções calculadas conforme NBR 5410 e NBR 16690). Não substitui um projeto elétrico
+            completo com simbologia normalizada (NBR 5444) e exige revisão e assinatura (ART) de um responsável
+            técnico habilitado antes de submissão à distribuidora. Conforme exemplo oficial de DUB da CEMIG (Anexo
+            1), o diagrama deve representar TODOS os módulos fotovoltaicos e inversores da central geradora — para
             sistemas com mais de um inversor, edite manualmente o PDF (ou o diagrama fonte) para acrescentar as
-            unidades adicionais antes do envio, pois este gerador automatico desenha apenas 1 bloco de inversor.
+            unidades adicionais antes do envio, pois este gerador automático desenha apenas 1 bloco de inversor.
           </Text>
         </View>
 
         <DiagramaSvg dados={dados} />
 
-        <Text style={S.legendaTitulo}>PROTECAO E CABEAMENTO — LADO CA (calculado: NBR 5410, curso Processo Homologatorio)</Text>
+        <Text style={S.legendaTitulo}>PROTEÇÃO E CABEAMENTO — LADO CA (calculado: NBR 5410, curso Processo Homologatório)</Text>
         <View style={S.tbl}>
           <View style={S.tblHead}>
             <Text style={S.tblHeadCell}>GRANDEZA</Text>
@@ -265,10 +265,10 @@ export function DiagramaUnifilarBasico({ data }: { data: any }) {
           </View>
           {[
             ['Corrente de projeto (Ib)', `${N(dados.caboCA.ibA)} A`],
-            ['Secao do cabo CA', `${dados.caboCA.secaoMm2} mm2`],
+            ['Seção do cabo CA', `${dados.caboCA.secaoMm2} mm2`],
             ['Disjuntor CA (In)', `${dados.caboCA.disjuntorA} A`],
             ['DPS CA', `${dados.dpsCA} kA — ${safe(calcularDPSCA(dados.potCA).descricao)}`],
-            ['Queda de tensao CA', `${N(dados.caboCA.quedaTensaoPct,2)}% ${dados.caboCA.quedaTensaoOk ? '(<= 4%, OK)' : '(> 4%, ATENCAO)'}`],
+            ['Queda de tensão CA', `${N(dados.caboCA.quedaTensaoPct,2)}% ${dados.caboCA.quedaTensaoOk ? '(<= 4%, OK)' : '(> 4%, ATENÇÃO)'}`],
           ].map(([lbl,val],i) => (
             <View key={i} style={i%2===1?S.tblRowAlt:S.tblRow}>
               <Text style={S.tblCellLeft}>{lbl}</Text>
@@ -277,20 +277,20 @@ export function DiagramaUnifilarBasico({ data }: { data: any }) {
           ))}
         </View>
 
-        <Text style={S.legendaTitulo}>PROTECAO E CABEAMENTO — LADO CC (calculado: NBR 16690:2019)</Text>
+        <Text style={S.legendaTitulo}>PROTEÇÃO E CABEAMENTO — LADO CC (calculado: NBR 16690:2019)</Text>
         <View style={S.tbl}>
           <View style={S.tblHead}>
             <Text style={S.tblHeadCell}>GRANDEZA</Text>
             <Text style={S.tblHeadCell}>VALOR</Text>
           </View>
           {[
-            ['Configuracao das strings', `${dados.nStrings} string(s) x ${dados.modPorString} modulo(s) = ${dados.qtdModulos} modulos`],
+            ['Configuração das strings', `${dados.nStrings} string(s) x ${dados.modPorString} módulo(s) = ${dados.qtdModulos} módulos`],
             ['Corrente de curto-circuito total (Isc)', `${N(dados.protecaoCC.correnteCurtoCircuitoTotalA)} A`],
-            ['Secao do cabo CC (solar)', `${dados.protecaoCC.secaoCaboMm2} mm2`],
-            ['Fusivel de string', dados.protecaoCC.fusivelStringA > 0 ? `${dados.protecaoCC.fusivelStringA} A` : 'a definir'],
+            ['Seção do cabo CC (solar)', `${dados.protecaoCC.secaoCaboMm2} mm2`],
+            ['Fusível de string', dados.protecaoCC.fusivelStringA > 0 ? `${dados.protecaoCC.fusivelStringA} A` : 'a definir'],
             ['DPS CC', `${dados.protecaoCC.dpsClasseKA} kA`],
             ['Voc do sistema (STC)', `${N(dados.protecaoCC.vocSistemaV,0)} V`],
-            ['Voc maximo no frio (5oC)', `${N(dados.protecaoCC.vocMaximoFrioV,0)} V de ${dados.protecaoCC.limiteTensaoV} V ${dados.protecaoCC.dentroDoLimiteTensao ? '(OK)' : '(EXCEDE O LIMITE)'}`],
+            ['Voc máximo no frio (5°C)', `${N(dados.protecaoCC.vocMaximoFrioV,0)} V de ${dados.protecaoCC.limiteTensaoV} V ${dados.protecaoCC.dentroDoLimiteTensao ? '(OK)' : '(EXCEDE O LIMITE)'}`],
           ].map(([lbl,val],i) => (
             <View key={i} style={i%2===1?S.tblRowAlt:S.tblRow}>
               <Text style={S.tblCellLeft}>{lbl}</Text>
@@ -301,13 +301,13 @@ export function DiagramaUnifilarBasico({ data }: { data: any }) {
 
         {alertas.length > 0 && (
           <View style={S.alertaBox}>
-            {alertas.map((a, i) => <Text key={i} style={S.alertaTxt}>ATENCAO: {safe(a)}</Text>)}
+            {alertas.map((a, i) => <Text key={i} style={S.alertaTxt}>ATENÇÃO: {safe(a)}</Text>)}
           </View>
         )}
 
         <View style={S.footer} fixed>
           <Text style={S.footerTxt}>{safe(empresa.razaoSocial||'')} - CNPJ: {empresa.cnpj||'-'}</Text>
-          <Text style={S.footerTxt}>Diagrama simplificado — requer revisao de responsavel tecnico (ART)</Text>
+          <Text style={S.footerTxt}>Diagrama simplificado — requer revisão de responsável técnico (ART)</Text>
         </View>
       </Page>
     </Document>

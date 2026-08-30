@@ -48,7 +48,7 @@ describe('PlantaDeSituacao — formatação da UTM digitada pelo usuário', () =
     const data = dataBase({ localizacao: {} });
     expect(() => PlantaDeSituacao({ data, mosaico: mosaicoBase })).not.toThrow();
     const texto = extractPdfTextJoined(PlantaDeSituacao({ data, mosaico: mosaicoBase }));
-    expect(texto).toContain('nao preenchida');
+    expect(texto).toContain('não preenchida');
   });
 
   it('UTM digitada com valor não-numérico (entrada inválida do usuário) não quebra — mostra o texto bruto', () => {
