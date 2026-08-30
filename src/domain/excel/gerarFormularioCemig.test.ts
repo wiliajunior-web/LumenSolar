@@ -94,6 +94,97 @@ describe('gerarFormularioCemigMicroGD — exercitando a função real de produç
     expect(ws[MAPA_CELULAS.armazenamento]?.v).toBe('Não');
     expect(ws[MAPA_CELULAS.telhado_arrendado]?.v).toBe('Não');
   });
+
+  // BUG CORRIGIDO (ago/2026): caso real (Ana Maria Vieira de Sá e Silva) tinha
+  // `localizacao.utmE`/`utmN` = "−48,2049444"/"−18,6366583" — uma
+  // latitude/longitude do Google Maps (sinal de menos Unicode U+2212, não
+  // hífen-menos ASCII, e vírgula decimal PT-BR) que foi parar nos campos de
+  // UTM por engano (ver parseNumeroBR.ts e utmValorPlausivel.test.ts para a
+  // causa raiz). O código antigo escrevia essa STRING direto numa célula
+  // XLSX tipo 'n' (numérico) sem convertê-la — o resultado viola a
+  // especificação OOXML (célula numérica precisa de um literal numérico
+  // válido). Verificado de duas formas contra o .xlsx gerado pelo código
+  // antigo: openpyxl (Python, parser rígido) recusava abrir o arquivo
+  // ("invalid literal for int()"); o próprio SheetJS (lib usada pelo app)
+  // não lançava, mas lia a célula de volta como v:null/w:"NAN" — perda
+  // silenciosa do dado, sem indício de erro. Dependendo de quem abrisse o
+  // Formulário antes de enviar à CEMIG, o resultado era "arquivo recusa
+  // abrir" ou "campo aparentemente vazio". A correção (`parseNumeroBR`)
+  // normaliza o sinal de menos Unicode e a vírgula ANTES de decidir o tipo
+  // da célula — então este valor específico (que É um número válido, só
+  // formatado de um jeito que `Number()` puro não reconhece) agora vai
+  // corretamente para uma célula tipo 'n' com o valor numérico certo
+  // (-48.2049444), em vez de uma célula 'n' com uma string inválida dentro.
+  it('REGRESSÃO — utmE/utmN com lat/long colada do Google Maps (sinal de menos Unicode) vira número válido, não corrompe o .xlsx', () => {
+    const menosUnicode = '−'; // U+2212 MINUS SIGN — caractere exato do caso real
+    const dados = {
+      cliente: { nome: 'Ana Maria Vieira de Sá e Silva' },
+      consumo: {},
+      localizacao: {
+        utmFuso: 22,
+        utmE: `${menosUnicode}48,2049444`,
+        utmN: `${menosUnicode}18,6366583`,
+      },
+      kit: {},
+      empresa: {},
+    };
+    gerarFormularioCemigMicroGD(dados);
+
+    const gerados = readdirSync('.').filter(f => f.startsWith('FormularioCEMIG_MicroGD_') && f.endsWith('.xlsx'));
+    expect(gerados.length).toBeGreaterThan(0);
+    const wb = XLSX.readFile(gerados[0]);
+    const ws = wb.Sheets['Formulário_Preenchido'];
+
+    expect(ws[MAPA_CELULAS.utm_fuso]?.v).toBe(22);
+    expect(ws[MAPA_CELULAS.utm_fuso]?.t).toBe('n');
+    // Valor calculado manualmente: "−48,2049444" (menos Unicode + vírgula) é
+    // o número -48.2049444, não uma string opaca.
+    expect(ws[MAPA_CELULAS.utm_e]?.t).toBe('n');
+    expect(ws[MAPA_CELULAS.utm_e]?.v).toBeCloseTo(-48.2049444, 6);
+    expect(ws[MAPA_CELULAS.utm_n]?.t).toBe('n');
+    expect(ws[MAPA_CELULAS.utm_n]?.v).toBeCloseTo(-18.6366583, 6);
+  });
+
+  // Complementa o teste acima: um valor que NÃO é número de jeito nenhum
+  // (nem com a normalização de menos Unicode/vírgula) precisa continuar
+  // indo como texto — é o caso de defesa que `escreverNumerico()` existe
+  // para cobrir (ex: usuário cola um endereço ou texto qualquer no campo
+  // UTM, não só uma lat/long malformatada).
+  it('utmE com texto que não é número de jeito nenhum vai como texto (tipo "s"), sem corromper o arquivo', () => {
+    const dados = {
+      cliente: { nome: 'Cliente Teste' },
+      consumo: {},
+      localizacao: { utmFuso: 22, utmE: 'endereço não encontrado', utmN: '7937092.29' },
+      kit: {},
+      empresa: {},
+    };
+    gerarFormularioCemigMicroGD(dados);
+    const gerados = readdirSync('.').filter(f => f.startsWith('FormularioCEMIG_MicroGD_') && f.endsWith('.xlsx'));
+    const wb = XLSX.readFile(gerados[0]);
+    const ws = wb.Sheets['Formulário_Preenchido'];
+    expect(ws[MAPA_CELULAS.utm_e]?.t).toBe('s');
+    expect(ws[MAPA_CELULAS.utm_e]?.v).toBe('endereço não encontrado');
+    expect(ws[MAPA_CELULAS.utm_n]?.t).toBe('n');
+    expect(ws[MAPA_CELULAS.utm_n]?.v).toBe(7937092.29);
+  });
+
+  it('utmE/utmN com valor numérico válido continuam indo como número (tipo "n"), sem regressão', () => {
+    const dados = {
+      cliente: { nome: 'Cliente Teste' },
+      consumo: {},
+      localizacao: { utmFuso: 22, utmE: '794897.61', utmN: '7937092.29' },
+      kit: {},
+      empresa: {},
+    };
+    gerarFormularioCemigMicroGD(dados);
+    const gerados = readdirSync('.').filter(f => f.startsWith('FormularioCEMIG_MicroGD_') && f.endsWith('.xlsx'));
+    const wb = XLSX.readFile(gerados[0]);
+    const ws = wb.Sheets['Formulário_Preenchido'];
+    expect(ws[MAPA_CELULAS.utm_e]?.t).toBe('n');
+    expect(ws[MAPA_CELULAS.utm_e]?.v).toBe(794897.61);
+    expect(ws[MAPA_CELULAS.utm_n]?.t).toBe('n');
+    expect(ws[MAPA_CELULAS.utm_n]?.v).toBe(7937092.29);
+  });
 });
 
 describe('checklistDocumentosCEMIG', () => {

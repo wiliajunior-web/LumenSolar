@@ -27,6 +27,7 @@ import { DISTRIBUIDORAS } from '@data/distribuidoras';
 import { HSP_MEDIO_POR_UF } from '@data/hspPorUF';
 import { formatarNomeModulo } from '@domain/kit/formatarModulo';
 import { formatarCrea } from '@domain/empresa/cadastroEmpresa';
+import { normalizarNomeArquivo } from '@domain/shared/normalizarNomeArquivo';
 
 // ── Tipos SheetJS ─────────────────────────────────────────────────────────────
 type WS  = Record<string, any>;
@@ -54,8 +55,26 @@ function setStr(ws: WS, r: number, c: number, v: string) {
 function setNum(ws: WS, r: number, c: number, v: number, fmt?: CellFmt) {
   ws[ref(r,c)] = { t:'n', v, z: fmt ?? 'General' };
 }
+// BUG CORRIGIDO (ago/2026, auditoria de design): todas as 86 chamadas a
+// `setFrm()` neste arquivo passam a fórmula com "=" na frente (ex:
+// `=AVERAGE(B16:B27)`), mas a propriedade `.f` de uma célula SheetJS é
+// documentada como o TEXTO da fórmula SEM o sinal de igual — quem adiciona
+// o "=" na hora de gravar é a própria lib. Isso fazia toda célula de
+// fórmula da planilha "Auditoria" sair com "==" duplicado no XML
+// (confirmado inspecionando o .xlsx gerado, descompactado: `<f>=AVERAGE
+// (B16:B27)</f>` — o "=" de dentro do texto da fórmula É esse bug, o "="
+// que aparece antes dele no XLSX vem da própria lib). Não é uma violação
+// cosmética: viola a especificação OOXML (ECMA-376) para o elemento <f>.
+// Testado com LibreOffice Calc real (não só o SheetJS que gerou o arquivo):
+// abre e calcula sem erro (ERROR:0, valor correto), então o "==" não
+// quebrava visivelmente nas ferramentas testadas — mas escrever XML fora da
+// especificação é sempre um risco desnecessário (comportamento não
+// garantido entre versões/aplicativos), e a correção é trivial: remove o
+// "=" inicial antes de gravar, deixando `.f` no formato que a própria
+// biblioteca espera.
 function setFrm(ws: WS, r: number, c: number, f: string, fmt?: CellFmt, cached?: number) {
-  ws[ref(r,c)] = { t:'n', f, v: cached ?? 0, z: fmt ?? 'General' };
+  const formula = f.startsWith('=') ? f.slice(1) : f;
+  ws[ref(r,c)] = { t:'n', f: formula, v: cached ?? 0, z: fmt ?? 'General' };
 }
 
 function updateRef(ws: WS, maxR: number, maxC: number) {
@@ -804,7 +823,7 @@ export function gerarExcelAuditoria(dados: any): void {
   XLSX.utils.book_append_sheet(wb, ws7, 'Fluxo_Caixa');
 
   // ── Download ─────────────────────────────────────────────────────────────
-  const nomeCliente = (dados.cliente?.nome ?? 'Cliente').replace(/\s+/g,'_').replace(/[^a-zA-Z0-9_]/g,'');
+  const nomeCliente = normalizarNomeArquivo(dados.cliente?.nome ?? 'Cliente');
   const data = new Date().toISOString().slice(0,10);
   XLSX.writeFile(wb, `Auditoria_${nomeCliente}_${data}.xlsx`);
 }

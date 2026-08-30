@@ -10,6 +10,7 @@ import { PropostaPDF } from '@domain/proposta/PropostaPDF';
 import { CHECKLIST_PADRAO_CEMIG_MICROGD, resumoChecklist, type ItemChecklistDocumentacao } from '@domain/documentacaoCemig/checklist';
 import { cadastroEmpresaIncompleto, mensagemCadastroEmpresaIncompleto } from '@domain/empresa/cadastroEmpresa';
 import { latLonParaUTM } from '@domain/geografia/converterCoordenadas';
+import { parseNumeroBR } from '@domain/shared/parseNumeroBR';
 import { calcularCaboCA } from '@domain/dimensionamento/calcularCaboCA';
 import { calcularDPSCA, calcularProtecaoCC } from '@domain/dimensionamento/calcularProtecaoCC';
 import { calcularFDI, type ResultadoFDI } from '@domain/dimensionamento/calcularFDI';
@@ -1526,7 +1527,14 @@ export function camposEmpresaParaPreencherAoImportar(
 export function utmValorPlausivel(v: string): boolean {
   const s = String(v).trim();
   if (s === '') return true; // campo vazio — não acusa erro aqui
-  const n = Number(s.replace(',', '.'));
+  // BUG CORRIGIDO (ago/2026): usava `Number(s.replace(',','.'))`, que retorna
+  // NaN para um valor colado do Google Maps (sinal de menos Unicode −,
+  // U+2212 — não o hífen-menos ASCII que Number() reconhece) — e todo NaN
+  // aqui era tratado como "campo em edição", suprimindo o aviso. Resultado:
+  // o aviso NUNCA aparecia justamente no caso que o motivou (lat/long colada
+  // do Google Maps num campo UTM — ver parseNumeroBR.ts para o caso real e a
+  // verificação). `parseNumeroBR` normaliza esse sinal antes de converter.
+  const n = parseNumeroBR(s);
   if (!Number.isFinite(n)) return true; // valor não numérico/em edição (ex: "-", ".") — não acusa erro aqui
   return Math.abs(n) >= 1000;
 }

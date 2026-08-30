@@ -14,6 +14,9 @@
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const XLSX: typeof import('xlsx') = require('xlsx');
 
+import { normalizarNomeArquivo } from '@domain/shared/normalizarNomeArquivo';
+import { parseNumeroBR } from '@domain/shared/parseNumeroBR';
+
 /**
  * Mapa de células do formulário CEMIG MicroGD Rev. N4.
  *
@@ -146,6 +149,28 @@ export function gerarFormularioCemigMicroGD(dados: any): void {
     ws[celula] = { t: tipo, v: valor };
   };
 
+  // BUG CORRIGIDO (ago/2026, auditoria de design): `escrever(cel, valor, 'n')`
+  // era usado para utmE/utmN/utmFuso assumindo que o valor digitado pelo
+  // usuário já era um número válido. No caso real (Ana Maria Vieira de Sá e
+  // Silva), `localizacao.utmE` era a STRING "−48,2049444" (lat/long colada
+  // do Google Maps num campo UTM por engano — ver parseNumeroBR.ts). Uma
+  // célula XLSX tipo 'n' com esse valor viola a especificação OOXML (célula
+  // numérica precisa conter um literal numérico válido) — verificado de duas
+  // formas contra o .xlsx gerado pelo código antigo: openpyxl (Python)
+  // recusava abrir o arquivo ("invalid literal for int()"); o próprio
+  // SheetJS (lib usada pelo app) não lançava, mas lia a célula de volta como
+  // v:null/w:"NAN" — perda silenciosa do dado, sem nenhum indício de erro.
+  // Como este é justamente o Formulário oficial enviado à CEMIG, nenhum dos
+  // dois resultados é aceitável: se não dá para converter para um número
+  // finito, escreve como TEXTO (tipo 's') em vez de forçar tipo 'n' — o
+  // arquivo sempre abre corretamente, e o valor suspeito fica visível (em
+  // vez de sumir) para quem for revisar antes do envio.
+  const escreverNumerico = (celula: string, valorBruto: any) => {
+    const n = parseNumeroBR(valorBruto);
+    if (Number.isFinite(n)) escrever(celula, n, 'n');
+    else escrever(celula, String(valorBruto), 's');
+  };
+
   // ── Seção 1 ──────────────────────────────────────────────────────────
   escrever(MAPA_CELULAS.uc_numero,    localizacao?.numeroUC || '');
   escrever(MAPA_CELULAS.uc_titular,   cliente?.nome || '');
@@ -161,9 +186,9 @@ export function gerarFormularioCemigMicroGD(dados: any): void {
   // BUG CORRIGIDO (ago/2026): campo real na store é `utmFuso`, não `fusoUtm` — a
   // condição nunca era verdadeira e a célula do fuso UTM (formulário oficial CEMIG)
   // ficava sempre em branco mesmo com o usuário preenchendo o campo corretamente.
-  if (localizacao?.utmFuso)  escrever(MAPA_CELULAS.utm_fuso, localizacao.utmFuso, 'n');
-  if (localizacao?.utmE)     escrever(MAPA_CELULAS.utm_e,    localizacao.utmE, 'n');
-  if (localizacao?.utmN)     escrever(MAPA_CELULAS.utm_n,    localizacao.utmN, 'n');
+  if (localizacao?.utmFuso)  escreverNumerico(MAPA_CELULAS.utm_fuso, localizacao.utmFuso);
+  if (localizacao?.utmE)     escreverNumerico(MAPA_CELULAS.utm_e,    localizacao.utmE);
+  if (localizacao?.utmN)     escreverNumerico(MAPA_CELULAS.utm_n,    localizacao.utmN);
   escrever(MAPA_CELULAS.tipo_solicitacao, DEFAULTS_CEMIG.tipo_solicitacao);
   escrever(MAPA_CELULAS.tipo_edificacao,  DEFAULTS_CEMIG.tipo_edificacao);
   escrever(MAPA_CELULAS.tensao_atend,     tensao);
@@ -234,7 +259,7 @@ export function gerarFormularioCemigMicroGD(dados: any): void {
   XLSX.utils.book_append_sheet(wb, wsInst, 'Instruções');
 
   // Download
-  const nomeCliente = (cliente?.nome || 'Cliente').replace(/\s+/g,'_').replace(/[^a-zA-Z0-9_]/g,'');
+  const nomeCliente = normalizarNomeArquivo(cliente?.nome || 'Cliente');
   XLSX.writeFile(wb, `FormularioCEMIG_MicroGD_${nomeCliente}.xlsx`);
 }
 

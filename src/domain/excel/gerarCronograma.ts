@@ -13,6 +13,8 @@
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const XLSX: typeof import('xlsx') = require('xlsx');
 
+import { normalizarNomeArquivo } from '@domain/shared/normalizarNomeArquivo';
+
 interface ParamsCronograma {
   nomeCliente: string;
   enderecoInstalacao: string;
@@ -298,6 +300,6 @@ export function gerarCronograma(dados: ParamsCronograma): void {
 
   XLSX.utils.book_append_sheet(wb, ws, 'Cronograma');
 
-  const nomeArquivo = `Cronograma_${dados.nomeCliente.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '')}_${dados.potenciaKWp}kWp.xlsx`;
+  const nomeArquivo = `Cronograma_${normalizarNomeArquivo(dados.nomeCliente)}_${dados.potenciaKWp}kWp.xlsx`;
   XLSX.writeFile(wb, nomeArquivo);
 }

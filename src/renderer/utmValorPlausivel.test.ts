@@ -15,7 +15,25 @@ describe('utmValorPlausivel', () => {
     // Google Maps: -18,636501 / -48,205023 — foi parar direto em utmE/utmN.
     expect(utmValorPlausivel('-18.636501')).toBe(false);
     expect(utmValorPlausivel('-48.205023')).toBe(false);
-    expect(utmValorPlausivel('-48,2049444')).toBe(false); // formato exato gravado no .lumensolar do caso
+    expect(utmValorPlausivel('-48,2049444')).toBe(false); // hífen-menos ASCII comum
+  });
+
+  // BUG CORRIGIDO (ago/2026): o teste acima usa hífen-menos ASCII comum
+  // ('-', U+002D) no valor, mas o .lumensolar REAL do caso auditado grava
+  // "−48,2049444" — sinal de MENOS UNICODE (−, U+2212 MINUS SIGN), que
+  // é o caractere que o Google Maps usa ao copiar coordenadas, e que
+  // `Number()` não reconhece como parte de um número (retorna NaN). O teste
+  // acima, apesar do comentário anterior dizer "formato exato gravado no
+  // .lumensolar do caso", na prática nunca exercitava esse caractere —
+  // conferido byte a byte no arquivo real com
+  // `[hex(ord(c)) for c in loc['utmE']]` → primeiro byte é 0x2212, não
+  // 0x2D — e por isso a função continuava com o defeito (retornava `true`,
+  // sem aviso) mesmo com este teste "cobrindo" o caso. Este teste usa o
+  // caractere Unicode de fato, via escape, para não haver ambiguidade.
+  it('caso real EXATO (sinal de menos Unicode do Google Maps, não hífen-menos ASCII): também rejeita', () => {
+    const menosUnicode = '−'; // sinal de menos Unicode, U+2212 (Google Maps)
+    expect(utmValorPlausivel(`${menosUnicode}48,2049444`)).toBe(false);
+    expect(utmValorPlausivel(`${menosUnicode}18,6366583`)).toBe(false);
   });
 
   it('aceita coordenadas UTM reais (6-7 dígitos)', () => {
