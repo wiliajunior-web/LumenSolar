@@ -517,16 +517,59 @@ export default function App() {
   }
 
   function restaurarDados(data: any) {
-    const st = useProjetoStore.getState();
-    if (data.empresa)     st.atualizarEmpresa(data.empresa);
-    if (data.cliente)     st.atualizarCliente(data.cliente);
-    if (data.consumo)     st.atualizarConsumo(data.consumo);
-    if (data.localizacao) st.atualizarLocalizacao(data.localizacao);
-    if (data.kit)         st.atualizarKit(data.kit);
-    if (data.preco)       st.atualizarPreco(data.preco);
-    // Arquivos .lumensolar salvos antes desta funcionalidade não têm esse
-    // campo — cair no padrão (nada gerado/anexado ainda) em vez de undefined.
-    useProjetoStore.setState({ checklistDocumentacao: data.checklistDocumentacao ?? CHECKLIST_PADRAO_CEMIG_MICROGD } as any);
+    // BUG CORRIGIDO (ago/2026): auditoria encontrou a mesma classe de bug já
+    // corrigida em `novaProposta()` (ver comentário lá), deixada sem correção
+    // neste caminho irmão. `atualizarCliente`/`atualizarConsumo`/etc fazem
+    // MERGE raso (`{...atual, ...p}`), não substituição — importar um
+    // arquivo .lumensolar mais antigo (ou qualquer arquivo cujo JSON não
+    // tenha uma chave que o estado atual já tem preenchida, inclusive por
+    // `JSON.stringify` descartar chaves com valor `undefined`) deixava sobrar
+    // dado do cliente ANTERIOR (UTM, histórico de tarifa, grupo de tensão,
+    // nº de UC) misturado com os dados do cliente recém-importado.
+    // `calculoDesatualizado()` não detecta isso — ele só compara "os dados
+    // atuais batem com o que foi calculado", não "os dados atuais são uma
+    // mistura de dois clientes diferentes". Corrigido reaproveitando as
+    // MESMAS fábricas de estado padrão de `novaProposta()`: substituição
+    // completa (fábrica + dados do arquivo por cima), nunca merge sobre o
+    // que sobrou na store.
+    //
+    // `empresa` é tratado diferente de propósito: não é dado por-proposta, é
+    // configuração da EMPRESA (⚙ Configurações), com fonte própria
+    // (`carregarEmpresa()`/`salvarEmpresa()`, localStorage, carregada uma
+    // vez no boot do app — ver App.tsx ~435). O snapshot de empresa
+    // embutido no arquivo .lumensolar é só uma cópia de quando o arquivo foi
+    // salvo — pode estar desatualizado ou (no caso real que motivou esta
+    // correção) com Responsável Técnico/CREA/CNPJ ainda vazios, de antes do
+    // usuário preencher Configurações. Sobrescrever a config atual (já
+    // preenchida) com esse snapshot velho reintroduziria exatamente o bug de
+    // "Procuração sai com nome do engenheiro em branco" corrigido nesta
+    // mesma sessão, só que pelo caminho de importar um arquivo antigo em vez
+    // de nunca ter preenchido. Por isso: o snapshot do arquivo só preenche
+    // campos que a config atual não tem — nunca substitui um valor já
+    // preenchido.
+    const empresaAtual = useProjetoStore.getState().empresa;
+    const empresaFaltante = camposEmpresaParaPreencherAoImportar(empresaAtual, data.empresa);
+
+    useProjetoStore.setState({
+      cliente: { ...clientePadrao(), ...(data.cliente || {}) },
+      consumo: { ...consumoPadrao(), ...(data.consumo || {}) },
+      localizacao: { ...LOCALIZACAO_PADRAO, ...(data.localizacao || {}) },
+      kit: { ...kitPadrao(), ...(data.kit || {}) },
+      preco: { ...precoPadrao(empresaAtual), ...(data.preco || {}) },
+      empresa: Object.keys(empresaFaltante).length ? { ...empresaAtual, ...empresaFaltante } : empresaAtual,
+      // Um arquivo .lumensolar salvo (ver `salvar()` acima) nunca inclui
+      // dimensionamento/precificação/indicadores — só as entradas. Qualquer
+      // valor calculado que sobrasse aqui seria do cliente ANTERIOR, e o
+      // step "Resultado" da barra lateral mostraria "completo" para um
+      // cliente que ainda não foi calculado nenhuma vez.
+      dimensionamento: null, enquadramento: null, custosRecorrentes: null,
+      precificacao: null, indicadores: null, resultadoGrupoA: null,
+      percentuaisFioBPorAno: {}, detalhamentoPerdas: [],
+      ultimoCalculoAssinatura: null,
+      // Arquivos .lumensolar salvos antes desta funcionalidade não têm esse
+      // campo — cair no padrão (nada gerado/anexado ainda) em vez de undefined.
+      checklistDocumentacao: data.checklistDocumentacao ?? CHECKLIST_PADRAO_CEMIG_MICROGD,
+    } as any);
     setProposalId(data.id || gerarId());
     setNomeArquivoAtual('');
     setValidationErrors([]);
@@ -1279,6 +1322,31 @@ export function resumoFDI(r: Pick<ResultadoFDI, 'aprovado' | 'statusFDI' | 'crit
   if (!r.criterio2Ok) problemas.push('o número de módulos em série está fora da faixa de tensão que o inversor aceita');
   if (r.criterio3Avaliado && !r.criterio3Ok) problemas.push('há strings demais ligadas na mesma entrada MPPT para a corrente que ela suporta');
   return `✗ Ajuste necessário: ${problemas.join('; ')}.`;
+}
+
+// ADICIONADO (ago/2026): decide quais campos do snapshot de `empresa` embutido
+// num arquivo .lumensolar importado devem preencher a config ATUAL da
+// empresa (⚙ Configurações) — ver comentário completo em `restaurarDados()`,
+// App.tsx. Regra: o arquivo só PREENCHE lacunas (campo vazio/ausente na
+// config atual); nunca SOBRESCREVE um valor já preenchido. Extraída como
+// função pura exportada para ser testável — mesmo padrão de
+// utmValorPlausivel/resumoFDI, já que este projeto não tem infraestrutura de
+// teste de componente/interação de UI.
+export function camposEmpresaParaPreencherAoImportar(
+  empresaAtual: Record<string, any> | undefined | null,
+  empresaArquivo: Record<string, any> | undefined | null
+): Record<string, any> {
+  const atual = empresaAtual || {};
+  const arquivo = empresaArquivo || {};
+  const faltantes: Record<string, any> = {};
+  for (const chave of Object.keys(arquivo)) {
+    const valorAtual = atual[chave];
+    const valorArquivo = arquivo[chave];
+    if ((valorAtual === undefined || valorAtual === null || valorAtual === '') && valorArquivo) {
+      faltantes[chave] = valorArquivo;
+    }
+  }
+  return faltantes;
 }
 
 // ADICIONADO (ago/2026): checagem de plausibilidade para os campos UTM E/N
@@ -2663,7 +2731,7 @@ function TabResultado({ onPrev, onEmpresa }: { onPrev:()=>void; onEmpresa:()=>vo
     };
   }
 
-  async function gerarPDFCliente() {
+  async function gerarPDFCliente(silencioso = false) {
     setGerando(true);
     try {
       const { PropostaComercialPDF } = await import('@domain/proposta/PropostaComercialPDF');
@@ -2673,7 +2741,7 @@ function TabResultado({ onPrev, onEmpresa }: { onPrev:()=>void; onEmpresa:()=>vo
       a.href = url;
       a.download = 'Proposta_' + (s.cliente.nome||'Cliente').replace(/\s+/g,'_') + '_' + new Date().toISOString().slice(0,10) + '.pdf';
       a.click(); URL.revokeObjectURL(url);
-    } catch(e) { alert('Erro ao gerar Proposta: ' + (e instanceof Error ? e.message : String(e)));
+    } catch(e) { if (silencioso) throw e; alert('Erro ao gerar Proposta: ' + (e instanceof Error ? e.message : String(e)));
     } finally { setGerando(false); }
   }
 
@@ -2842,7 +2910,7 @@ function TabResultado({ onPrev, onEmpresa }: { onPrev:()=>void; onEmpresa:()=>vo
     } finally { setGerando(false); }
   }
 
-  async function gerarFormularioCemig() {
+  async function gerarFormularioCemig(silencioso = false) {
     setGerando(true);
     try {
       const { gerarFormularioCemigMicroGD, checklistDocumentosCEMIG } = await import('@domain/excel/gerarFormularioCemig');
@@ -2850,25 +2918,30 @@ function TabResultado({ onPrev, onEmpresa }: { onPrev:()=>void; onEmpresa:()=>vo
       const d = buildData();
       gerarFormularioCemigMicroGD(d);
       st.marcarDocumentoGerado('formulario_microgd');
-      // Mostrar checklist após gerar
-      const lista = checklistDocumentosCEMIG(d);
-      const pendentes = lista.filter(i => i.obrigatorio && i.status === 'pendente');
-      const geradosApp = lista.filter(i => i.geradoPeloApp && i.obrigatorio);
-      setTimeout(() => {
-        alert(
-          'Formulário CEMIG MicroGD gerado!\n\n' +
-          '✅ Gerados pelo LumenSolar:\n' +
-          geradosApp.map(i => '  • ' + i.doc).join('\n') +
-          '\n\n📋 Ainda pendentes:\n' +
-          pendentes.filter(i => !i.geradoPeloApp).map(i => '  • ' + i.doc).join('\n') +
-          '\n\nContato CEMIG: geracaodistribuida@cemig.com.br | 0800 721 0167'
-        );
-      }, 500);
-    } catch(e) { alert('Erro ao gerar formulário CEMIG: ' + (e instanceof Error ? e.message : String(e)));
+      // BUG CORRIGIDO (ago/2026): este alert() de resumo do checklist disparava
+      // também dentro de "📦 Pacote Completo" — um popup a mais no meio de uma
+      // sequência de 6 downloads, sem relação com o resumo único que o pacote já
+      // mostra no final (ver gerarPacoteCompleto). Suprimido quando silencioso.
+      if (!silencioso) {
+        const lista = checklistDocumentosCEMIG(d);
+        const pendentes = lista.filter(i => i.obrigatorio && i.status === 'pendente');
+        const geradosApp = lista.filter(i => i.geradoPeloApp && i.obrigatorio);
+        setTimeout(() => {
+          alert(
+            'Formulário CEMIG MicroGD gerado!\n\n' +
+            '✅ Gerados pelo LumenSolar:\n' +
+            geradosApp.map(i => '  • ' + i.doc).join('\n') +
+            '\n\n📋 Ainda pendentes:\n' +
+            pendentes.filter(i => !i.geradoPeloApp).map(i => '  • ' + i.doc).join('\n') +
+            '\n\nContato CEMIG: geracaodistribuida@cemig.com.br | 0800 721 0167'
+          );
+        }, 500);
+      }
+    } catch(e) { if (silencioso) throw e; alert('Erro ao gerar formulário CEMIG: ' + (e instanceof Error ? e.message : String(e)));
     } finally { setGerando(false); }
   }
 
-  async function gerarExcel() {
+  async function gerarExcel(silencioso = false) {
     setGerando(true);
     try {
       const { gerarExcelAuditoria } = await import('@domain/excel/gerarExcel');
@@ -2900,11 +2973,11 @@ function TabResultado({ onPrev, onEmpresa }: { onPrev:()=>void; onEmpresa:()=>vo
         // CORRIGIDO" no bloco "PROJEÇÃO FIO-B" de gerarExcel.ts.
         enquadramento: st.enquadramento, percentuaisFioBPorAno: st.percentuaisFioBPorAno,
       });
-    } catch(e) { alert('Erro ao gerar Excel: ' + (e instanceof Error ? e.message : String(e)));
+    } catch(e) { if (silencioso) throw e; alert('Erro ao gerar Excel: ' + (e instanceof Error ? e.message : String(e)));
     } finally { setGerando(false); }
   }
 
-  async function gerarMemorial() {
+  async function gerarMemorial(silencioso = false) {
     setGerando(true);
     try {
       const { MemorialDescritivo } = await import('@domain/proposta/MemorialDescritivo');
@@ -2917,11 +2990,12 @@ function TabResultado({ onPrev, onEmpresa }: { onPrev:()=>void; onEmpresa:()=>vo
       a.click(); URL.revokeObjectURL(url);
       useProjetoStore.getState().marcarDocumentoGerado('memorial_descritivo');
     } catch(e) {
+      if (silencioso) throw e;
       alert('Erro ao gerar Memorial Descritivo: ' + (e instanceof Error ? e.message : String(e)));
     } finally { setGerando(false); }
   }
 
-  async function gerarProcuracao() {
+  async function gerarProcuracao(silencioso = false) {
     setGerando(true);
     try {
       const { Procuracao } = await import('@domain/proposta/Procuracao');
@@ -2934,11 +3008,12 @@ function TabResultado({ onPrev, onEmpresa }: { onPrev:()=>void; onEmpresa:()=>vo
       a.click(); URL.revokeObjectURL(url);
       useProjetoStore.getState().marcarDocumentoGerado('procuracao');
     } catch(e) {
+      if (silencioso) throw e;
       alert('Erro ao gerar Procuração: ' + (e instanceof Error ? e.message : String(e)));
     } finally { setGerando(false); }
   }
 
-  async function gerarDUB() {
+  async function gerarDUB(silencioso = false) {
     setGerando(true);
     try {
       const { DiagramaUnifilarBasico } = await import('@domain/proposta/DiagramaUnifilarBasico');
@@ -2951,11 +3026,12 @@ function TabResultado({ onPrev, onEmpresa }: { onPrev:()=>void; onEmpresa:()=>vo
       a.click(); URL.revokeObjectURL(url);
       useProjetoStore.getState().marcarDocumentoGerado('dub');
     } catch(e) {
+      if (silencioso) throw e;
       alert('Erro ao gerar DUB: ' + (e instanceof Error ? e.message : String(e)));
     } finally { setGerando(false); }
   }
 
-  async function gerarPlantaSituacao() {
+  async function gerarPlantaSituacao(silencioso = false) {
     setGerando(true);
     try {
       const { montarMosaicoSatelite } = await import('./services/satelliteMosaic');
@@ -2963,7 +3039,9 @@ function TabResultado({ onPrev, onEmpresa }: { onPrev:()=>void; onEmpresa:()=>vo
       const d = buildData();
       const endereco = [d.cliente.endereco, d.cliente.cidade, d.cliente.uf].filter(Boolean).join(', ');
       if (!endereco.trim()) {
-        alert('Preencha ao menos cidade/UF do cliente (passo Cliente) antes de gerar a Planta de Situação — ela precisa localizar o endereço no mapa.');
+        const msg = 'Preencha ao menos cidade/UF do cliente (passo Cliente) antes de gerar a Planta de Situação — ela precisa localizar o endereço no mapa.';
+        if (silencioso) throw new Error(msg);
+        alert(msg);
         return;
       }
       const mosaico = await montarMosaicoSatelite(endereco);
@@ -2975,21 +3053,62 @@ function TabResultado({ onPrev, onEmpresa }: { onPrev:()=>void; onEmpresa:()=>vo
       a.click(); URL.revokeObjectURL(url);
       useProjetoStore.getState().marcarDocumentoGerado('planta_situacao');
     } catch(e) {
+      // BUG CORRIGIDO (ago/2026): esta função nunca relançava — quando chamada
+      // de dentro de "📦 Pacote Completo", o `try{}catch{}` vazio ao redor dela
+      // achava que qualquer falha aqui já tinha sido "avisada" (o alert() abaixo
+      // de fato dispara), mas a Planta continuava contando como "concluída" no
+      // pacote, sem entrar no resumo final. Depende de rede (busca tile de
+      // satélite) — é o passo com maior chance real de falhar do pacote inteiro,
+      // e era o único cujo erro o usuário não via resumido no final.
+      if (silencioso) throw e;
       alert('Erro ao gerar Planta de Situação: ' + (e instanceof Error ? e.message : String(e)) + '\n\nVerifique sua conexão com a internet — este documento busca uma imagem de satélite pública (Esri World Imagery, sem necessidade de chave de API).');
     } finally { setGerando(false); }
   }
 
   async function gerarPacoteCompleto() {
+    // BUG CORRIGIDO (ago/2026): auditoria de rotinas encontrou que NENHUM dos 6
+    // passos abaixo relançava erro (cada um só fazia alert() + return dentro do
+    // próprio catch) — então uma única causa raiz (ex.: cadastro de empresa
+    // incompleto, ou dados desatualizados) disparava o MESMO alert() bloqueante
+    // até 6 vezes seguidas (uma por documento), sem nunca mostrar um resumo do
+    // que realmente funcionou. Agora cada passo roda em modo silencioso (lança
+    // em vez de alertar), o pacote coleta o resultado de cada um, e mostra UM
+    // resumo só no final — sucesso e falha por documento, causa raiz de cada
+    // falha incluída.
     setGerando(true);
+    const passos: { nome: string; rodar: () => Promise<void> }[] = [
+      { nome: 'Proposta Comercial', rodar: () => gerarPDFCliente(true) },
+      { nome: 'Memorial Descritivo', rodar: () => gerarMemorial(true) },
+      { nome: 'Procuração', rodar: () => gerarProcuracao(true) },
+      { nome: 'DUB', rodar: () => gerarDUB(true) },
+      { nome: 'Formulário CEMIG', rodar: () => gerarFormularioCemig(true) },
+      { nome: 'Planta de Situação', rodar: () => gerarPlantaSituacao(true) },
+      { nome: 'Excel de Auditoria', rodar: () => gerarExcel(true) },
+    ];
+    const resultados: { nome: string; ok: boolean; erro?: string }[] = [];
     try {
-      await gerarPDFCliente();
-      await gerarMemorial();
-      await gerarProcuracao();
-      await gerarDUB();
-      await gerarFormularioCemig();
-      try { await gerarPlantaSituacao(); } catch { /* já alertado dentro da própria função (depende de rede) */ }
-      await gerarExcel();
-    } finally { setGerando(false); }
+      for (const passo of passos) {
+        try {
+          await passo.rodar();
+          resultados.push({ nome: passo.nome, ok: true });
+        } catch (e) {
+          resultados.push({ nome: passo.nome, ok: false, erro: e instanceof Error ? e.message : String(e) });
+        }
+      }
+    } finally {
+      setGerando(false);
+    }
+    const falhas = resultados.filter(r => !r.ok);
+    const sucessos = resultados.filter(r => r.ok);
+    if (falhas.length === 0) {
+      alert(`Pacote completo gerado! ${sucessos.length}/${resultados.length} documentos baixados com sucesso.`);
+    } else {
+      alert(
+        `Pacote completo: ${sucessos.length}/${resultados.length} documentos gerados.\n\n` +
+        (sucessos.length ? '✅ Gerados:\n' + sucessos.map(r => '  • ' + r.nome).join('\n') + '\n\n' : '') +
+        '❌ Falharam:\n' + falhas.map(r => `  • ${r.nome}: ${r.erro}`).join('\n')
+      );
+    }
   }
 
   if (!s.dimensionamento || !s.precificacao || !s.custosRecorrentes || !s.indicadores) {

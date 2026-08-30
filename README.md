@@ -174,8 +174,22 @@ envio, em vez de fingir automatizar algo que não automatiza.
 
 - Arquivo `.lumensolar` — formato JSON com envelope de metadados
 - Checksum SHA-256: detecta corrupção de qualquer byte
-- Auto-save automático
-- Backup `.bak` antes de sobrescrever
+- Salvamento manual (botão "Salvar") — dispara download do navegador/Electron,
+  sem gravação silenciosa em segundo plano
+
+**CORRIGIDO (ago/2026):** este README afirmava "Auto-save automático" e
+"Backup `.bak` antes de sobrescrever" — nenhum dos dois existe no código.
+Verificado: `salvarArquivo()` (`persistence.ts`) sempre usa `<a download>`
+(download de blob, mesmo mecanismo de todo PDF/Excel gerado pelo app) — o
+app nunca tem um handle de arquivo aberto pra reescrever nem pra copiar como
+`.bak` antes, e não existe `setInterval`/debounce de auto-save em lugar
+nenhum. Implementar isso de verdade exigiria um canal de IPC Electron
+(main process com acesso a `fs`, exposto via `contextBridge` no preload —
+hoje `src/preload/index.ts` expõe só um número de versão) — mudança de
+arquitetura real, não um ajuste de função, e que só dá pra validar rodando
+o `.exe` de verdade (fora do alcance deste ambiente). Documentado como
+pendência abaixo em vez de deixar o README prometendo uma rede de segurança
+contra perda de dados que não existe.
 
 ---
 
@@ -267,6 +281,25 @@ não é do software; o usuário confirma manualmente que anexou por fora. O bot�
   parte do repositório (documento interno da CEMIG), então o teste só impede regressão
   acidental do mapa já verificado, não revalida contra o arquivo a cada execução.
 - [ ] Teste de fluxo completo no `.exe` (criar proposta → gerar todos os documentos)
+- [ ] **Auto-save/backup `.bak`** — README afirmava que existiam (corrigido nesta rodada,
+  ver seção "Persistência" acima); implementação real exige canal de IPC Electron
+  (main process + `contextBridge`) que não existe hoje — o app só sabe fazer download
+  de blob, nunca escreve num arquivo já aberto.
+- [ ] **Economia/payback/TIR usam geração mensal MÉDIA, não a curva sazonal real** —
+  auditoria (ago/2026) encontrou que `indicadores.geracaoMensalKWh` (usado só pra
+  desenhar o gráfico "Geração × Consumo mensal") já reflete a sazonalidade real por UF
+  (HSP varia ~±15-20% mês a mês, `data/hspMensal.ts`), mas `calcularCustosRecorrentes`/
+  `projetarCustosAnuais` — que alimentam economia mensal, fluxo de caixa, TIR, VPL e
+  payback — recebem só a média anual, repetida igual nos 25 anos de projeção. Não é bug
+  de fórmula (verificado: `Math.min(geração,consumo)` está correto para o par de números
+  que recebe) — é que o gráfico mostrado ao cliente pode visualmente mostrar um mês
+  específico gerando menos que o consumo, enquanto os números financeiros do lado nunca
+  refletem nenhum mês sendo pior ou melhor que a média. Simplificação defensável (o SCEE
+  já usa banco de créditos de até 60 meses, então mês isolado abaixo da média não é
+  necessariamente prejuízo real), mas o gráfico e os números financeiros podem parecer
+  contraditórios um do outro. Modelar o saldo de créditos mês a mês corretamente é
+  trabalho substancial — não tentado nesta rodada, fica registrado para decisão do
+  usuário sobre prioridade.
 - [x] **Corrigido (ago/2026):** erro de tipo em `App.tsx` (`kit.tipoModulo` não aceitava
   `bifacial_ntype`/`bifacial_ptype`/`hibrido`/`cdte` em `PropostaData`) — `tsc --noEmit` falhava
   silenciosamente (mascarado porque `vite build`/esbuild não faz type-check completo).
