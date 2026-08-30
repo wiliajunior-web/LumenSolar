@@ -423,6 +423,147 @@ function SidebarContainer({ aba, setAba, onEmpresa, stepStatus, onHome }: {
   return <Sidebar aba={aba} setAba={setAba} logo={logo} nomeEmpresa={nome} onEmpresa={onEmpresa} stepStatus={stepStatus} />;
 }
 
+// ─── Popup flutuante de copiar seleção ───────────────────────────────────────
+// ADICIONADO (ago/2026): a pedido do usuário — "implemente o copiar e colar
+// aparecendo assim que eu seleciono algum texto". "Colar" (Ctrl+V) já
+// funciona nativamente em todo <input>/<textarea> do Chromium/Electron sem
+// nenhum código adicional, e não existe um destino coerente para um botão de
+// "colar" disparado por SELEÇÃO de texto (colar sempre acontece dentro de um
+// campo de edição, nunca sobre um texto selecionado) — por isso esta feature
+// cobre a parte que o gatilho "selecionei texto" realmente habilita: copiar.
+// Só reage a seleções feitas com a Selection API do documento — texto
+// selecionado DENTRO de <input>/<textarea> usa `selectionStart/End` (API
+// diferente) e não aciona este popup; esses campos já têm Ctrl+C nativo e
+// menu de contexto do Chromium, então nada de funcionalidade é perdido, é um
+// recorte de escopo deliberado.
+function copiarViaExecCommand(texto: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = texto;
+      ta.style.position = 'fixed';
+      ta.style.top = '-9999px';
+      ta.style.left = '-9999px';
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      const ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+      ok ? resolve() : reject(new Error('document.execCommand("copy") retornou false'));
+    } catch (e) {
+      reject(e);
+    }
+  });
+}
+
+function copiarTextoClipboard(texto: string): Promise<void> {
+  if (navigator.clipboard?.writeText) {
+    // Fallback: alguns empacotamentos do Electron podem negar a permissão de
+    // clipboard-write à navigator.clipboard — não custa ter um plano B.
+    return navigator.clipboard.writeText(texto).catch(() => copiarViaExecCommand(texto));
+  }
+  return copiarViaExecCommand(texto);
+}
+
+const LARGURA_POPUP_COPIAR = 96;
+
+// Extraída como função pura só para ser testável sem infra de teste de DOM
+// (este projeto roda os testes em ambiente `node`, não `jsdom` — ver nota em
+// `camposEmpresaParaPreencherAoImportar.test.ts`). Recebe um retângulo
+// "achatado" (as 4 medidas que `getBoundingClientRect()` devolve) em vez do
+// objeto DOMRect real, para não depender do DOM no teste.
+export function calcularPosicaoPopupCopiar(
+  rectSelecao: { top: number; left: number; width: number },
+  larguraJanela: number,
+  larguraPopup: number = LARGURA_POPUP_COPIAR
+): { top: number; left: number } {
+  const top = Math.max(8, rectSelecao.top - 38);
+  const left = Math.min(
+    Math.max(8, rectSelecao.left + rectSelecao.width / 2 - larguraPopup / 2),
+    larguraJanela - larguraPopup - 8
+  );
+  return { top, left };
+}
+
+function SelectionCopyToolbar() {
+  const [estado, setEstado] = useState<{ top: number; left: number; texto: string; copiado: boolean } | null>(null);
+
+  React.useEffect(() => {
+    function atualizarDaSelecao() {
+      const sel = window.getSelection();
+      const texto = sel ? sel.toString() : '';
+      if (!sel || sel.isCollapsed || !texto.trim() || sel.rangeCount === 0) {
+        setEstado(null);
+        return;
+      }
+      const range = sel.getRangeAt(0);
+      const rect = range.getBoundingClientRect();
+      if (rect.width === 0 && rect.height === 0) { setEstado(null); return; }
+      const { top, left } = calcularPosicaoPopupCopiar(rect, window.innerWidth);
+      setEstado({ top, left, texto, copiado: false });
+    }
+    function aoSoltarMouse() { requestAnimationFrame(atualizarDaSelecao); }
+    function aoSoltarTecla(e: KeyboardEvent) {
+      // Seleção via teclado: Shift+Setas, Shift+Home/End/PageUp/PageDown, Ctrl/Cmd+A
+      if (e.shiftKey || ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a')) {
+        requestAnimationFrame(atualizarDaSelecao);
+      }
+    }
+    function aoTeclaEscape(e: KeyboardEvent) {
+      if (e.key === 'Escape') setEstado(null);
+    }
+    function aoRolarOuRedimensionar() { setEstado(null); }
+    // `scroll` não borbulha (bubble) — capture:true garante que a rolagem de
+    // QUALQUER contêiner descendente (ex.: o <main> com overflow:auto) seja
+    // detectada, não só a da janela.
+    document.addEventListener('mouseup', aoSoltarMouse);
+    document.addEventListener('keyup', aoSoltarTecla);
+    document.addEventListener('keydown', aoTeclaEscape);
+    document.addEventListener('scroll', aoRolarOuRedimensionar, true);
+    window.addEventListener('resize', aoRolarOuRedimensionar);
+    return () => {
+      document.removeEventListener('mouseup', aoSoltarMouse);
+      document.removeEventListener('keyup', aoSoltarTecla);
+      document.removeEventListener('keydown', aoTeclaEscape);
+      document.removeEventListener('scroll', aoRolarOuRedimensionar, true);
+      window.removeEventListener('resize', aoRolarOuRedimensionar);
+    };
+  }, []);
+
+  if (!estado) return null;
+
+  return (
+    <div
+      style={{
+        position: 'fixed', top: estado.top, left: estado.left, zIndex: 9999,
+        // Impede que o próprio mousedown no popup colapse a seleção de texto
+        // antes do clique no botão ser processado (truque padrão desse tipo
+        // de toolbar flutuante).
+        userSelect: 'none', WebkitUserSelect: 'none',
+      }}
+    >
+      <button
+        onClick={() => {
+          copiarTextoClipboard(estado.texto)
+            .then(() => {
+              setEstado(prev => (prev ? { ...prev, copiado: true } : prev));
+              setTimeout(() => setEstado(null), 900);
+            })
+            .catch(() => alert('Não foi possível copiar automaticamente. Use Ctrl+C.'));
+        }}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 5,
+          background: D.header, color: '#fff', border: 'none', borderRadius: 6,
+          padding: '6px 11px', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+          boxShadow: D.shadowMd, whiteSpace: 'nowrap',
+        }}
+      >
+        {estado.copiado ? '✓ Copiado' : '📋 Copiar'}
+      </button>
+    </div>
+  );
+}
+
 // ─── App ─────────────────────────────────────────────────────────────────────
 export default function App() {
   const [aba, setAba] = useState<Aba>('home');
@@ -651,6 +792,7 @@ export default function App() {
           </div>
         </main>
       </div>
+      <SelectionCopyToolbar />
     </>
   );
 }
