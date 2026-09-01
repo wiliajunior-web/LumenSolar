@@ -9,7 +9,13 @@
  *     pelo autor desde a publicação):
  *     - PRECIFICAO_DE_PROJETOS_MEDIA_VALORES.xlsx  (aula 8, id 1345626)
  *     - PRECIFICAO_DE_PROJETOS-_SPDA.xlsx           (aula 9, id 1345627)
- *   Extraído em 25/08/2026 (senha "fam7523", igual nos dois arquivos).
+ *   Extraído em 25/08/2026 (arquivos protegidos por senha — a senha em si
+ *     foi removida deste comentário em set/2026: é a senha de um conteúdo
+ *     pago de terceiros, não algo que devesse ficar em texto puro dentro do
+ *     código-fonte, mesmo num repositório privado — repositórios privados
+ *     viram públicos, são clonados, compartilhados. Quem precisar reabrir os
+ *     .xlsx originais para conferência deve pedir a senha diretamente ao
+ *     usuário deste projeto, não copiá-la daqui.).
  *
  * DATA-BASE DOS VALORES (estimada, não documentada no arquivo em si):
  *   Os comentários mais antigos visíveis na página da aula pedindo a senha
