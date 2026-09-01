@@ -1068,10 +1068,14 @@ function TabEmpresa({ onClose }: { onClose: () => void }) {
               <input className="inp" value={empresa.descricaoOutroFinanciamento} onChange={e => atualizarEmpresa({ descricaoOutroFinanciamento: e.target.value })} />
             </Campo>
             <Campo label="3ª opção — parcelas">
-              <input className="inp inp-num" type="number" value={empresa.parcelasOutroFinanciamento} onChange={e => atualizarEmpresa({ parcelasOutroFinanciamento: Number(e.target.value) })} />
+              {/* min="1" é só uma dica visual (spinner/teclas de seta) — não
+                  bloqueia digitação nem "limpar o campo"; a validação real
+                  está em validarProjetoCompleto() (validation.ts) e, como
+                  segunda camada, em simularFinanciamento() (indicadores.ts). */}
+              <input className="inp inp-num" type="number" min="1" value={empresa.parcelasOutroFinanciamento} onChange={e => atualizarEmpresa({ parcelasOutroFinanciamento: Number(e.target.value) })} />
             </Campo>
             <Campo label="3ª opção — taxa mensal (%)" hint="Cartão de crédito: geralmente 2,49% a 3,49% a.m.">
-              <input className="inp inp-num" type="number" step="0.01" value={+(empresa.taxaOutroFinanciamento*100).toFixed(2)} onChange={e => atualizarEmpresa({ taxaOutroFinanciamento: Number(e.target.value)/100 })} />
+              <input className="inp inp-num" type="number" step="0.01" min="0" value={+(empresa.taxaOutroFinanciamento*100).toFixed(2)} onChange={e => atualizarEmpresa({ taxaOutroFinanciamento: Number(e.target.value)/100 })} />
             </Campo>
           </div>
         </div>

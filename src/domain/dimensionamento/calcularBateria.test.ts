@@ -175,3 +175,42 @@ describe('calcularBancoBaterias — autonomia empírica (offgrid) abaixo do mín
     expect(r0dias.alertas.some(a => a.includes('Autonomia mínima recomendada'))).toBe(true);
   });
 });
+
+// REGRESSÃO (set/2026, auditoria de robustez): App.tsx chama esta função
+// DENTRO do corpo de renderização (não num handler de clique) — autonomia
+// negativa (input sem validação real, só min="1" de dica visual) propagava
+// direto até Math.ceil(negativo), exibindo "-N unidades" ao vivo no painel,
+// sem nenhum erro. Verificado manualmente (node -e) antes de escrever este
+// teste: Math.max(1, -5) = 1 → energiaAutonomia_kWh = (1/24)×10 ≈ 0,41667.
+describe('calcularBancoBaterias — [REGRESSÃO set/2026] autonomia inválida (negativa) é clampada, não produz baterias negativas', () => {
+  it('autonomia=-5 (backup_hybrid): clampa para 1h, avisa, e nunca produz bateriasTotal negativo', () => {
+    const r = calcularBancoBaterias({
+      consumoDiarioKWh: 10,
+      tipoBateria: 'estacionaria_comum',
+      tipoSistema: 'backup_hybrid',
+      autonomia: -5,
+      tensaoSistemaV: 48,
+      capacidadeBateriaAh: 100,
+    });
+    // energiaAutonomia_kWh não é exposta no retorno — verificada indiretamente
+    // via capacidadeBruta_Wh, que deriva dela: (1/24)×10 = 0,41667 kWh ×
+    // 1000 / dod(0,40) = 1041,67 Wh → arredonda para 1042.
+    expect(r.capacidadeBruta_Wh).toBeCloseTo(1042, 0);
+    expect(r.bateriasParalelo).toBeGreaterThan(0);
+    expect(r.bateriasTotal).toBeGreaterThan(0);
+    expect(r.alertas.some(a => a.includes('não é um valor válido'))).toBe(true);
+  });
+
+  it('autonomia=0 (offgrid): clampa para 1 dia (não 0), nunca produz banco de tamanho zero/negativo', () => {
+    const r = calcularBancoBaterias({
+      consumoDiarioKWh: 5,
+      tipoBateria: 'estacionaria_comum',
+      tipoSistema: 'offgrid_sfi',
+      autonomia: -1,
+      tensaoSistemaV: 12,
+      capacidadeBateriaAh: 100,
+    });
+    expect(r.autonomiaDias).toBe(1);
+    expect(r.bateriasTotal).toBeGreaterThan(0);
+  });
+});

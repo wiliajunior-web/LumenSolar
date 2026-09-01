@@ -80,6 +80,25 @@ export function validarProjetoCompleto(state: any): { podeCalcular: boolean; err
     validarPreco(state.preco, state.kit.custoKitRS),
   ];
   const todosErros = v.flatMap(r => r.erros);
+  // BUG CORRIGIDO (set/2026, auditoria de robustez): o campo "Nº parcelas"
+  // da 3ª opção de financiamento (aba Empresa) não era validado aqui — sem
+  // isso, limpar o campo (vira 0) fazia `simularFinanciamento`
+  // (indicadores.ts) dividir por zero silenciosamente, corrompendo o card
+  // "Simulações de financiamento" com Infinity/NaN sem nenhum aviso.
+  // `simularFinanciamento` agora lança um erro nesse caso (defesa em
+  // profundidade para o caminho de "Recalcular agora", que chama
+  // calcularTudo() direto sem passar por esta validação) — mas o clique
+  // principal em "Calcular resultado completo" (tentarCalcular(), App.tsx)
+  // NÃO tem try/catch ao redor de calcularTudo(), então deixar só o throw
+  // do domínio faria o app inteiro travar (tela de erro da ErrorBoundary)
+  // em vez de mostrar a mensagem amigável de campo obrigatório que os
+  // outros passos já mostram.
+  if (!state.empresa?.parcelasOutroFinanciamento || state.empresa.parcelasOutroFinanciamento <= 0) {
+    todosErros.push({ campo: 'parcelasOutroFinanciamento', mensagem: 'Nº de parcelas da 3ª opção de financiamento deve ser maior que zero (aba Empresa → Financiamento)' });
+  }
+  if ((state.empresa?.taxaOutroFinanciamento ?? 0) < 0) {
+    todosErros.push({ campo: 'taxaOutroFinanciamento', mensagem: 'Taxa de juros da 3ª opção de financiamento não pode ser negativa (aba Empresa → Financiamento)' });
+  }
   return {
     podeCalcular: todosErros.length === 0,
     erros: todosErros,

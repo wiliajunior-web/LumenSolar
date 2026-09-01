@@ -86,6 +86,32 @@ describe('área e peso', () => {
 });
 
 describe('simularFinanciamento', () => {
+  // REGRESSÃO (set/2026, auditoria de robustez): numeroParcelas=0 (campo "Nº
+  // parcelas" da 3ª opção de financiamento, alcançável limpando o input na
+  // UI — vira Number('')=0) causava divisão por zero silenciosa: com i=0,
+  // valorFinanciado/0 = Infinity; com i>0, (1+i)^0-1 = 0 no denominador →
+  // Infinity também. Verificado manualmente com `node -e` antes de escrever
+  // este teste: simularFinanciamento(18000, x, 0.0299, 0, ...) → parcelaMensal
+  // = Infinity, totalPago = Infinity*0 = NaN — confirmado nos dois casos
+  // (i=0 e i>0) antes de decidir que um throw (não um valor de fallback) é a
+  // correção certa aqui.
+  it('numeroParcelas=0 lança erro em vez de produzir Infinity/NaN silenciosos', () => {
+    expect(() => simularFinanciamento(18000, 400, 0.0299, 0, 0.005, 0.06, 25, '3ª opção'))
+      .toThrow('Número de parcelas da 3ª opção de financiamento deve ser maior que zero.');
+    expect(() => simularFinanciamento(18000, 400, 0, 0, 0.005, 0.06, 25, '3ª opção'))
+      .toThrow('Número de parcelas da 3ª opção de financiamento deve ser maior que zero.');
+  });
+
+  it('numeroParcelas negativo lança erro', () => {
+    expect(() => simularFinanciamento(18000, 400, 0.0299, -5, 0.005, 0.06, 25, '3ª opção'))
+      .toThrow('Número de parcelas da 3ª opção de financiamento deve ser maior que zero.');
+  });
+
+  it('taxaJurosMensal negativa lança erro', () => {
+    expect(() => simularFinanciamento(18000, 400, -0.01, 24, 0.005, 0.06, 25, '3ª opção'))
+      .toThrow('Taxa de juros da 3ª opção de financiamento não pode ser negativa.');
+  });
+
   it('parcela Price 48x deve ser maior que 60x para mesmo valor', () => {
     const sim48 = simularFinanciamento(18000, 400, 0.018, 48, 0.005, 0.06, 25, '48x');
     const sim60 = simularFinanciamento(18000, 400, 0.018, 60, 0.005, 0.06, 25, '60x');

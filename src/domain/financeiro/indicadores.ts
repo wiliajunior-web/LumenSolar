@@ -114,6 +114,25 @@ export function simularFinanciamento(
   descricao: string,
   economiaMensalPorAno?: number[]
 ): SimulacaoFinanciamento {
+  // BUG CORRIGIDO (set/2026, auditoria de robustez): `numeroParcelas` (campo
+  // "Nº parcelas" da 3ª opção de financiamento, aba Empresa) é um
+  // `<input type="number">` sem validação — limpar o campo vira
+  // `Number('') = 0` (ver App.tsx). Sem este guard, n=0 produzia divisão por
+  // zero: com i=0 → valorFinanciado/0 = Infinity; com i>0 →
+  // (1+i)^0 - 1 = 0 no denominador → Infinity também. Como `.click()`/`for`
+  // não lança nada, o Infinity/NaN corria solto até o card "Simulações de
+  // financiamento" (App.tsx), sem nenhum erro visível ao usuário. `n<0`
+  // (também alcançável, mesmo campo) chegava a um valor finito mas sem
+  // sentido físico algum (financiamento com parcelas negativas). Mesmo guard
+  // já existente na função irmã `gerarTabelaPrice` (price.ts) — este era o
+  // único ponto do arquivo que ainda não tinha essa proteção. A validação
+  // "de verdade" (mensagem amigável antes de chegar aqui) foi adicionada em
+  // `validation.ts`; este throw é a segunda camada, para o caminho de
+  // "Recalcular agora" que chama calcularTudo() direto, sem passar pela
+  // validação de `tentarCalcular()`.
+  if (numeroParcelas <= 0) throw new Error('Número de parcelas da 3ª opção de financiamento deve ser maior que zero.');
+  if (taxaJurosMensal < 0) throw new Error('Taxa de juros da 3ª opção de financiamento não pode ser negativa.');
+
   const i = taxaJurosMensal;
   const n = numeroParcelas;
   const parcelaMensal = i === 0

@@ -119,6 +119,27 @@ export function calcularBancoBaterias(p: ParamsBateria): ResultadoBateria {
   const observacoes: string[] = [];
   const perfil = PERFIS_BATERIA[p.tipoBateria];
 
+  // BUG CORRIGIDO (set/2026, auditoria de robustez): App.tsx chama esta
+  // função DENTRO do corpo de renderização de um componente (não num
+  // handler de clique/evento) — sem guard, uma `autonomia` negativa (o
+  // input "Autonomia" só tem `min="1"` de dica visual, HTML não bloqueia
+  // digitação) propagava direto até `bateriasParalelo`/`bateriasTotal`
+  // (via Math.ceil de um valor negativo), exibindo ao vivo algo como
+  // "-5 unidades total" no painel — sem nenhum erro visível. Diferente do
+  // financiamento (indicadores.ts), aqui um `throw` seria PIOR: como a
+  // chamada roda a cada renderização (inclusive a cada tecla digitada), um
+  // throw travaria a tela inteira (ErrorBoundary) enquanto o usuário ainda
+  // está digitando, não só ao confirmar. Por isso a correção aqui é
+  // "clampar" para o mínimo fisicamente válido (1) em vez de lançar erro.
+  const autonomiaEfetiva = Math.max(1, p.autonomia || 0);
+  if (autonomiaEfetiva !== p.autonomia) {
+    alertas.push(
+      `Autonomia informada (${p.autonomia}) não é um valor válido — usando o mínimo de 1 ` +
+      (p.tipoSistema === 'backup_hybrid' ? 'hora' : 'dia') + ' para este cálculo.'
+    );
+  }
+  p = { ...p, autonomia: autonomiaEfetiva };
+
   // ── 1. Energia diária e autonomia ─────────────────────────────────────────
   const energiaDiaria = p.consumoDiarioKWh; // kWh/dia
 

@@ -28,6 +28,9 @@ const kitVazio     = { ...kitCompleto, marcaModulo:'', potenciaModuloWp:0, quant
 const kitParcial   = { ...kitCompleto, marcaModulo:'Leapton', quantidade:0, custoKitRS:0 };
 
 const precoCompleto = { estruturaRS:1200, materiaisEletricosRS:800, maoDeObraRS:2000, projetoArtRS:500, outrosCustosRS:0, aliquotaImpostos:0.06, margemDesejada:0.15 };
+// Mesmos valores-padrão de DADOS_EMPRESA_PADRAO (src/data/empresa.ts) — estado
+// real da store sempre tem `empresa` preenchido (nunca undefined na prática).
+const empresaCompleta = { taxaOutroFinanciamento: 0.0299, parcelasOutroFinanciamento: 18, descricaoOutroFinanciamento: 'Cartão 18×' };
 const precoInvalido = { ...precoCompleto, aliquotaImpostos:0.50, margemDesejada:0.60 }; // soma >= 1
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -196,7 +199,7 @@ describe('Validação — Preço', () => {
 describe('Validação — Projeto Completo', () => {
   const estadoCompleto = {
     cliente: clienteCompleto, consumo: consumoCompleto,
-    kit: kitCompleto, preco: precoCompleto,
+    kit: kitCompleto, preco: precoCompleto, empresa: empresaCompleta,
   };
 
   it('[V25] Estado completo → podeCalcular = true', () => {
@@ -229,6 +232,35 @@ describe('Validação — Projeto Completo', () => {
     });
     expect(r.erros.length).toBeGreaterThan(5);
     expect(r.podeCalcular).toBe(false);
+  });
+
+  // REGRESSÃO (set/2026, auditoria de robustez): campo "Nº parcelas" da 3ª
+  // opção de financiamento (aba Empresa) não era validado — limpar o campo
+  // vira 0 (Number('')) e fazia simularFinanciamento() (indicadores.ts)
+  // dividir por zero silenciosamente. Ver comentário completo lá.
+  it('[V32] Nº de parcelas da 3ª opção de financiamento = 0 → não pode calcular', () => {
+    const r = validarProjetoCompleto({ ...estadoCompleto, empresa: { ...empresaCompleta, parcelasOutroFinanciamento: 0 } });
+    expect(r.podeCalcular).toBe(false);
+    expect(r.erros.some(e => e.campo === 'parcelasOutroFinanciamento')).toBe(true);
+  });
+
+  it('[V33] Nº de parcelas da 3ª opção de financiamento negativo → não pode calcular', () => {
+    const r = validarProjetoCompleto({ ...estadoCompleto, empresa: { ...empresaCompleta, parcelasOutroFinanciamento: -5 } });
+    expect(r.podeCalcular).toBe(false);
+    expect(r.erros.some(e => e.campo === 'parcelasOutroFinanciamento')).toBe(true);
+  });
+
+  it('[V34] Taxa de juros da 3ª opção de financiamento negativa → não pode calcular', () => {
+    const r = validarProjetoCompleto({ ...estadoCompleto, empresa: { ...empresaCompleta, taxaOutroFinanciamento: -0.01 } });
+    expect(r.podeCalcular).toBe(false);
+    expect(r.erros.some(e => e.campo === 'taxaOutroFinanciamento')).toBe(true);
+  });
+
+  it('[V35] empresa ausente do estado → trata como inválido (não deixa passar silenciosamente)', () => {
+    const { empresa, ...semEmpresa } = estadoCompleto as any;
+    const r = validarProjetoCompleto(semEmpresa);
+    expect(r.podeCalcular).toBe(false);
+    expect(r.erros.some(e => e.campo === 'parcelasOutroFinanciamento')).toBe(true);
   });
 });
 
