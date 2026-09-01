@@ -124,17 +124,47 @@ function createWindow() {
 // lugar que o usuário não escolheu e dificilmente encontraria depois.
 ipcMain.handle('obter-pasta-documentos', () => app.getPath('documents'));
 
-// ADICIONADO (set/2026, robustecimento do processo principal): sem isso, uma
-// exceção não tratada no processo principal (não no renderer — este é o
-// processo Node "de trás", sem UI própria) simplesmente derrubava o app inteiro
-// sem nenhum diagnóstico visível pro usuário (nem mesmo um dialog nativo, já
-// que o processo já não existe mais quando o crash acontece). Registrar aqui
-// pelo menos garante um log no console antes de qualquer encerramento — não
-// tenta "engolir" o erro e continuar rodando em estado desconhecido (isso seria
-// pior: mascarar um bug real deixando o app seguir com estado corrompido).
+// BUG CORRIGIDO (set/2026, auditoria de código adjacente ao revisar este mesmo
+// arquivo por outro motivo): o comentário original aqui dizia "não tenta
+// engolir o erro e continuar rodando em estado desconhecido" — mas o código
+// fazia exatamente isso. Em Node, registrar um listener de 'uncaughtException'
+// SUPRIME o comportamento padrão (que é imprimir o stack e encerrar o
+// processo) — sem chamar `process.exit()` explicitamente dentro do handler,
+// o processo principal simplesmente CONTINUA rodando depois de uma exceção
+// verdadeiramente não tratada, só com um `console.error` que nenhum usuário
+// final de um app empacotado (sem terminal visível) jamais vê. Ou seja: o
+// comentário prometia uma coisa, o código entregava o oposto — o processo
+// principal (o que decide IPC, caminho de gravação de arquivo, ciclo de vida
+// da janela) seguia rodando em estado desconhecido depois de um erro fatal
+// de verdade, sem nenhum aviso.
+//
+// Corrigido: 'uncaughtException' agora avisa o usuário (dialog nativo, igual
+// ao padrão já usado em 'render-process-gone' acima) e encerra o processo de
+// propósito — não tenta adivinhar se é seguro continuar. É deliberadamente
+// mais agressivo que 'unhandledRejection' abaixo: uma exceção síncrona não
+// tratada no processo principal é rara o bastante, e severa o bastante (nada
+// mais roda depois disso sem afetar o processo inteiro, não só uma aba/janela)
+// pra que "encerrar limpo" seja mais seguro que "seguir rodando sem saber o
+// que quebrou".
 process.on('uncaughtException', (err) => {
   console.error('[main] uncaughtException:', err);
+  dialog.showErrorBox(
+    'LumenSolar encontrou um erro grave',
+    `O aplicativo precisa fechar por causa de um erro interno inesperado:\n\n${err?.message || err}\n\n` +
+    'Se tinha um formulário preenchido sem salvar, esses dados foram perdidos. ' +
+    'Abra o LumenSolar novamente — se o erro se repetir, esse detalhe ajuda a diagnosticar a causa.'
+  );
+  app.exit(1);
 });
+// 'unhandledRejection' fica só registrando log, sem forçar o encerramento —
+// diferente de 'uncaughtException' acima. Promises rejeitadas sem `.catch()`
+// são mais comuns e nem sempre indicam um estado corrompido (podem ser uma
+// chamada assíncrona isolada que falhou sem afetar o resto do app); forçar
+// o fechamento do app inteiro por qualquer rejeição não tratada seria pior
+// pro usuário do que a situação atual (nenhuma promise ignorada existe hoje
+// neste arquivo — o único await é o handler trivial de
+// 'obter-pasta-documentos' — então isso é uma rede de segurança pra código
+// futuro, não uma correção de um caso conhecido).
 process.on('unhandledRejection', (reason) => {
   console.error('[main] unhandledRejection:', reason);
 });
