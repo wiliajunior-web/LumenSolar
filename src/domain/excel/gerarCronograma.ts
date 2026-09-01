@@ -13,6 +13,7 @@
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const XLSX: typeof import('xlsx') = require('xlsx');
 
+import path from 'node:path';
 import { normalizarNomeArquivo } from '@domain/shared/normalizarNomeArquivo';
 
 interface ParamsCronograma {
@@ -49,7 +50,9 @@ function addWeeks(dateStr: string, weeks: number): string {
   return d.toLocaleDateString('pt-BR', { timeZone: 'UTC' });
 }
 
-export function gerarCronograma(dados: ParamsCronograma): void {
+// `pastaDestino`: ver comentário em `gerarExcel.ts` (mesma correção, mesmo motivo
+// — build.win.target = "portable" extrai pra pasta temporária a cada execução).
+export function gerarCronograma(dados: ParamsCronograma, pastaDestino: string = process.cwd()): void {
   const wb = XLSX.utils.book_new();
   const ws: Record<string, any> = {};
 
@@ -301,5 +304,5 @@ export function gerarCronograma(dados: ParamsCronograma): void {
   XLSX.utils.book_append_sheet(wb, ws, 'Cronograma');
 
   const nomeArquivo = `Cronograma_${normalizarNomeArquivo(dados.nomeCliente)}_${dados.potenciaKWp}kWp.xlsx`;
-  XLSX.writeFile(wb, nomeArquivo);
+  XLSX.writeFile(wb, path.join(pastaDestino, nomeArquivo));
 }

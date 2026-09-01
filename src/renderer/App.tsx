@@ -1,12 +1,10 @@
 import React, { useState } from 'react';
-import { pdf } from '@react-pdf/renderer';
 import { useProjetoStore, PRESETS_MODULO, MESES, type TipoModuloPreset, clientePadrao, consumoPadrao, kitPadrao, precoPadrao, assinaturaEntradasCalculo } from './store/useProjetoStore';
 import { salvarArquivo, importarArquivo, listarRecentes, removerRecente, carregarEmpresa, salvarEmpresa, gerarId, type MetadataProposta } from './services/persistence';
 import { validarCliente, validarConsumo, validarKit, validarPreco, validarProjetoCompleto, validarCPF, validarCNPJ, formatarCPF, type StatusPasso } from './services/validation';
 import { DISTRIBUIDORAS } from '@data/distribuidoras';
 import { TIPO_TELHADO_LABELS, ORIENTACOES, type TipoTelhado, LOCALIZACAO_PADRAO } from '@data/localizacao';
 import { HSP_MEDIO_POR_UF } from '@data/hspPorUF';
-import { PropostaPDF } from '@domain/proposta/PropostaPDF';
 import { CHECKLIST_PADRAO_CEMIG_MICROGD, resumoChecklist, type ItemChecklistDocumentacao } from '@domain/documentacaoCemig/checklist';
 import { cadastroEmpresaIncompleto, mensagemCadastroEmpresaIncompleto } from '@domain/empresa/cadastroEmpresa';
 import { latLonParaUTM } from '@domain/geografia/converterCoordenadas';
@@ -2909,6 +2907,16 @@ function TabResultado({ onPrev, onEmpresa }: { onPrev:()=>void; onEmpresa:()=>vo
   async function gerarPDFCliente(silencioso = false) {
     setGerando(true);
     try {
+      // BUG CORRIGIDO (ago/2026, profissionalização): `pdf` (o motor de
+      // renderização do @react-pdf/renderer — PDFKit + layout + fontes) e
+      // `PropostaPDF` eram importados de forma ESTÁTICA no topo do arquivo,
+      // mesmo só sendo usados dentro destas funções assíncronas — junto com
+      // os outros 6 componentes de documento, que já eram importados de
+      // forma dinâmica. Isso forçava todo o motor do react-pdf (a maior
+      // dependência do projeto) para dentro do bundle principal (index.js),
+      // carregado mesmo que o usuário nunca gere nenhum documento na sessão.
+      // Convertido para import dinâmico, no mesmo padrão já usado ao lado.
+      const { pdf } = await import('@react-pdf/renderer');
       const { PropostaComercialPDF } = await import('@domain/proposta/PropostaComercialPDF');
       const blob = await pdf(<PropostaComercialPDF data={buildData()} />).toBlob();
       const url = URL.createObjectURL(blob);
@@ -2923,6 +2931,8 @@ function TabResultado({ onPrev, onEmpresa }: { onPrev:()=>void; onEmpresa:()=>vo
   async function gerarPDFTecnico() {
     setGerando(true);
     try {
+      const { pdf } = await import('@react-pdf/renderer');
+      const { PropostaPDF } = await import('@domain/proposta/PropostaPDF');
       const blob = await pdf(<PropostaPDF data={buildData()} />).toBlob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -2961,6 +2971,7 @@ function TabResultado({ onPrev, onEmpresa }: { onPrev:()=>void; onEmpresa:()=>vo
     setGerando(true);
     try {
       // Gerar PDF como base64
+      const { pdf } = await import('@react-pdf/renderer');
       const { PropostaComercialPDF } = await import('@domain/proposta/PropostaComercialPDF');
       const blob = await pdf(<PropostaComercialPDF data={buildData()} />).toBlob();
       const base64 = await new Promise<string>((res, rej) => {
@@ -2974,7 +2985,7 @@ function TabResultado({ onPrev, onEmpresa }: { onPrev:()=>void; onEmpresa:()=>vo
       const kwp   = st.dimensionamento?.potenciaInstaladaRealKWp?.toFixed(2) ?? '';
       const eco   = st.custosRecorrentes?.economiaMensalRS
         ? `R$ ${st.custosRecorrentes.economiaMensalRS.toFixed(2).replace('.',',')}` : '';
-      const assunto = 'Proposta Energia Solar ' + kwp + ' kWp - Lumen Solucoes';
+      const assunto = 'Proposta Energia Solar ' + kwp + ' kWp - Lumen Soluções';
       const nl = '\n';
       const corpo = [
         'Prezado(a) ' + nome + ',',
@@ -3070,6 +3081,8 @@ function TabResultado({ onPrev, onEmpresa }: { onPrev:()=>void; onEmpresa:()=>vo
     setGerando(true);
     try {
       const { gerarCronograma: gc } = await import('@domain/excel/gerarCronograma');
+      const { obterPastaDocumentos } = await import('./services/pastaDocumentos');
+      const pastaDestino = await obterPastaDocumentos();
       const d = buildData();
       gc({
         nomeCliente: d.cliente?.nome || 'Cliente',
@@ -3080,7 +3093,7 @@ function TabResultado({ onPrev, onEmpresa }: { onPrev:()=>void; onEmpresa:()=>vo
         empresa: d.empresa?.razaoSocial || 'Lumen Soluções Ltda',
         responsavelTecnico: d.empresa?.responsavelTecnico || '',
         tipoSistema: (d.dimensionamento?.potenciaInstaladaRealKWp || 0) > 75 ? 'mini' : 'micro',
-      });
+      }, pastaDestino);
     } catch(e) { alert('Erro ao gerar cronograma: ' + (e instanceof Error ? e.message : String(e)));
     } finally { setGerando(false); }
   }
@@ -3089,9 +3102,11 @@ function TabResultado({ onPrev, onEmpresa }: { onPrev:()=>void; onEmpresa:()=>vo
     setGerando(true);
     try {
       const { gerarFormularioCemigMicroGD, checklistDocumentosCEMIG } = await import('@domain/excel/gerarFormularioCemig');
+      const { obterPastaDocumentos } = await import('./services/pastaDocumentos');
+      const pastaDestino = await obterPastaDocumentos();
       const st = useProjetoStore.getState();
       const d = buildData();
-      gerarFormularioCemigMicroGD(d);
+      gerarFormularioCemigMicroGD(d, pastaDestino);
       st.marcarDocumentoGerado('formulario_microgd');
       // BUG CORRIGIDO (ago/2026): este alert() de resumo do checklist disparava
       // também dentro de "📦 Pacote Completo" — um popup a mais no meio de uma
@@ -3120,6 +3135,8 @@ function TabResultado({ onPrev, onEmpresa }: { onPrev:()=>void; onEmpresa:()=>vo
     setGerando(true);
     try {
       const { gerarExcelAuditoria } = await import('@domain/excel/gerarExcel');
+      const { obterPastaDocumentos } = await import('./services/pastaDocumentos');
+      const pastaDestino = await obterPastaDocumentos();
       const st = useProjetoStore.getState();
       // BUG CORRIGIDO (ago/2026): único gerador de documento que não passa por
       // buildData() (que já ganhou este mesmo guard) — monta o payload direto
@@ -3147,7 +3164,7 @@ function TabResultado({ onPrev, onEmpresa }: { onPrev:()=>void; onEmpresa:()=>vo
         // ADICIONADO (ago/2026): faltavam por completo — ver comentário "BUG
         // CORRIGIDO" no bloco "PROJEÇÃO FIO-B" de gerarExcel.ts.
         enquadramento: st.enquadramento, percentuaisFioBPorAno: st.percentuaisFioBPorAno,
-      });
+      }, pastaDestino);
     } catch(e) { if (silencioso) throw e; alert('Erro ao gerar Excel: ' + (e instanceof Error ? e.message : String(e)));
     } finally { setGerando(false); }
   }
@@ -3155,6 +3172,7 @@ function TabResultado({ onPrev, onEmpresa }: { onPrev:()=>void; onEmpresa:()=>vo
   async function gerarMemorial(silencioso = false) {
     setGerando(true);
     try {
+      const { pdf } = await import('@react-pdf/renderer');
       const { MemorialDescritivo } = await import('@domain/proposta/MemorialDescritivo');
       const d = buildData();
       const blob = await pdf(<MemorialDescritivo data={d} />).toBlob();
@@ -3173,6 +3191,7 @@ function TabResultado({ onPrev, onEmpresa }: { onPrev:()=>void; onEmpresa:()=>vo
   async function gerarProcuracao(silencioso = false) {
     setGerando(true);
     try {
+      const { pdf } = await import('@react-pdf/renderer');
       const { Procuracao } = await import('@domain/proposta/Procuracao');
       const d = buildData();
       const blob = await pdf(<Procuracao data={d} />).toBlob();
@@ -3191,6 +3210,7 @@ function TabResultado({ onPrev, onEmpresa }: { onPrev:()=>void; onEmpresa:()=>vo
   async function gerarDUB(silencioso = false) {
     setGerando(true);
     try {
+      const { pdf } = await import('@react-pdf/renderer');
       const { DiagramaUnifilarBasico } = await import('@domain/proposta/DiagramaUnifilarBasico');
       const d = buildData();
       const blob = await pdf(<DiagramaUnifilarBasico data={d} />).toBlob();
@@ -3219,6 +3239,7 @@ function TabResultado({ onPrev, onEmpresa }: { onPrev:()=>void; onEmpresa:()=>vo
         alert(msg);
         return;
       }
+      const { pdf } = await import('@react-pdf/renderer');
       const mosaico = await montarMosaicoSatelite(endereco);
       const blob = await pdf(<PlantaDeSituacao data={d} mosaico={mosaico} />).toBlob();
       const url = URL.createObjectURL(blob);

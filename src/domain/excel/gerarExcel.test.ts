@@ -1,8 +1,25 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { existsSync, unlinkSync, readdirSync } from 'node:fs';
+import { existsSync, unlinkSync, readdirSync, mkdtempSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const XLSX: typeof import('xlsx') = require('xlsx');
 import { gerarExcelAuditoria } from './gerarExcel';
+
+// BUG CORRIGIDO (set/2026): estes testes gravavam e liam de volta com
+// caminho relativo ('.', ou seja, process.cwd()) — cwd é compartilhado entre
+// TODO teste rodando nesta máquina (inclusive scripts manuais de auditoria
+// que às vezes deixam .xlsx velhos pra trás, e outros arquivos de teste
+// rodando em paralelo em workers diferentes do vitest). Isso causou uma
+// falha real e reproduzida nesta sessão: um arquivo velho
+// "FormularioCEMIG_MicroGD_Ana_Maria..." de um teste manual anterior foi
+// pego por engano por outro readdirSync('.') (prefixo igual), fazendo um
+// teste comparar contra o CPF errado. Isolando cada arquivo de teste num
+// diretório temporário próprio (mkdtempSync), a suíte fica imune a esse
+// tipo de colisão — ver o mesmo parâmetro `pastaDestino` (novo, opcional)
+// em gerarExcel.ts, adicionado por um motivo de produção relacionado (ver
+// comentário lá).
+const DIR_TESTE = mkdtempSync(path.join(os.tmpdir(), 'lumensolar-test-excel-'));
 
 // Este arquivo não tinha NENHUM teste antes. Dois bugs reais passaram
 // despercebidos por isso:
@@ -15,8 +32,8 @@ import { gerarExcelAuditoria } from './gerarExcel';
 // regressão futura quebre o build de novo, não silenciosamente.
 
 function limparArquivosGerados() {
-  for (const f of readdirSync('.')) {
-    if (f.startsWith('Auditoria_') && f.endsWith('.xlsx')) unlinkSync(f);
+  for (const f of readdirSync(DIR_TESTE)) {
+    if (f.startsWith('Auditoria_') && f.endsWith('.xlsx')) unlinkSync(path.join(DIR_TESTE, f));
   }
 }
 
@@ -24,7 +41,7 @@ describe('gerarExcelAuditoria — smoke test (regressão do bug FC_T0 + dependê
   afterEach(() => limparArquivosGerados());
 
   it('não lança exceção com dados mínimos (objeto vazio — todos os campos têm default)', () => {
-    expect(() => gerarExcelAuditoria({})).not.toThrow();
+    expect(() => gerarExcelAuditoria({}, DIR_TESTE)).not.toThrow();
   });
 
   it('não lança exceção com dados realistas e gera o arquivo .xlsx esperado', () => {
@@ -48,15 +65,15 @@ describe('gerarExcelAuditoria — smoke test (regressão do bug FC_T0 + dependê
       },
     };
 
-    expect(() => gerarExcelAuditoria(dados as any)).not.toThrow();
+    expect(() => gerarExcelAuditoria(dados as any, DIR_TESTE)).not.toThrow();
 
-    const gerados = readdirSync('.').filter(f => f.startsWith('Auditoria_') && f.endsWith('.xlsx'));
+    const gerados = readdirSync(DIR_TESTE).filter(f => f.startsWith('Auditoria_') && f.endsWith('.xlsx'));
     expect(gerados.length).toBeGreaterThan(0);
-    expect(existsSync(gerados[0])).toBe(true);
+    expect(existsSync(path.join(DIR_TESTE, gerados[0]))).toBe(true);
   });
 
   it('funciona igual com consumo/kit/preco ausentes (undefined dentro de dados)', () => {
-    expect(() => gerarExcelAuditoria({ cliente: { nome: 'Sem Dados' } } as any)).not.toThrow();
+    expect(() => gerarExcelAuditoria({ cliente: { nome: 'Sem Dados' } } as any, DIR_TESTE)).not.toThrow();
   });
 
   // [REGRESSÃO ago/2026] bloco de aviso Grupo A na aba Resumo — adicionado
@@ -76,7 +93,7 @@ describe('gerarExcelAuditoria — smoke test (regressão do bug FC_T0 + dependê
         houveUltrapassagemDemanda: false, alertas: [], observacoes: [],
       },
     };
-    expect(() => gerarExcelAuditoria(dados as any)).not.toThrow();
+    expect(() => gerarExcelAuditoria(dados as any, DIR_TESTE)).not.toThrow();
   });
 
   it('não lança exceção quando consumo.grupoTensao é "A" com ultrapassagem de demanda (alerta extra)', () => {
@@ -93,7 +110,7 @@ describe('gerarExcelAuditoria — smoke test (regressão do bug FC_T0 + dependê
         houveUltrapassagemDemanda: true, alertas: ['Ultrapassagem de demanda: 30.0kW acima do contratado'], observacoes: [],
       },
     };
-    expect(() => gerarExcelAuditoria(dados as any)).not.toThrow();
+    expect(() => gerarExcelAuditoria(dados as any, DIR_TESTE)).not.toThrow();
   });
 });
 
@@ -109,9 +126,9 @@ describe('gerarExcelAuditoria — REGRESSÃO ago/2026: aba Resumo respeita o enq
   afterEach(() => limparArquivosGerados());
 
   function planilhaResumo(dados: any): any {
-    gerarExcelAuditoria(dados);
-    const gerados = readdirSync('.').filter(f => f.startsWith('Auditoria_') && f.endsWith('.xlsx'));
-    const wb = XLSX.readFile(gerados[0]);
+    gerarExcelAuditoria(dados, DIR_TESTE);
+    const gerados = readdirSync(DIR_TESTE).filter(f => f.startsWith('Auditoria_') && f.endsWith('.xlsx'));
+    const wb = XLSX.readFile(path.join(DIR_TESTE, gerados[0]));
     return wb.Sheets['Resumo'];
   }
 
@@ -161,9 +178,9 @@ describe('gerarExcelAuditoria — REGRESSÃO ago/2026 (rodada 10): 6 bugs de fó
   afterEach(() => limparArquivosGerados());
 
   function planilha(dados: any, aba: string): any {
-    gerarExcelAuditoria(dados);
-    const gerados = readdirSync('.').filter(f => f.startsWith('Auditoria_') && f.endsWith('.xlsx'));
-    const wb = XLSX.readFile(gerados[0]);
+    gerarExcelAuditoria(dados, DIR_TESTE);
+    const gerados = readdirSync(DIR_TESTE).filter(f => f.startsWith('Auditoria_') && f.endsWith('.xlsx'));
+    const wb = XLSX.readFile(path.join(DIR_TESTE, gerados[0]));
     return wb.Sheets[aba];
   }
 

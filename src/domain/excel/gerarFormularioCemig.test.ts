@@ -1,13 +1,21 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { readdirSync, unlinkSync } from 'node:fs';
+import { readdirSync, unlinkSync, mkdtempSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { checklistDocumentosCEMIG, gerarFormularioCemigMicroGD, MAPA_CELULAS } from './gerarFormularioCemig';
 import { CHECKLIST_PADRAO_CEMIG_MICROGD, marcarItemGerado, marcarItemAnexado } from '../documentacaoCemig/checklist';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const XLSX: typeof import('xlsx') = require('xlsx');
 
+// BUG CORRIGIDO (set/2026): ver comentário completo em gerarExcel.test.ts —
+// mesma correção (isolar em diretório temporário próprio em vez de cwd
+// compartilhado), motivada por uma falha real desta sessão causada por
+// exatamente essa colisão neste mesmo arquivo de teste.
+const DIR_TESTE = mkdtempSync(path.join(os.tmpdir(), 'lumensolar-test-cemig-'));
+
 function limparArquivosGerados() {
-  for (const f of readdirSync('.')) {
-    if (f.startsWith('FormularioCEMIG_MicroGD_') && f.endsWith('.xlsx')) unlinkSync(f);
+  for (const f of readdirSync(DIR_TESTE)) {
+    if (f.startsWith('FormularioCEMIG_MicroGD_') && f.endsWith('.xlsx')) unlinkSync(path.join(DIR_TESTE, f));
   }
 }
 
@@ -78,11 +86,11 @@ describe('gerarFormularioCemigMicroGD — exercitando a função real de produç
       kit: { potenciaModuloWp: 550, quantidade: 10 },
       empresa: {},
     };
-    gerarFormularioCemigMicroGD(dados);
+    gerarFormularioCemigMicroGD(dados, DIR_TESTE);
 
-    const gerados = readdirSync('.').filter(f => f.startsWith('FormularioCEMIG_MicroGD_') && f.endsWith('.xlsx'));
+    const gerados = readdirSync(DIR_TESTE).filter(f => f.startsWith('FormularioCEMIG_MicroGD_') && f.endsWith('.xlsx'));
     expect(gerados.length).toBeGreaterThan(0);
-    const wb = XLSX.readFile(gerados[0]);
+    const wb = XLSX.readFile(path.join(DIR_TESTE, gerados[0]));
     const ws = wb.Sheets['Formulário_Preenchido'];
 
     expect(ws[MAPA_CELULAS.uc_cpf]?.v).toBe('123.456.789-00');
@@ -128,11 +136,11 @@ describe('gerarFormularioCemigMicroGD — exercitando a função real de produç
       kit: {},
       empresa: {},
     };
-    gerarFormularioCemigMicroGD(dados);
+    gerarFormularioCemigMicroGD(dados, DIR_TESTE);
 
-    const gerados = readdirSync('.').filter(f => f.startsWith('FormularioCEMIG_MicroGD_') && f.endsWith('.xlsx'));
+    const gerados = readdirSync(DIR_TESTE).filter(f => f.startsWith('FormularioCEMIG_MicroGD_') && f.endsWith('.xlsx'));
     expect(gerados.length).toBeGreaterThan(0);
-    const wb = XLSX.readFile(gerados[0]);
+    const wb = XLSX.readFile(path.join(DIR_TESTE, gerados[0]));
     const ws = wb.Sheets['Formulário_Preenchido'];
 
     expect(ws[MAPA_CELULAS.utm_fuso]?.v).toBe(22);
@@ -158,9 +166,9 @@ describe('gerarFormularioCemigMicroGD — exercitando a função real de produç
       kit: {},
       empresa: {},
     };
-    gerarFormularioCemigMicroGD(dados);
-    const gerados = readdirSync('.').filter(f => f.startsWith('FormularioCEMIG_MicroGD_') && f.endsWith('.xlsx'));
-    const wb = XLSX.readFile(gerados[0]);
+    gerarFormularioCemigMicroGD(dados, DIR_TESTE);
+    const gerados = readdirSync(DIR_TESTE).filter(f => f.startsWith('FormularioCEMIG_MicroGD_') && f.endsWith('.xlsx'));
+    const wb = XLSX.readFile(path.join(DIR_TESTE, gerados[0]));
     const ws = wb.Sheets['Formulário_Preenchido'];
     expect(ws[MAPA_CELULAS.utm_e]?.t).toBe('s');
     expect(ws[MAPA_CELULAS.utm_e]?.v).toBe('endereço não encontrado');
@@ -176,9 +184,9 @@ describe('gerarFormularioCemigMicroGD — exercitando a função real de produç
       kit: {},
       empresa: {},
     };
-    gerarFormularioCemigMicroGD(dados);
-    const gerados = readdirSync('.').filter(f => f.startsWith('FormularioCEMIG_MicroGD_') && f.endsWith('.xlsx'));
-    const wb = XLSX.readFile(gerados[0]);
+    gerarFormularioCemigMicroGD(dados, DIR_TESTE);
+    const gerados = readdirSync(DIR_TESTE).filter(f => f.startsWith('FormularioCEMIG_MicroGD_') && f.endsWith('.xlsx'));
+    const wb = XLSX.readFile(path.join(DIR_TESTE, gerados[0]));
     const ws = wb.Sheets['Formulário_Preenchido'];
     expect(ws[MAPA_CELULAS.utm_e]?.t).toBe('n');
     expect(ws[MAPA_CELULAS.utm_e]?.v).toBe(794897.61);

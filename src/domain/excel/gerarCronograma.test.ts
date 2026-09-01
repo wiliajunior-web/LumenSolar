@@ -1,8 +1,15 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { existsSync, unlinkSync, readdirSync } from 'node:fs';
+import { existsSync, unlinkSync, readdirSync, mkdtempSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const XLSX: typeof import('xlsx') = require('xlsx');
 import { gerarCronograma } from './gerarCronograma';
+
+// BUG CORRIGIDO (set/2026): ver comentário completo em gerarExcel.test.ts —
+// mesma correção (isolar em diretório temporário próprio em vez de cwd
+// compartilhado).
+const DIR_TESTE = mkdtempSync(path.join(os.tmpdir(), 'lumensolar-test-cronograma-'));
 
 // Este arquivo não existia antes da auditoria de ago/2026. gerarCronograma.ts
 // tinha ZERO cobertura de teste — o que deixou passar despercebido o bug
@@ -16,8 +23,8 @@ import { gerarCronograma } from './gerarCronograma';
 // falhado com o código antigo (mostraria 01/03/2026 em vez de 02/03/2026).
 
 function limparArquivosGerados() {
-  for (const f of readdirSync('.')) {
-    if (f.startsWith('Cronograma_') && f.endsWith('.xlsx')) unlinkSync(f);
+  for (const f of readdirSync(DIR_TESTE)) {
+    if (f.startsWith('Cronograma_') && f.endsWith('.xlsx')) unlinkSync(path.join(DIR_TESTE, f));
   }
 }
 
@@ -38,13 +45,13 @@ describe('gerarCronograma — REGRESSÃO ago/2026: datas corretas independente d
         empresa: 'Lumen Soluções Ltda',
         responsavelTecnico: 'Eng. Teste',
         tipoSistema: 'micro',
-      });
+      }, DIR_TESTE);
 
-      const gerados = readdirSync('.').filter(f => f.startsWith('Cronograma_') && f.endsWith('.xlsx'));
+      const gerados = readdirSync(DIR_TESTE).filter(f => f.startsWith('Cronograma_') && f.endsWith('.xlsx'));
       expect(gerados.length).toBeGreaterThan(0);
-      expect(existsSync(gerados[0])).toBe(true);
+      expect(existsSync(path.join(DIR_TESTE, gerados[0]))).toBe(true);
 
-      const wb = XLSX.readFile(gerados[0]);
+      const wb = XLSX.readFile(path.join(DIR_TESTE, gerados[0]));
       const ws = wb.Sheets['Cronograma'];
 
       // Linha 4: "10 kWp | 19 módulos | Início: 02/03/2026"
@@ -76,7 +83,7 @@ describe('gerarCronograma — REGRESSÃO ago/2026: datas corretas independente d
       empresa: 'Lumen Soluções Ltda',
       responsavelTecnico: 'Eng. Teste',
       tipoSistema: 'mini',
-    })).not.toThrow();
+    }, DIR_TESTE)).not.toThrow();
   });
 });
 
@@ -100,14 +107,14 @@ describe('gerarCronograma — REGRESSÃO ago/2026 (rodada 10): instalação nunc
       empresa: 'Lumen Soluções Ltda',
       responsavelTecnico: 'Eng. Teste',
       tipoSistema,
-    });
+    }, DIR_TESTE);
     // Filtra pelo nome do cliente: como o teste de comparação micro-vs-mini gera
     // os dois arquivos antes de limpar (afterEach só roda ao fim do `it`), um
     // filtro genérico por prefixo pegaria o primeiro arquivo em ordem alfabética
     // (ex.: "...Cliente_mini..." < "...Cliente_micro..." alfabeticamente é falso
     // — "mini" > "micro" — mas não se pode confiar em ordem alfabética aqui).
-    const gerados = readdirSync('.').filter(f => f.startsWith(`Cronograma_Cliente_${tipoSistema}_`) && f.endsWith('.xlsx'));
-    const wb = XLSX.readFile(gerados[0]);
+    const gerados = readdirSync(DIR_TESTE).filter(f => f.startsWith(`Cronograma_Cliente_${tipoSistema}_`) && f.endsWith('.xlsx'));
+    const wb = XLSX.readFile(path.join(DIR_TESTE, gerados[0]));
     return wb.Sheets['Cronograma'];
   }
 
@@ -164,9 +171,9 @@ describe('gerarCronograma — REGRESSÃO ago/2026 (rodada 13): coluna "Descriç�
       empresa: 'Lumen Soluções Ltda',
       responsavelTecnico: 'Eng. Teste',
       tipoSistema: 'micro',
-    });
-    const gerados = readdirSync('.').filter(f => f.startsWith('Cronograma_') && f.endsWith('.xlsx'));
-    const wb = XLSX.readFile(gerados[0]);
+    }, DIR_TESTE);
+    const gerados = readdirSync(DIR_TESTE).filter(f => f.startsWith('Cronograma_') && f.endsWith('.xlsx'));
+    const wb = XLSX.readFile(path.join(DIR_TESTE, gerados[0]));
     return wb.Sheets['Cronograma'];
   }
 

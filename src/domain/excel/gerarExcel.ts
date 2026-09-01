@@ -23,6 +23,7 @@
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const XLSX: typeof import('xlsx') = require('xlsx');
+import path from 'node:path';
 import { DISTRIBUIDORAS } from '@data/distribuidoras';
 import { HSP_MEDIO_POR_UF } from '@data/hspPorUF';
 import { formatarNomeModulo } from '@domain/kit/formatarModulo';
@@ -85,7 +86,15 @@ function setCols(ws: WS, widths: number[]) {
 }
 
 // ── Gerador principal ─────────────────────────────────────────────────────────
-export function gerarExcelAuditoria(dados: any): void {
+// `pastaDestino` (opcional, padrão `process.cwd()` — comportamento antigo,
+// preservado pra não quebrar nenhum teste/script existente): ver comentário
+// completo sobre PORQUE isso passou a ser parametrizável em
+// `src/renderer/services/pastaDocumentos.ts`. Resumo: o único alvo Windows
+// deste app (build.win.target = "portable" em package.json) roda com cwd
+// dentro de uma pasta temporária de extração — gravar com caminho relativo
+// jogava o Excel gerado num lugar que o usuário não escolheu e dificilmente
+// encontraria depois.
+export function gerarExcelAuditoria(dados: any, pastaDestino: string = process.cwd()): void {
   const { empresa, cliente, consumo, localizacao, kit, preco,
           dimensionamento, custosRecorrentes, precificacao, indicadores,
           resultadoGrupoA, enquadramento, percentuaisFioBPorAno } = dados;
@@ -825,5 +834,5 @@ export function gerarExcelAuditoria(dados: any): void {
   // ── Download ─────────────────────────────────────────────────────────────
   const nomeCliente = normalizarNomeArquivo(dados.cliente?.nome ?? 'Cliente');
   const data = new Date().toISOString().slice(0,10);
-  XLSX.writeFile(wb, `Auditoria_${nomeCliente}_${data}.xlsx`);
+  XLSX.writeFile(wb, path.join(pastaDestino, `Auditoria_${nomeCliente}_${data}.xlsx`));
 }

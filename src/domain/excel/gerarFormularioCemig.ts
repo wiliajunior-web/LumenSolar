@@ -14,6 +14,7 @@
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const XLSX: typeof import('xlsx') = require('xlsx');
 
+import path from 'node:path';
 import { normalizarNomeArquivo } from '@domain/shared/normalizarNomeArquivo';
 import { parseNumeroBR } from '@domain/shared/parseNumeroBR';
 
@@ -122,7 +123,9 @@ const DEFAULTS_CEMIG = {
   telhado_arrendado: 'Não',
 };
 
-export function gerarFormularioCemigMicroGD(dados: any): void {
+// `pastaDestino`: ver comentário em `gerarExcel.ts` (mesma correção, mesmo motivo
+// — build.win.target = "portable" extrai pra pasta temporária a cada execução).
+export function gerarFormularioCemigMicroGD(dados: any, pastaDestino: string = process.cwd()): void {
   const { cliente, consumo, localizacao, kit, dimensionamento, indicadores, empresa } = dados;
 
   // ── Derivar dados calculados ───────────────────────────────────────────
@@ -260,7 +263,7 @@ export function gerarFormularioCemigMicroGD(dados: any): void {
 
   // Download
   const nomeCliente = normalizarNomeArquivo(cliente?.nome || 'Cliente');
-  XLSX.writeFile(wb, `FormularioCEMIG_MicroGD_${nomeCliente}.xlsx`);
+  XLSX.writeFile(wb, path.join(pastaDestino, `FormularioCEMIG_MicroGD_${nomeCliente}.xlsx`));
 }
 
 /**
