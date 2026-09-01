@@ -21,6 +21,23 @@
  * dimensionamento usadas aqui).
  */
 
+// AVALIADO (set/2026): `npm audit` acusa a `xlsx` (SheetJS) publicada no
+// registro npm como "high severity" — Prototype Pollution
+// (GHSA-4r6h-8v6p-xvw6) e ReDoS (GHSA-5pgg-2g8v-p4x9), sem correção
+// disponível nesse pacote (a SheetJS só publica a versão corrigida no CDN
+// próprio deles, fora do npm). Verifiquei o vetor de ataque de ambas: as
+// duas exigem que o app PARSEIE um .xlsx malicioso construído pra explorar
+// isso (`XLSX.read`/`XLSX.readFile` num arquivo controlado por um
+// atacante). Busquei todo uso de `XLSX.readFile`/`XLSX.read` no projeto —
+// só existe dentro de arquivos `.test.ts`, pra conferir que o PRÓPRIO
+// Excel gerado pelo app bate com o esperado. Nenhum caminho do app
+// empacotado (o que o usuário final roda) chama `XLSX.read`/`readFile` —
+// só `XLSX.writeFile`/`XLSX.utils.*` pra CRIAR planilhas. Como o app nunca
+// abre um .xlsx vindo de fora, as duas vulnerabilidades não têm superfície
+// de ataque real neste uso específico — por isso o achado do audit foi
+// avaliado e conscientemente deixado sem ação, não ignorado por descuido.
+// Se um dia o app passar a IMPORTAR planilhas de terceiros, esta análise
+// precisa ser refeita antes.
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const XLSX: typeof import('xlsx') = require('xlsx');
 import path from 'node:path';
