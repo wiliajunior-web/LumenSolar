@@ -57,6 +57,60 @@ export interface DadosEmpresa {
   fotoApoio?: string;
 }
 
+/**
+ * BUG CORRIGIDO (set/2026, auditoria de código adjacente ao fix do
+ * `webSecurity`/fetch externo): a tela "⚙ Empresa" tem um campo de chave de
+ * API da Anthropic (`anthropicApiKey`, usada só para a importação de
+ * datasheet por IA — ver App.tsx ~2262/2337) gravado direto no MESMO objeto
+ * `empresa` da store (`atualizarEmpresa({ anthropicApiKey: ... })`, campo
+ * solto via `as any` porque nunca fez parte de `DadosEmpresa`). Esse mesmo
+ * objeto `empresa`, por sua vez, é embutido INTEIRO — sem filtro nenhum — em
+ * TRÊS artefatos que saem da máquina do usuário:
+ *   1. `salvar()` (App.tsx) grava `empresa` dentro de todo arquivo
+ *      `.lumensolar`, que o próprio app documenta como "pode copiar,
+ *      renomear, enviar por e-mail, colocar no Google Drive" (ver
+ *      persistence.ts) — ou seja, TODO projeto salvo levava a chave de API
+ *      pessoal do usuário, em texto puro, dentro do JSON.
+ *   2. `gerarExcelAuditoria()` recebe `empresa` no payload — o Excel de
+ *      auditoria/formulário CEMIG é literalmente feito para ser ENVIADO À
+ *      DISTRIBUIDORA.
+ *   3. `buildData()` retorna `empresa` para todos os PDFs (Proposta,
+ *      Memorial, Procuração, DUB, Planta de Situação) — documentos que vão
+ *      direto para o CLIENTE.
+ * Nenhum template atual imprime o objeto `empresa` inteiro (cada um lê
+ * campos específicos como razaoSocial/cnpj/crea), então a chave não aparece
+ * como texto visível em nenhum PDF/Excel gerado hoje — mas o dado sensível
+ * não tinha nenhum motivo para sequer chegar até essas funções, e um
+ * template futuro (ou uma seção de "dados técnicos completos") poderia
+ * expor ela por acidente. No `.lumensolar` o risco já é real e imediato: o
+ * arquivo é JSON puro, sem nenhuma tela intermediária — abrir o arquivo em
+ * qualquer editor de texto mostra a chave.
+ *
+ * Corrigido na raiz: esta função remove qualquer campo de credencial do
+ * objeto `empresa` ANTES dele entrar em qualquer um dos 3 artefatos acima
+ * (ver usos em App.tsx: `salvar()`, `buildData()`, payload do
+ * `gerarExcelAuditoria`). A chave continua funcionando normalmente na tela
+ * "⚙ Empresa" e na importação de datasheet — ela só nunca sai da store
+ * local (`salvarEmpresa()`/`carregarEmpresa()`, localStorage, nunca
+ * embutida em arquivo exportado). Como consequência colateral correta:
+ * importar um arquivo .lumensolar de outra pessoa/computador não
+ * sobrescreve (nem preenche) a chave de API local — `camposEmpresaParaPreencherAoImportar`
+ * só herda campos que EXISTEM no arquivo importado, e a chave nunca está lá.
+ *
+ * Lista de campos de credencial é centralizada aqui de propósito: qualquer
+ * campo sensível futuro (outra chave de API, token, etc.) deve ser
+ * adicionado a `CAMPOS_SECRETOS_EMPRESA`, não espalhado em filtros ad-hoc
+ * pelos 3 pontos de uso.
+ */
+const CAMPOS_SECRETOS_EMPRESA = ['anthropicApiKey'] as const;
+
+export function empresaSemSegredos<T extends Record<string, any>>(empresa: T): T {
+  if (!empresa) return empresa;
+  const copia: Record<string, any> = { ...empresa };
+  for (const campo of CAMPOS_SECRETOS_EMPRESA) delete copia[campo];
+  return copia as T;
+}
+
 export const DADOS_EMPRESA_PADRAO: DadosEmpresa = {
   razaoSocial: 'LUMEN SOLUÇÕES LTDA',
   nomeFantasia: 'Lumen Solar',

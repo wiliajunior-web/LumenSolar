@@ -3,6 +3,7 @@ import { useProjetoStore, PRESETS_MODULO, MESES, type TipoModuloPreset, clienteP
 import { salvarArquivo, importarArquivo, listarRecentes, removerRecente, carregarEmpresa, salvarEmpresa, gerarId, type MetadataProposta } from './services/persistence';
 import { validarCliente, validarConsumo, validarKit, validarPreco, validarProjetoCompleto, validarCPF, validarCNPJ, formatarCPF, type StatusPasso } from './services/validation';
 import { DISTRIBUIDORAS } from '@data/distribuidoras';
+import { empresaSemSegredos } from '@data/empresa';
 import { TIPO_TELHADO_LABELS, ORIENTACOES, type TipoTelhado, LOCALIZACAO_PADRAO } from '@data/localizacao';
 import { HSP_MEDIO_POR_UF } from '@data/hspPorUF';
 import { CHECKLIST_PADRAO_CEMIG_MICROGD, resumoChecklist, type ItemChecklistDocumentacao } from '@domain/documentacaoCemig/checklist';
@@ -645,7 +646,12 @@ export default function App() {
       id, nomeCliente: s.cliente.nome || 'Sem nome', cidade: s.cliente.cidade,
       uf: s.cliente.uf, criadoEm: criadoEmOriginal, atualizadoEm: new Date().toISOString(),
       potenciaKWp: s.dimensionamento?.potenciaInstaladaRealKWp, precoVenda: s.precificacao?.precoVenda,
-      empresa: s.empresa, cliente: s.cliente, consumo: s.consumo, localizacao: s.localizacao, kit: s.kit, preco: s.preco,
+      // BUG CORRIGIDO (set/2026): `empresa` sem filtro aqui gravava a chave de
+      // API da Anthropic (⚙ Empresa) em texto puro dentro de TODO arquivo
+      // .lumensolar salvo — arquivo que o próprio app trata como exportável
+      // (copiar, enviar por e-mail, Google Drive). Ver comentário completo em
+      // `empresaSemSegredos` (src/data/empresa.ts).
+      empresa: empresaSemSegredos(s.empresa), cliente: s.cliente, consumo: s.consumo, localizacao: s.localizacao, kit: s.kit, preco: s.preco,
       checklistDocumentacao: s.checklistDocumentacao,
     };
     const nomeArq = await salvarArquivo(data);
@@ -2917,7 +2923,12 @@ function TabResultado({ onPrev, onEmpresa }: { onPrev:()=>void; onEmpresa:()=>vo
     }
     const distribuidoraObj = DISTRIBUIDORAS.find(d => d.codigo === consumo.codigoDistribuidora) ?? DISTRIBUIDORAS[0];
     return {
-      empresa, cliente,
+      // BUG CORRIGIDO (set/2026): mesmo problema de `salvar()` (ver comentário
+      // lá) — `empresa` sem filtro alimentava todos os PDFs (Proposta,
+      // Memorial, Procuração, DUB, Planta de Situação), documentos que vão
+      // direto pro cliente. Nenhum template hoje imprime o objeto inteiro,
+      // mas a chave de API não tinha motivo pra sequer chegar até aqui.
+      empresa: empresaSemSegredos(empresa), cliente,
       // Consumo completo + distribuidora (usados por Memorial e Procuracao)
       consumo,
       // Grupo A (ago/2026): usado por PropostaPDF/PropostaComercialPDF para
@@ -3189,7 +3200,13 @@ function TabResultado({ onPrev, onEmpresa }: { onPrev:()=>void; onEmpresa:()=>vo
         throw new Error(mensagemCadastroEmpresaIncompleto(st.empresa));
       }
       gerarExcelAuditoria({
-        empresa: st.empresa, cliente: st.cliente, consumo: st.consumo,
+        // BUG CORRIGIDO (set/2026): mesmo problema de `salvar()`/`buildData()`
+        // (ver comentários lá) — este é o único gerador que monta o payload
+        // direto do store em vez de passar por `buildData()`, então precisava
+        // do mesmo filtro duplicado aqui. Agravante: este Excel é o
+        // formulário de auditoria/CEMIG, feito pra ser ENVIADO À
+        // DISTRIBUIDORA — pior destino possível pra uma chave de API vazada.
+        empresa: empresaSemSegredos(st.empresa), cliente: st.cliente, consumo: st.consumo,
         localizacao: st.localizacao, kit: st.kit, preco: st.preco,
         dimensionamento: st.dimensionamento, custosRecorrentes: st.custosRecorrentes,
         precificacao: st.precificacao, indicadores: st.indicadores,
