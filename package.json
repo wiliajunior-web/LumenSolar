@@ -36,11 +36,11 @@
             "x64"
           ]
         }
-      ],
-      "artifactName": "LumenSolar-${version}-portable.exe"
+      ]
     },
     "portable": {
-      "requestExecutionLevel": "user"
+      "requestExecutionLevel": "user",
+      "artifactName": "${productName}-${version}-portable.${ext}"
     },
     "extraMetadata": {
       "main": "dist-electron/index.js"
@@ -48,7 +48,8 @@
     "nsis": {
       "oneClick": true,
       "perMachine": false,
-      "allowToChangeInstallationDirectory": false
+      "allowToChangeInstallationDirectory": false,
+      "artifactName": "${productName}-${version}-instalador.${ext}"
     },
     "extraResources": []
   },
