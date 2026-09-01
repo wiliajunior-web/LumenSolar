@@ -2918,12 +2918,10 @@ function TabResultado({ onPrev, onEmpresa }: { onPrev:()=>void; onEmpresa:()=>vo
       // Convertido para import dinâmico, no mesmo padrão já usado ao lado.
       const { pdf } = await import('@react-pdf/renderer');
       const { PropostaComercialPDF } = await import('@domain/proposta/PropostaComercialPDF');
+      const { salvarPdfNativo } = await import('./services/pastaDocumentos');
       const blob = await pdf(<PropostaComercialPDF data={buildData()} />).toBlob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'Proposta_' + (s.cliente.nome||'Cliente').replace(/\s+/g,'_') + '_' + new Date().toISOString().slice(0,10) + '.pdf';
-      a.click(); URL.revokeObjectURL(url);
+      const nomeArquivo = 'Proposta_' + (s.cliente.nome||'Cliente').replace(/\s+/g,'_') + '_' + new Date().toISOString().slice(0,10) + '.pdf';
+      await salvarPdfNativo(blob, nomeArquivo);
     } catch(e) { if (silencioso) throw e; alert('Erro ao gerar Proposta: ' + (e instanceof Error ? e.message : String(e)));
     } finally { setGerando(false); }
   }
@@ -2933,12 +2931,10 @@ function TabResultado({ onPrev, onEmpresa }: { onPrev:()=>void; onEmpresa:()=>vo
     try {
       const { pdf } = await import('@react-pdf/renderer');
       const { PropostaPDF } = await import('@domain/proposta/PropostaPDF');
+      const { salvarPdfNativo } = await import('./services/pastaDocumentos');
       const blob = await pdf(<PropostaPDF data={buildData()} />).toBlob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'DocTecnica_' + (s.cliente.nome||'Cliente').replace(/\s+/g,'_') + '_' + new Date().toISOString().slice(0,10) + '.pdf';
-      a.click(); URL.revokeObjectURL(url);
+      const nomeArquivo = 'DocTecnica_' + (s.cliente.nome||'Cliente').replace(/\s+/g,'_') + '_' + new Date().toISOString().slice(0,10) + '.pdf';
+      await salvarPdfNativo(blob, nomeArquivo);
     } catch(e) { alert('Erro ao gerar Doc. Técnica: ' + (e instanceof Error ? e.message : String(e)));
     } finally { setGerando(false); }
   }
@@ -2970,16 +2966,15 @@ function TabResultado({ onPrev, onEmpresa }: { onPrev:()=>void; onEmpresa:()=>vo
     if (!st.dimensionamento) { alert('Calcule o projeto antes de enviar o email.'); return; }
     setGerando(true);
     try {
-      // Gerar PDF como base64
       const { pdf } = await import('@react-pdf/renderer');
       const { PropostaComercialPDF } = await import('@domain/proposta/PropostaComercialPDF');
+      const { salvarPdfNativo } = await import('./services/pastaDocumentos');
       const blob = await pdf(<PropostaComercialPDF data={buildData()} />).toBlob();
-      const base64 = await new Promise<string>((res, rej) => {
-        const r = new FileReader();
-        r.onload = () => res((r.result as string).split(',')[1]);
-        r.onerror = rej;
-        r.readAsDataURL(blob);
-      });
+      // BUG CORRIGIDO (set/2026): este bloco convertia o PDF para base64 via
+      // FileReader e nunca usava o resultado em lugar nenhum — mailto: não
+      // suporta anexar arquivo (limitação real do protocolo/navegador, não
+      // deste app), então essa conversão era trabalho jogado fora a cada
+      // envio. Removida.
       const email = st.cliente.email || '';
       const nome  = st.cliente.nome  || 'cliente';
       const kwp   = st.dimensionamento?.potenciaInstaladaRealKWp?.toFixed(2) ?? '';
@@ -3006,17 +3001,12 @@ function TabResultado({ onPrev, onEmpresa }: { onPrev:()=>void; onEmpresa:()=>vo
         alert('Cadastre o email do cliente na aba Cliente.');
         return;
       }
-      // Preparar email
-
-      // Baixar PDF automaticamente + abrir cliente de email
-      const urlPdf = URL.createObjectURL(blob);
-      const aPdf = document.createElement('a');
-      aPdf.href = urlPdf; aPdf.download = nomeArq; aPdf.click();
-      URL.revokeObjectURL(urlPdf);
+      // Salvar PDF localmente + abrir cliente de email
+      const caminhoSalvo = await salvarPdfNativo(blob, nomeArq);
       const assuntoEnc = encodeURIComponent(assunto);
-      const corpoEnc = encodeURIComponent(corpo + nl + nl + '[Anexe o PDF que foi baixado automaticamente]');
+      const corpoEnc = encodeURIComponent(corpo + nl + nl + '[Anexe o PDF salvo em: ' + caminhoSalvo + ']');
       setTimeout(() => { window.location.href = `mailto:${email}?subject=${assuntoEnc}&body=${corpoEnc}`; }, 800);
-      alert(`PDF baixado! Seu cliente de email foi aberto para ${email}. Apenas anexe o arquivo.`);
+      alert(`PDF salvo em:\n${caminhoSalvo}\n\nSeu cliente de email foi aberto para ${email}. Anexe o arquivo manualmente — mailto: não suporta anexo automático.`);
     } catch(e) { alert('Erro: ' + (e instanceof Error ? e.message : String(e)));
     } finally { setGerando(false); }
   }
@@ -3174,13 +3164,11 @@ function TabResultado({ onPrev, onEmpresa }: { onPrev:()=>void; onEmpresa:()=>vo
     try {
       const { pdf } = await import('@react-pdf/renderer');
       const { MemorialDescritivo } = await import('@domain/proposta/MemorialDescritivo');
+      const { salvarPdfNativo } = await import('./services/pastaDocumentos');
       const d = buildData();
       const blob = await pdf(<MemorialDescritivo data={d} />).toBlob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'Memorial_' + (s.cliente.nome||'Cliente').replace(/\s+/g,'_') + '_' + new Date().toISOString().slice(0,10) + '.pdf';
-      a.click(); URL.revokeObjectURL(url);
+      const nomeArquivo = 'Memorial_' + (s.cliente.nome||'Cliente').replace(/\s+/g,'_') + '_' + new Date().toISOString().slice(0,10) + '.pdf';
+      await salvarPdfNativo(blob, nomeArquivo);
       useProjetoStore.getState().marcarDocumentoGerado('memorial_descritivo');
     } catch(e) {
       if (silencioso) throw e;
@@ -3193,13 +3181,11 @@ function TabResultado({ onPrev, onEmpresa }: { onPrev:()=>void; onEmpresa:()=>vo
     try {
       const { pdf } = await import('@react-pdf/renderer');
       const { Procuracao } = await import('@domain/proposta/Procuracao');
+      const { salvarPdfNativo } = await import('./services/pastaDocumentos');
       const d = buildData();
       const blob = await pdf(<Procuracao data={d} />).toBlob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'Procuracao_' + (s.cliente.nome||'Cliente').replace(/\s+/g,'_') + '_' + new Date().toISOString().slice(0,10) + '.pdf';
-      a.click(); URL.revokeObjectURL(url);
+      const nomeArquivo = 'Procuracao_' + (s.cliente.nome||'Cliente').replace(/\s+/g,'_') + '_' + new Date().toISOString().slice(0,10) + '.pdf';
+      await salvarPdfNativo(blob, nomeArquivo);
       useProjetoStore.getState().marcarDocumentoGerado('procuracao');
     } catch(e) {
       if (silencioso) throw e;
@@ -3212,13 +3198,11 @@ function TabResultado({ onPrev, onEmpresa }: { onPrev:()=>void; onEmpresa:()=>vo
     try {
       const { pdf } = await import('@react-pdf/renderer');
       const { DiagramaUnifilarBasico } = await import('@domain/proposta/DiagramaUnifilarBasico');
+      const { salvarPdfNativo } = await import('./services/pastaDocumentos');
       const d = buildData();
       const blob = await pdf(<DiagramaUnifilarBasico data={d} />).toBlob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'DUB_' + (s.cliente.nome||'Cliente').replace(/\s+/g,'_') + '_' + new Date().toISOString().slice(0,10) + '.pdf';
-      a.click(); URL.revokeObjectURL(url);
+      const nomeArquivo = 'DUB_' + (s.cliente.nome||'Cliente').replace(/\s+/g,'_') + '_' + new Date().toISOString().slice(0,10) + '.pdf';
+      await salvarPdfNativo(blob, nomeArquivo);
       useProjetoStore.getState().marcarDocumentoGerado('dub');
     } catch(e) {
       if (silencioso) throw e;
@@ -3240,13 +3224,11 @@ function TabResultado({ onPrev, onEmpresa }: { onPrev:()=>void; onEmpresa:()=>vo
         return;
       }
       const { pdf } = await import('@react-pdf/renderer');
+      const { salvarPdfNativo } = await import('./services/pastaDocumentos');
       const mosaico = await montarMosaicoSatelite(endereco);
       const blob = await pdf(<PlantaDeSituacao data={d} mosaico={mosaico} />).toBlob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'PlantaSituacao_' + (s.cliente.nome||'Cliente').replace(/\s+/g,'_') + '_' + new Date().toISOString().slice(0,10) + '.pdf';
-      a.click(); URL.revokeObjectURL(url);
+      const nomeArquivo = 'PlantaSituacao_' + (s.cliente.nome||'Cliente').replace(/\s+/g,'_') + '_' + new Date().toISOString().slice(0,10) + '.pdf';
+      await salvarPdfNativo(blob, nomeArquivo);
       useProjetoStore.getState().marcarDocumentoGerado('planta_situacao');
     } catch(e) {
       // BUG CORRIGIDO (ago/2026): esta função nunca relançava — quando chamada
