@@ -750,6 +750,42 @@ export default function App() {
 
   const temProposta = aba !== 'home';
 
+  // ADICIONADO (set/2026, auditoria de robustez — Task #8): o app não tinha
+  // NENHUM mecanismo de autosave/recuperação — um crash do renderer
+  // (mitigado nesta mesma auditoria com um handler de `render-process-gone`
+  // em src/main/index.ts, mas que ainda assim fecha a janela) ou fechar o
+  // app sem lembrar de clicar em "Salvar" perdia todo o formulário em
+  // andamento, sem chance de recuperação. Reusa `salvar()` — o MESMO
+  // caminho do botão "💾 Salvar" (corrigido nesta auditoria para gravar de
+  // verdade no disco via fs, não mais um download de blob que podia falhar
+  // silenciosamente) — a cada 3 minutos, só quando há uma proposta aberta
+  // com nome de cliente preenchido (evita salvar uma proposta vazia/recém-
+  // criada repetidamente) e nenhum salvamento já em andamento. Silencioso
+  // em caso de erro (loga no console, não interrompe o usuário com alert) —
+  // o próximo ciclo de 3 minutos tenta de novo; se o problema persistir, o
+  // próprio botão "Salvar" manual mostraria o erro na próxima vez que o
+  // usuário clicasse nele. `nomeArquivo()` (persistence.ts) usa só a DATA
+  // (não a hora) no nome do arquivo, então saves repetidos no mesmo dia
+  // para o mesmo cliente sobrescrevem o mesmo arquivo — autosave não cria
+  // uma pilha crescente de arquivos duplicados no disco do usuário.
+  const savingRef = React.useRef(saving);
+  savingRef.current = saving; // lido dentro do setInterval abaixo — ref evita
+  // recriar o timer a cada mudança de `saving` (idle→saving→saved→idle
+  // acontece a cada salvamento, manual ou automático; sem o ref, colocar
+  // `saving` nas deps do useEffect abaixo destruiria/recriaria o interval 3x
+  // por salvamento).
+  React.useEffect(() => {
+    if (!temProposta) return;
+    const INTERVALO_AUTOSAVE_MS = 3 * 60 * 1000; // 3 minutos
+    const id = setInterval(() => {
+      const st = useProjetoStore.getState();
+      if (!st.cliente.nome?.trim()) return;
+      if (savingRef.current === 'saving') return;
+      salvar().catch(e => console.warn('[autosave] falhou (tentará de novo em 3min):', e));
+    }, INTERVALO_AUTOSAVE_MS);
+    return () => clearInterval(id);
+  }, [temProposta]);
+
   return (
     <>
       <style>{GLOBAL_CSS}</style>
