@@ -110,8 +110,8 @@ export async function obterPastaDocumentos(): Promise<string> {
  * Documentos resolvida por `obterPastaDocumentos()` — sem blob URL, sem
  * elemento <a>, sem timing assíncrono não determinístico pra dar errado.
  */
-export async function salvarPdfNativo(blob: Blob, nomeArquivo: string): Promise<string> {
-  const pasta = await obterPastaDocumentos();
+export async function salvarArquivoNativo(blob: Blob, nomeArquivo: string, pastaDestino?: string): Promise<string> {
+  const pasta = pastaDestino ?? await obterPastaDocumentos();
   const buffer = Buffer.from(await blob.arrayBuffer());
   const caminho = path.join(pasta, nomeArquivo);
   fs.writeFileSync(caminho, buffer);

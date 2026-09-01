@@ -16,6 +16,7 @@
  */
 
 import { gerarId } from './utils';
+import { salvarArquivoNativo } from './pastaDocumentos';
 
 export { gerarId };
 
@@ -74,10 +75,25 @@ export function nomeArquivo(nomeCliente: string, data?: string): string {
 // ─── Salvar arquivo ──────────────────────────────────────────────────────────
 
 /**
- * Serializa os dados do projeto em um arquivo .lumensolar e dispara o download.
- * O usuário escolhe onde salvar via diálogo nativo do Windows.
+ * Serializa os dados do projeto em um arquivo .lumensolar e grava no disco.
+ *
+ * BUG CORRIGIDO (set/2026): usava o MESMO padrão `URL.createObjectURL(blob)` +
+ * `<a download>.click()` + `URL.revokeObjectURL(url)` já confirmado quebrado
+ * nos 5 botões de PDF desta sessão (ver comentário completo em
+ * `salvarArquivoNativo`, pastaDocumentos.ts — instrumentei
+ * `session.on('will-download')` no processo principal e confirmei que o
+ * evento nunca dispara para este exato padrão de código). Esta é a função
+ * de "Salvar" PRINCIPAL do app — o botão que grava o próprio arquivo de
+ * projeto (.lumensolar) no disco, chamado por `salvar()` em App.tsx a cada
+ * clique manual e (depois desta mesma auditoria) pelo autosave periódico.
+ * Era o bug de maior risco possível encontrado nesta auditoria: o "Salvar"
+ * do usuário podia estar silenciosamente não gravando nada, sem nenhum
+ * erro, com a UI mostrando "salvo" (`setSaving('saved')` em App.tsx) mesmo
+ * assim. Corrigido com o mesmo mecanismo já usado e verificado para PDF/
+ * Excel: grava direto com `fs`, sem passar pelo gerenciador de download do
+ * Chromium.
  */
-export async function salvarArquivo(dados: any): Promise<string> {
+export async function salvarArquivo(dados: any, pastaDestino?: string): Promise<string> {
   const agora    = new Date().toISOString();
   const nome     = nomeArquivo(dados.cliente?.nome || 'Proposta', agora);
   const dadosStr = JSON.stringify(dados, null, 2);
@@ -96,15 +112,7 @@ export async function salvarArquivo(dados: any): Promise<string> {
 
   const conteudo = JSON.stringify(arquivo, null, 2);
   const blob     = new Blob([conteudo], { type: 'application/json; charset=utf-8' });
-  const url      = URL.createObjectURL(blob);
-
-  const a = document.createElement('a');
-  a.href     = url;
-  a.download = nome;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  await salvarArquivoNativo(blob, nome, pastaDestino);
 
   // Guardar metadados no localStorage para exibir na lista de recentes
   //

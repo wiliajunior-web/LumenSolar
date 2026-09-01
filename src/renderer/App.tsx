@@ -2922,10 +2922,10 @@ function TabResultado({ onPrev, onEmpresa }: { onPrev:()=>void; onEmpresa:()=>vo
       // Convertido para import dinâmico, no mesmo padrão já usado ao lado.
       const { pdf } = await import('@react-pdf/renderer');
       const { PropostaComercialPDF } = await import('@domain/proposta/PropostaComercialPDF');
-      const { salvarPdfNativo } = await import('./services/pastaDocumentos');
+      const { salvarArquivoNativo } = await import('./services/pastaDocumentos');
       const blob = await pdf(<PropostaComercialPDF data={buildData()} />).toBlob();
       const nomeArquivo = 'Proposta_' + (s.cliente.nome||'Cliente').replace(/\s+/g,'_') + '_' + new Date().toISOString().slice(0,10) + '.pdf';
-      await salvarPdfNativo(blob, nomeArquivo);
+      await salvarArquivoNativo(blob, nomeArquivo);
     } catch(e) { if (silencioso) throw e; alert('Erro ao gerar Proposta: ' + (e instanceof Error ? e.message : String(e)));
     } finally { setGerando(false); }
   }
@@ -2935,10 +2935,10 @@ function TabResultado({ onPrev, onEmpresa }: { onPrev:()=>void; onEmpresa:()=>vo
     try {
       const { pdf } = await import('@react-pdf/renderer');
       const { PropostaPDF } = await import('@domain/proposta/PropostaPDF');
-      const { salvarPdfNativo } = await import('./services/pastaDocumentos');
+      const { salvarArquivoNativo } = await import('./services/pastaDocumentos');
       const blob = await pdf(<PropostaPDF data={buildData()} />).toBlob();
       const nomeArquivo = 'DocTecnica_' + (s.cliente.nome||'Cliente').replace(/\s+/g,'_') + '_' + new Date().toISOString().slice(0,10) + '.pdf';
-      await salvarPdfNativo(blob, nomeArquivo);
+      await salvarArquivoNativo(blob, nomeArquivo);
     } catch(e) { alert('Erro ao gerar Doc. Técnica: ' + (e instanceof Error ? e.message : String(e)));
     } finally { setGerando(false); }
   }
@@ -2972,7 +2972,7 @@ function TabResultado({ onPrev, onEmpresa }: { onPrev:()=>void; onEmpresa:()=>vo
     try {
       const { pdf } = await import('@react-pdf/renderer');
       const { PropostaComercialPDF } = await import('@domain/proposta/PropostaComercialPDF');
-      const { salvarPdfNativo } = await import('./services/pastaDocumentos');
+      const { salvarArquivoNativo } = await import('./services/pastaDocumentos');
       const blob = await pdf(<PropostaComercialPDF data={buildData()} />).toBlob();
       // BUG CORRIGIDO (set/2026): este bloco convertia o PDF para base64 via
       // FileReader e nunca usava o resultado em lugar nenhum — mailto: não
@@ -3009,7 +3009,7 @@ function TabResultado({ onPrev, onEmpresa }: { onPrev:()=>void; onEmpresa:()=>vo
         return;
       }
       // Salvar PDF localmente + abrir cliente de email
-      const caminhoSalvo = await salvarPdfNativo(blob, nomeArq);
+      const caminhoSalvo = await salvarArquivoNativo(blob, nomeArq);
       const assuntoEnc = encodeURIComponent(assunto);
       const corpoEnc = encodeURIComponent(corpo + nl + nl + '[Anexe o PDF salvo em: ' + caminhoSalvo + ']');
       setTimeout(() => { window.location.href = `mailto:${email}?subject=${assuntoEnc}&body=${corpoEnc}`; }, 800);
@@ -3171,11 +3171,11 @@ function TabResultado({ onPrev, onEmpresa }: { onPrev:()=>void; onEmpresa:()=>vo
     try {
       const { pdf } = await import('@react-pdf/renderer');
       const { MemorialDescritivo } = await import('@domain/proposta/MemorialDescritivo');
-      const { salvarPdfNativo } = await import('./services/pastaDocumentos');
+      const { salvarArquivoNativo } = await import('./services/pastaDocumentos');
       const d = buildData();
       const blob = await pdf(<MemorialDescritivo data={d} />).toBlob();
       const nomeArquivo = 'Memorial_' + (s.cliente.nome||'Cliente').replace(/\s+/g,'_') + '_' + new Date().toISOString().slice(0,10) + '.pdf';
-      await salvarPdfNativo(blob, nomeArquivo);
+      await salvarArquivoNativo(blob, nomeArquivo);
       useProjetoStore.getState().marcarDocumentoGerado('memorial_descritivo');
     } catch(e) {
       if (silencioso) throw e;
@@ -3188,11 +3188,11 @@ function TabResultado({ onPrev, onEmpresa }: { onPrev:()=>void; onEmpresa:()=>vo
     try {
       const { pdf } = await import('@react-pdf/renderer');
       const { Procuracao } = await import('@domain/proposta/Procuracao');
-      const { salvarPdfNativo } = await import('./services/pastaDocumentos');
+      const { salvarArquivoNativo } = await import('./services/pastaDocumentos');
       const d = buildData();
       const blob = await pdf(<Procuracao data={d} />).toBlob();
       const nomeArquivo = 'Procuracao_' + (s.cliente.nome||'Cliente').replace(/\s+/g,'_') + '_' + new Date().toISOString().slice(0,10) + '.pdf';
-      await salvarPdfNativo(blob, nomeArquivo);
+      await salvarArquivoNativo(blob, nomeArquivo);
       useProjetoStore.getState().marcarDocumentoGerado('procuracao');
     } catch(e) {
       if (silencioso) throw e;
@@ -3205,11 +3205,11 @@ function TabResultado({ onPrev, onEmpresa }: { onPrev:()=>void; onEmpresa:()=>vo
     try {
       const { pdf } = await import('@react-pdf/renderer');
       const { DiagramaUnifilarBasico } = await import('@domain/proposta/DiagramaUnifilarBasico');
-      const { salvarPdfNativo } = await import('./services/pastaDocumentos');
+      const { salvarArquivoNativo } = await import('./services/pastaDocumentos');
       const d = buildData();
       const blob = await pdf(<DiagramaUnifilarBasico data={d} />).toBlob();
       const nomeArquivo = 'DUB_' + (s.cliente.nome||'Cliente').replace(/\s+/g,'_') + '_' + new Date().toISOString().slice(0,10) + '.pdf';
-      await salvarPdfNativo(blob, nomeArquivo);
+      await salvarArquivoNativo(blob, nomeArquivo);
       useProjetoStore.getState().marcarDocumentoGerado('dub');
     } catch(e) {
       if (silencioso) throw e;
@@ -3231,11 +3231,11 @@ function TabResultado({ onPrev, onEmpresa }: { onPrev:()=>void; onEmpresa:()=>vo
         return;
       }
       const { pdf } = await import('@react-pdf/renderer');
-      const { salvarPdfNativo } = await import('./services/pastaDocumentos');
+      const { salvarArquivoNativo } = await import('./services/pastaDocumentos');
       const mosaico = await montarMosaicoSatelite(endereco);
       const blob = await pdf(<PlantaDeSituacao data={d} mosaico={mosaico} />).toBlob();
       const nomeArquivo = 'PlantaSituacao_' + (s.cliente.nome||'Cliente').replace(/\s+/g,'_') + '_' + new Date().toISOString().slice(0,10) + '.pdf';
-      await salvarPdfNativo(blob, nomeArquivo);
+      await salvarArquivoNativo(blob, nomeArquivo);
       useProjetoStore.getState().marcarDocumentoGerado('planta_situacao');
     } catch(e) {
       // BUG CORRIGIDO (ago/2026): esta função nunca relançava — quando chamada

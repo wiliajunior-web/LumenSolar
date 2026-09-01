@@ -4,6 +4,9 @@
  */
 
 import { describe, expect, it, beforeEach } from 'vitest';
+import { readFileSync, mkdtempSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { gerarId, nomeArquivo, listarRecentes, removerRecente, salvarArquivo, importarArquivo } from './persistence';
 
 // ── Utilitários de teste ──────────────────────────────────────────────────────
@@ -301,40 +304,49 @@ describe('Cenários de borda e segurança', () => {
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // salvarArquivo()/importarArquivo() DE VERDADE — não a reimplementação acima.
-describe('salvarArquivo() — exercitando a função real de produção', () => {
+//
+// BUG CORRIGIDO (set/2026): a versão anterior deste describe interceptava
+// `URL.createObjectURL` e considerava o teste "passando" ao capturar o Blob —
+// ou seja, testava exatamente o mecanismo de download do browser
+// (`URL.createObjectURL` + `<a download>.click()` + `URL.revokeObjectURL`)
+// que esta mesma auditoria confirmou estar QUEBRADO (condição de corrida do
+// Chromium — revogar a URL imediatamente após o clique podia invalidar o
+// blob antes do download terminar de ler seu conteúdo; nenhum erro chega ao
+// JS quando isso acontece). Ou seja: este teste passava mesmo com o bug real
+// presente — ele nunca verificava que um ARQUIVO de verdade chegava ao
+// disco, só que a API do browser tinha sido *chamada*. `salvarArquivo()` foi
+// corrigido para gravar direto com `fs` (ver persistence.ts/pastaDocumentos.ts);
+// o teste agora usa um diretório temporário real (mesmo padrão dos testes de
+// Excel desta sessão) e lê o arquivo de volta do disco de verdade.
+describe('salvarArquivo() — exercitando a função real de produção (grava no disco de verdade)', () => {
+  const DIR_TESTE = mkdtempSync(path.join(os.tmpdir(), 'lumensolar-test-persistence-'));
+
   beforeEach(() => {
     Object.keys(_lsStore).forEach(k => delete _lsStore[k]);
     arquivoSelecionadoMock = null;
   });
 
-  it('gera o envelope correto (formato/versão/checksum) e grava nos recentes', async () => {
-    let blobCapturado: Blob | null = null;
-    const origCreateObjectURL = URL.createObjectURL.bind(URL);
-    (URL as any).createObjectURL = (b: Blob) => { blobCapturado = b; return origCreateObjectURL(b); };
-    try {
-      const dados = { ...DADOS_VALIDOS, id: 'proj-001', cliente: { nome: 'Rafael Ribeiro' },
-        dimensionamento: { potenciaInstaladaRealKWp: 5.5 }, precificacao: { precoVenda: 32000 } };
-      const nome = await salvarArquivo(dados);
+  it('gera o envelope correto (formato/versão/checksum) e grava um arquivo real e legível no disco', async () => {
+    const dados = { ...DADOS_VALIDOS, id: 'proj-001', cliente: { nome: 'Rafael Ribeiro' },
+      dimensionamento: { potenciaInstaladaRealKWp: 5.5 }, precificacao: { precoVenda: 32000 } };
+    const nome = await salvarArquivo(dados, DIR_TESTE);
 
-      expect(nome).toMatch(/^Rafael_Ribeiro_\d{4}-\d{2}-\d{2}\.lumensolar$/);
-      expect(blobCapturado).not.toBeNull();
+    expect(nome).toMatch(/^Rafael_Ribeiro_\d{4}-\d{2}-\d{2}\.lumensolar$/);
 
-      const conteudo = JSON.parse(await (blobCapturado as unknown as Blob).text());
-      expect(conteudo._formato).toBe('LumenSolar');
-      expect(conteudo._versao).toBe('2.0');
-      expect(conteudo._dados).toEqual(dados);
-      const hashEsperado = `sha256:${await sha256(JSON.stringify(dados, null, 2))}`;
-      expect(conteudo._checksum).toBe(hashEsperado);
+    const caminho = path.join(DIR_TESTE, nome);
+    const conteudo = JSON.parse(readFileSync(caminho, 'utf8'));
+    expect(conteudo._formato).toBe('LumenSolar');
+    expect(conteudo._versao).toBe('2.0');
+    expect(conteudo._dados).toEqual(dados);
+    const hashEsperado = `sha256:${await sha256(JSON.stringify(dados, null, 2))}`;
+    expect(conteudo._checksum).toBe(hashEsperado);
 
-      const recentes = listarRecentes();
-      expect(recentes).toHaveLength(1);
-      expect(recentes[0]).toMatchObject({
-        id: 'proj-001', nomeCliente: 'Rafael Ribeiro',
-        potenciaKWp: 5.5, precoVenda: 32000, nomeArquivo: nome,
-      });
-    } finally {
-      (URL as any).createObjectURL = origCreateObjectURL;
-    }
+    const recentes = listarRecentes();
+    expect(recentes).toHaveLength(1);
+    expect(recentes[0]).toMatchObject({
+      id: 'proj-001', nomeCliente: 'Rafael Ribeiro',
+      potenciaKWp: 5.5, precoVenda: 32000, nomeArquivo: nome,
+    });
   });
 
   // BUG CORRIGIDO (ago/2026): o teste acima usa `dados.dimensionamento`/
@@ -347,24 +359,30 @@ describe('salvarArquivo() — exercitando a função real de produção', () => 
   // metadados de "recentes" — a Home nunca mostrava potência/preço em
   // nenhum card de proposta salva de verdade. Este teste usa o formato REAL.
   it('grava potenciaKWp/precoVenda nos recentes a partir do formato REAL enviado por App.tsx (campos na raiz, sem dimensionamento/precificacao)', async () => {
-    const origCreateObjectURL = URL.createObjectURL.bind(URL);
-    (URL as any).createObjectURL = (b: Blob) => origCreateObjectURL(b);
-    try {
-      const dados = {
-        id: 'proj-004', cliente: { nome: 'Fernanda Lima' }, criadoEm: '2026-08-01T10:00:00.000Z',
-        potenciaKWp: 11.2, precoVenda: 58900,
-        empresa: {}, consumo: {}, localizacao: {}, kit: {}, preco: {},
-      };
-      await salvarArquivo(dados);
-      const recentes = listarRecentes();
-      expect(recentes).toHaveLength(1);
-      expect(recentes[0]).toMatchObject({
-        id: 'proj-004', nomeCliente: 'Fernanda Lima',
-        potenciaKWp: 11.2, precoVenda: 58900,
-      });
-    } finally {
-      (URL as any).createObjectURL = origCreateObjectURL;
-    }
+    const dados = {
+      id: 'proj-004', cliente: { nome: 'Fernanda Lima' }, criadoEm: '2026-08-01T10:00:00.000Z',
+      potenciaKWp: 11.2, precoVenda: 58900,
+      empresa: {}, consumo: {}, localizacao: {}, kit: {}, preco: {},
+    };
+    await salvarArquivo(dados, DIR_TESTE);
+    const recentes = listarRecentes();
+    expect(recentes).toHaveLength(1);
+    expect(recentes[0]).toMatchObject({
+      id: 'proj-004', nomeCliente: 'Fernanda Lima',
+      potenciaKWp: 11.2, precoVenda: 58900,
+    });
+  });
+
+  it('[REGRESSÃO set/2026] o arquivo gravado é lido de volta por importarArquivo() com checksum válido (ida e volta completa)', async () => {
+    const dados = { id: 'proj-005', cliente: { nome: 'Roberto Alves' }, criadoEm: '2026-09-01T10:00:00.000Z',
+      empresa: {}, consumo: {}, localizacao: {}, kit: {}, preco: {} };
+    const nome = await salvarArquivo(dados, DIR_TESTE);
+    const caminho = path.join(DIR_TESTE, nome);
+    const conteudoDisco = readFileSync(caminho, 'utf8');
+
+    arquivoSelecionadoMock = { name: nome, text: async () => conteudoDisco };
+    const resultado = await importarArquivo();
+    expect(resultado).toEqual(dados);
   });
 });
 
