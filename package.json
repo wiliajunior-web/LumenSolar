@@ -2,6 +2,9 @@
   "name": "lumensolar",
   "version": "0.5.0",
   "description": "Dimensionamento e proposta comercial fotovoltaica — Lumen Soluções",
+  "author": "Lumen Soluções Ltda",
+  "license": "UNLICENSED",
+  "private": true,
   "main": "dist-electron/index.js",
   "type": "module",
   "scripts": {

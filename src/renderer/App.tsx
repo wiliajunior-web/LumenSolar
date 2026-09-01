@@ -739,7 +739,7 @@ export default function App() {
       setValidationErrors(erros.map(e => e.mensagem));
       // Mostrar modal de erros em vez de barra que some
       const msgs = erros.map((e, i) => `${i+1}. ${e.mensagem}`).join('\n');
-      alert('Preencha os campos obrigatorios antes de calcular:\n\n' + msgs);
+      alert('Preencha os campos obrigatórios antes de calcular:\n\n' + msgs);
       setTimeout(() => setValidationErrors([]), 8000);
       return;
     }
@@ -1196,7 +1196,7 @@ function TabConsumo({ onPrev, onNext }: { onPrev:()=>void; onNext:()=>void }) {
             <span style={{ display: 'block', marginTop: 6, lineHeight: 1.6 }}>
               • <strong>Distribuidora</strong> → logo no cabeçalho da conta (CEMIG, Equatorial, etc.)<br/>
               • <strong>Tipo de ligação</strong> → campo "Classe/Subclasse" — "Bifásico" ou "Trifásico" ou "Monofásico"<br/>
-              • <strong>CIP/COSIP</strong> → linha "Contrib. Ilum. Publica Municipal" nos Valores Faturados<br/>
+              • <strong>CIP/COSIP</strong> → linha "Contrib. Ilum. Pública Municipal" nos Valores Faturados<br/>
               • <strong>Tarifa real</strong> → coluna "Preço Unit." na linha "Energia Elétrica"<br/>
               • <strong>Nº da UC</strong> → "N.º DA UNIDADE CONSUMIDORA" (número grande em destaque)<br/>
               • <strong>Histórico</strong> → tabela "Histórico de Consumo" no canto inferior esquerdo
@@ -1394,7 +1394,7 @@ function TabConsumo({ onPrev, onNext }: { onPrev:()=>void; onNext:()=>void }) {
                 <button onClick={() => window.open('https://www.gov.br/aneel/pt-br/assuntos/tarifas', '_blank')} style={{ padding:'6px 12px', borderRadius:8, border:'1px solid #ddd9cb', background:'#eeece2', color:'#6f6d63', fontSize:12, fontWeight:600, cursor:'pointer', whiteSpace:'nowrap' }} title="Consultar tarifas vigentes no portal ANEEL (gov.br)">⚡ ANEEL</button>
               </div>
             </Campo>
-            <Campo label="CIP / Iluminação pública (R$/mês)" hint="Linha 'Contrib. Ilum. Publica Municipal'" tip="Contribuição municipal de iluminação pública. Na conta CEMIG aparece como 'Contrib. Ilum. Publica Municipal'. Persiste após instalação solar.">
+            <Campo label="CIP / Iluminação pública (R$/mês)" hint="Linha 'Contrib. Ilum. Pública Municipal'" tip="Contribuição municipal de iluminação pública. Na conta CEMIG aparece como 'Contrib. Ilum. Pública Municipal'. Persiste após instalação solar.">
               <input className="inp inp-num" type="number" step="0.01" value={s.consumo.cipMensalRS} onChange={e => s.atualizarConsumo({ cipMensalRS: Number(e.target.value) })} />
             </Campo>
           </div>
@@ -2985,14 +2985,17 @@ function TabResultado({ onPrev, onEmpresa }: { onPrev:()=>void; onEmpresa:()=>vo
       const corpo = [
         'Prezado(a) ' + nome + ',',
         '',
-        'Segue em anexo a proposta comercial para instalacao do sistema fotovoltaico de ' + kwp + ' kWp.',
-        eco ? 'Economia estimada: ' + eco + '/mes.' : '',
+        'Segue em anexo a proposta comercial para instalação do sistema fotovoltaico de ' + kwp + ' kWp.',
+        eco ? 'Economia estimada: ' + eco + '/mês.' : '',
         '',
-        'Ficamos a disposicao para esclarecimentos.',
+        // CORRIGIDO (set/2026): faltava a crase — "ficar à disposição (de
+        // alguém)" é regência com crase obrigatória ("a" preposição + "a"
+        // artigo feminino de "disposição"), não "a disposição" sem crase.
+        'Ficamos à disposição para esclarecimentos.',
         '',
         'Atenciosamente,',
-        st.empresa.responsavelTecnico || 'Equipe Lumen Solucoes',
-        st.empresa.razaoSocial || 'Lumen Solucoes Ltda',
+        st.empresa.responsavelTecnico || 'Equipe Lumen Soluções',
+        st.empresa.razaoSocial || 'Lumen Soluções Ltda',
         st.empresa.telefone || '',
       ].join(nl);
       const nomeArq = `Proposta_${(nome).replace(/\s+/g,'_')}.pdf`;
