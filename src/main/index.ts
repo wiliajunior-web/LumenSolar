@@ -28,6 +28,53 @@ function createWindow() {
       // nodeIntegration necessário para @react-pdf/renderer (usa require internamente)
       nodeIntegration: true,
       contextIsolation: false,
+      // INVESTIGADO, MANTIDO DE PROPÓSITO (set/2026) — não é um flag esquecido.
+      //
+      // `webSecurity: false` desliga same-origin/CORS por completo no
+      // renderer — uma superfície de ataque real: qualquer conteúdo web que
+      // este app venha a carregar no futuro (hoje é só o próprio app,
+      // carregado local via file://) ficaria sem a última linha de defesa
+      // do Chromium contra requisições cross-origin maliciosas. Auditei os 3
+      // pontos de rede externa do app pra achar o motivo real de estar
+      // ligado, em vez de só desligar às cegas:
+      //
+      //   1. `App.tsx` (import de datasheet por IA): POST direto pra
+      //      api.anthropic.com com a chave QUE O PRÓPRIO USUÁRIO cadastra em
+      //      ⚙ Empresa (não é credencial embutida no app) — não precisa de
+      //      webSecurity:false, é só uma chamada de rede normal.
+      //   2. `BuscadorCoordenadas` (App.tsx): geocodifica endereço via
+      //      nominatim.openstreetmap.org — API pública, sem credencial,
+      //      também não depende de webSecurity:false pra funcionar.
+      //   3. `satelliteMosaic.ts` (mosaico de satélite da Planta de
+      //      Situação): busca tiles de server.arcgisonline.com, desenha cada
+      //      um num <canvas> com `img.crossOrigin = 'anonymous'` (linha ~52)
+      //      e no final chama `canvas.toDataURL()` (linha ~111) pra virar
+      //      imagem do PDF. ESTE é o motivo mais provável: se o servidor de
+      //      tiles não devolver cabeçalho CORS permissivo em TODO tile (nem
+      //      sempre é garantido em servidores públicos de mapa), o canvas
+      //      fica "tainted" e `toDataURL()` lança SecurityError — quebrando
+      //      a Planta de Situação pra qualquer endereço. `webSecurity:false`
+      //      desliga essa checagem de tainting inteira, então nunca quebra,
+      //      não importa o que o ArcGIS mande.
+      //
+      // Não removi o flag: pra confirmar que dá pra tirar com segurança eu
+      // precisaria testar o mosaico de satélite de verdade contra
+      // server.arcgisonline.com — e ESTE AMBIENTE (sandbox de teste) tem
+      // egress bloqueado pra esse domínio especificamente (ver comentário em
+      // satelliteMosaic.ts), então qualquer teste aqui não prova nada sobre
+      // o comportamento real no Windows do usuário. Mudar às cegas um flag
+      // de segurança carregado por uma feature que já está em produção, sem
+      // conseguir verificar, é pior do que deixar como está.
+      //
+      // Caminho pra resolver isso de verdade, se algum dia valer a pena (só
+      // com o app rodando numa máquina com acesso de verdade a
+      // arcgisonline.com): trocar `webSecurity: false` por
+      // `webSecurity: true` + testar se a Planta de Situação ainda gera
+      // corretamente pra 3-4 endereços diferentes. Se quebrar, a correção
+      // correta não é religar este flag global — é buscar os tiles pelo
+      // processo PRINCIPAL (`net.fetch` do Electron, que não tem CORS) e
+      // passar os bytes pro renderer via IPC, em vez de `<img crossOrigin>`
+      // direto no renderer.
       webSecurity: false,
     },
   });
