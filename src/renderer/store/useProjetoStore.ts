@@ -172,6 +172,23 @@ export interface EntradaKit {
   potenciaAtualKWp: number;
   /** Data do protocolo de acesso ORIGINAL — só relevante em expansão de usina existente. */
   dataProtocoloOriginal: string;
+  // ADICIONADO (set/2026, pedido direto do usuário: "anexar o datasheet do
+  // equipamento de forma que o selo INMETRO dele já esteja lá" / "link do
+  // equipamento... para consulta a posteriori"): `certificacoes` (acima) já
+  // registrava a certificação como TEXTO livre — sem nenhuma prova
+  // verificável por trás. Estes 4 campos guardam a prova de verdade: uma
+  // CÓPIA local do PDF do datasheet (caminho — ver `salvarArquivoNativo` em
+  // ImportarDatasheet/App.tsx, grava na mesma pasta configurável em ⚙
+  // Configurações) e/ou um link (URL da página do fabricante, por exemplo).
+  // Os dois são opcionais e independentes — o usuário pode preencher só um.
+  /** Caminho local da cópia do datasheet do módulo (PDF), salva ao usar "Importar Datasheet" ou "Anexar". */
+  datasheetModuloCaminho?: string;
+  /** Link/URL de referência do módulo (página do fabricante, loja, etc.) — opcional, digitado manualmente. */
+  datasheetModuloLink?: string;
+  /** Caminho local da cópia do datasheet do inversor (PDF). */
+  datasheetInversorCaminho?: string;
+  /** Link/URL de referência do inversor — opcional, digitado manualmente. */
+  datasheetInversorLink?: string;
 }
 
 export interface EntradaPrecificacao {

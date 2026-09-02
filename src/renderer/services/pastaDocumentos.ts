@@ -15,11 +15,29 @@ import path from 'node:path';
 // E build empacotado). É por isso que nenhum outro arquivo deste renderer
 // importava 'electron' estaticamente antes deste — mantendo o mesmo padrão
 // `require()` em runtime já usado em outros lugares do projeto.
-function obterIpcRenderer(): typeof import('electron').ipcRenderer {
-  const electron = (window as any).require
+function obterElectron(): typeof import('electron') {
+  return (window as any).require
     ? (window as any).require('electron')
     : require('electron');
-  return electron.ipcRenderer;
+}
+
+function obterIpcRenderer(): typeof import('electron').ipcRenderer {
+  return obterElectron().ipcRenderer;
+}
+
+/**
+ * Abre um arquivo local com o programa padrão do Windows (ex: PDF no leitor
+ * padrão) — usado pelo botão "Abrir datasheet" (ver TabKit em App.tsx).
+ * `shell` (diferente de `dialog`/`app`) é um dos poucos módulos do Electron
+ * disponíveis tanto no processo principal quanto no renderer — não precisa
+ * de IPC. Devolve uma mensagem de erro (string) se falhar (ex.: arquivo foi
+ * apagado/movido depois de salvo), ou `null` se abriu com sucesso —
+ * `shell.openPath` nunca lança, só resolve com uma string vazia (sucesso) ou
+ * a mensagem de erro do SO.
+ */
+export async function abrirArquivoLocal(caminho: string): Promise<string | null> {
+  const erro = await obterElectron().shell.openPath(caminho);
+  return erro || null;
 }
 
 /**

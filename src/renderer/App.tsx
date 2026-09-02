@@ -2379,6 +2379,31 @@ Use valores numéricos reais. coefTempPmax deve ser negativo (ex: -0.35). Se nã
     '  - Valores numericos devem ser numeros, nao strings.',
   ].join('\n');
 
+  // ADICIONADO (set/2026, pedido direto do usuário: "anexar o datasheet do
+  // equipamento... o selo INMETRO dele já esteja lá"): a extração por IA
+  // acima devolve só os NÚMEROS do datasheet (Vmpp, Isc, garantias etc.) —
+  // o selo INMETRO é uma imagem na página do PDF, não um dado extraível
+  // como texto de forma confiável. A prova de verdade é guardar o PDF
+  // original: salva uma cópia (mesma pasta configurável em ⚙ Configurações,
+  // reaproveitando `salvarArquivoNativo` já testado) e devolve o caminho.
+  // Não lança em caso de falha — perder a cópia do PDF não deveria derrubar
+  // a extração de dados, que é o valor principal desta tela.
+  const campoCaminho = tipo === 'modulo' ? 'datasheetModuloCaminho' : 'datasheetInversorCaminho';
+  async function salvarCopiaDatasheet(file: File): Promise<string | null> {
+    try {
+      const { salvarArquivoNativo } = await import('./services/pastaDocumentos');
+      // Lógica de nomenclatura extraída para @domain/shared/nomearDatasheet
+      // (função pura, com teste unitário próprio) — antes ficava inline
+      // aqui, sem cobertura de teste direta.
+      const { nomeArquivoDatasheet } = await import('@domain/shared/nomearDatasheet');
+      const nomeArquivo = nomeArquivoDatasheet(tipo, file.name);
+      return await salvarArquivoNativo(file, nomeArquivo);
+    } catch (e) {
+      console.warn('[ImportarDatasheet] não foi possível salvar cópia do datasheet:', e);
+      return null;
+    }
+  }
+
   async function processar(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -2418,6 +2443,8 @@ Use valores numéricos reais. coefTempPmax deve ser negativo (ex: -0.35). Se nã
       const texto = data.content?.[0]?.text || '';
       const jsonStr = texto.replace(/```json?|```/g, '').trim();
       const extraido = JSON.parse(jsonStr);
+      const caminhoCopia = await salvarCopiaDatasheet(file);
+      if (caminhoCopia) extraido[campoCaminho] = caminhoCopia;
       onExtracted(extraido);
       setEstado('ok');
       setTimeout(() => setEstado('idle'), 3000);
@@ -2428,12 +2455,29 @@ Use valores numéricos reais. coefTempPmax deve ser negativo (ex: -0.35). Se nã
     if (fileRef.current) fileRef.current.value = '';
   }
 
+  // ADICIONADO (set/2026): anexar o PDF SEM extrair nada por IA — não exige
+  // chave de API configurada. Serve tanto pra quem não tem/não quer usar a
+  // chave Anthropic quanto pra guardar o datasheet mesmo quando os campos já
+  // foram preenchidos manualmente.
+  const anexoRef = React.useRef<HTMLInputElement>(null);
+  const [anexando, setAnexando] = React.useState(false);
+  async function anexarSemIA(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setAnexando(true);
+    const caminho = await salvarCopiaDatasheet(file);
+    setAnexando(false);
+    if (anexoRef.current) anexoRef.current.value = '';
+    if (!caminho) { alert('Não foi possível salvar o datasheet — veja o console para detalhes.'); return; }
+    onExtracted({ [campoCaminho]: caminho });
+  }
+
   const label = tipo === 'modulo' ? '📋 Importar Datasheet do Módulo' : '📋 Importar Datasheet do Inversor';
   const colors = { idle:'#ddd9cb', lendo:'#1a3a6e', extraindo:'#7c3aed', ok:'#166534', erro:'#7f1d1d' };
   const texts  = { idle: label, lendo:'📖 Lendo PDF...', extraindo:'🤖 Extraindo dados...', ok:'✅ Dados importados!', erro:`❌ ${erro.slice(0,60)}` };
 
   return (
-    <div>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
       <input ref={fileRef} type="file" accept=".pdf" style={{ display:'none' }} onChange={processar} />
       <button
         onClick={() => fileRef.current?.click()}
@@ -2449,6 +2493,72 @@ Use valores numéricos reais. coefTempPmax deve ser negativo (ex: -0.35). Se nã
       >
         {texts[estado]}
       </button>
+      <input ref={anexoRef} type="file" accept=".pdf" style={{ display:'none' }} onChange={anexarSemIA} />
+      <button
+        onClick={() => anexoRef.current?.click()}
+        disabled={anexando}
+        style={{
+          padding:'7px 12px', borderRadius:8, border:`1px solid ${D.border}`,
+          background:'transparent', color: D.textMuted, fontSize:12, fontWeight:600,
+          cursor: anexando ? 'default' : 'pointer', whiteSpace:'nowrap',
+        }}
+        title="Salvar o PDF do datasheet sem extrair dados por IA — não precisa de chave de API"
+      >
+        {anexando ? '📎 Salvando...' : '📎 Só anexar (sem IA)'}
+      </button>
+    </div>
+  );
+}
+
+// ─── Exibir/editar datasheet salvo (caminho local) + link de referência ────────
+// ADICIONADO (set/2026, mesmo pedido do usuário do ImportarDatasheet acima):
+// depois que um datasheet é importado/anexado, o usuário precisa (a) ver que
+// o arquivo está salvo, (b) reabri-lo pra conferir o selo INMETRO impresso no
+// PDF, e (c) opcionalmente guardar um link (página do fabricante, loja etc.)
+// pra consulta futura — o pedido original citava as duas opções ("link" OU
+// "datasheet"), então este componente cobre as duas ao mesmo tempo, já que
+// não são mutuamente exclusivas e o custo de mostrar ambas é baixo.
+function CampoDatasheet({ tipo, caminho, link, onLinkChange }: {
+  tipo: 'modulo' | 'inversor';
+  caminho?: string;
+  link?: string;
+  onLinkChange: (link: string) => void;
+}) {
+  const [erroAbrir, setErroAbrir] = React.useState('');
+  const nomeArquivo = caminho ? caminho.split(/[\\/]/).pop() : null;
+
+  async function abrir() {
+    setErroAbrir('');
+    const { abrirArquivoLocal } = await import('./services/pastaDocumentos');
+    const erro = await abrirArquivoLocal(caminho!);
+    if (erro) setErroAbrir(`Não foi possível abrir o arquivo — ele pode ter sido movido ou apagado (${erro})`);
+  }
+
+  return (
+    <div style={{ marginBottom: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {caminho && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 12, color: D.textMuted }}>📄 Datasheet salvo:</span>
+          <code style={{ fontSize: 11, background: '#f4f3ee', padding: '3px 8px', borderRadius: 6, wordBreak: 'break-all' }}>{nomeArquivo}</code>
+          <button
+            onClick={abrir}
+            style={{ padding: '4px 10px', borderRadius: 6, border: `1px solid ${D.border}`, background: 'transparent', color: '#4c4fb0', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}
+            title="Abrir o PDF no leitor padrão do Windows — use para conferir o selo INMETRO impresso no documento"
+          >
+            Abrir
+          </button>
+        </div>
+      )}
+      {erroAbrir && <p style={{ fontSize: 11, color: '#dc2626', margin: 0 }}>{erroAbrir}</p>}
+      <Campo label={`Link de referência do ${tipo === 'modulo' ? 'módulo' : 'inversor'}`} hint="Página do fabricante, loja, ficha técnica online — opcional, para consulta posterior">
+        <input
+          className="inp"
+          type="url"
+          placeholder="https://..."
+          value={link || ''}
+          onChange={e => onLinkChange(e.target.value)}
+        />
+      </Campo>
     </div>
   );
 }
@@ -2771,6 +2881,30 @@ function TabKit({ onPrev, onNext }: { onPrev:()=>void; onNext:()=>void }) {
         <div className="card-head">Especificações técnicas do módulo — do datasheet</div>
         <div className="card-body">
           <p className="lbl-hint" style={{ marginBottom: 14 }}>Dados do datasheet do fabricante — necessários para o Memorial Descritivo enviado à distribuidora.</p>
+          {/* ADICIONADO (set/2026, pedido direto do usuário: "anexar o link do
+              equipamento do orçamento... ou uma forma de anexar o datasheet
+              do equipamento de forma que o selo IMETRO dele já esteja lá"):
+              este botão de importar por IA existia como componente completo
+              (ImportarDatasheet, com integração real à API da Anthropic)
+              desde jul/2026 (commit 3382bce) mas NUNCA foi renderizado em
+              lugar nenhum — achado auditando o "documentos... bagunçada" do
+              usuário via `grep -n "<ImportarDatasheet" src/renderer/App.tsx`,
+              que não retornou nenhuma ocorrência. O commit original alegava
+              "Botão em cada card" no texto, mas o diff nunca adicionou o JSX.
+              Corrigido aqui: liga o componente de verdade nos dois cards de
+              specs técnicas (módulo e inversor), e adiciona também o botão
+              "Só anexar (sem IA)" — que guarda o PDF como prova (a extração
+              por IA não lê o selo INMETRO de forma confiável, é uma imagem
+              na página; guardar o PDF original é a prova verificável). */}
+          <div style={{ marginBottom: 14 }}>
+            <ImportarDatasheet tipo="modulo" onExtracted={dados => s.atualizarKit(dados)} />
+          </div>
+          <CampoDatasheet
+            tipo="modulo"
+            caminho={s.kit.datasheetModuloCaminho}
+            link={s.kit.datasheetModuloLink}
+            onLinkChange={link => s.atualizarKit({ datasheetModuloLink: link })}
+          />
           <div className="g3" style={{ rowGap: 14 }}>
             <Campo label="Vmpp (V)" tip="Tensão de máxima potência em condições STC (1000 W/m², 25°C). Está na ficha técnica do módulo."><input className="inp inp-num" type="number" step="0.1" value={s.kit.vmppV || ''} onChange={e => s.atualizarKit({ vmppV: Number(e.target.value) })} /></Campo>
             <Campo label="Impp (A)" tip="Corrente de máxima potência em STC."><input className="inp inp-num" type="number" step="0.01" value={s.kit.imppA || ''} onChange={e => s.atualizarKit({ imppA: Number(e.target.value) })} /></Campo>
@@ -2792,6 +2926,15 @@ function TabKit({ onPrev, onNext }: { onPrev:()=>void; onNext:()=>void }) {
       <div className="card" style={{ marginBottom: 14 }}>
         <div className="card-head">Configuração de strings e specs do inversor — para Memorial</div>
         <div className="card-body">
+          <div style={{ marginBottom: 14 }}>
+            <ImportarDatasheet tipo="inversor" onExtracted={dados => s.atualizarKit(dados)} />
+          </div>
+          <CampoDatasheet
+            tipo="inversor"
+            caminho={s.kit.datasheetInversorCaminho}
+            link={s.kit.datasheetInversorLink}
+            onLinkChange={link => s.atualizarKit({ datasheetInversorLink: link })}
+          />
           <div className="g2" style={{ rowGap: 14 }}>
             <Campo label="Número de strings (fileiras)" tip="Número de fileiras de módulos ligadas em paralelo. Sistemas residenciais pequenos geralmente usam 1 string."><input className="inp inp-num" type="number" min="1" value={s.kit.numStrings} onChange={e => s.atualizarKit({ numStrings: Number(e.target.value) })} /></Campo>
             <Campo label="Módulos por string" hint="Será preenchido automaticamente ao calcular" tip="Número de módulos ligados em série em cada string. Tensão do sistema CC = Voc × módulos por string."><input className="inp inp-num" type="number" min="1" value={s.kit.modulosPorString} onChange={e => s.atualizarKit({ modulosPorString: Number(e.target.value) })} /></Campo>
