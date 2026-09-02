@@ -53,7 +53,15 @@ export interface DadosEmpresa {
   cpfEngenheiro: string;
   /** Foto de capa da proposta (base64). Padrão: arte Lumen. */
   fotoCapa?: string;
-  /** Foto de apoio — interior das páginas (base64). Padrão: arte Lumen. */
+  /**
+   * @deprecated (set/2026) Não usado mais em nenhum documento gerado — a
+   * Proposta Comercial trocou o banner fotográfico de topo (que cortava a
+   * logo em qualquer foto enviada aqui, proporção do container 5,41:1) por
+   * uma faixa de marca sólida (ver BrandBar em PropostaComercialPDF.tsx).
+   * O upload correspondente também foi removido de App.tsx. Campo mantido
+   * apenas para não quebrar a leitura de perfis de empresa/.lumensolar
+   * salvos antes desta mudança que ainda tragam essa chave.
+   */
   fotoApoio?: string;
 }
 

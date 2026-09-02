@@ -1071,7 +1071,7 @@ function TabEmpresa({ onClose }: { onClose: () => void }) {
             {empresa.logoBase64 && <button onClick={() => atualizarEmpresa({ logoBase64: undefined })} style={{ background:'none', border:'none', color: D.danger, cursor:'pointer', fontSize:12, fontWeight:600 }}>Remover logo</button>}
           </div>
           <div className="sep" />
-          <p className="lbl-hint" style={{ marginBottom: 10 }}>Fotos para os PDFs — <strong>já vêm com a arte Lumen padrão</strong>, mas você pode personalizar:</p>
+          <p className="lbl-hint" style={{ marginBottom: 10 }}>Foto de capa do PDF — <strong>já vem com a arte Lumen padrão</strong>, mas você pode personalizar:</p>
           <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
             {/* Foto de capa */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -1091,24 +1091,21 @@ function TabEmpresa({ onClose }: { onClose: () => void }) {
                 <p className="lbl-hint">Portrait A4 — proposta do cliente</p>
               </div>
             </div>
-            {/* Foto de apoio */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              {empresa.fotoApoio
-                ? <img src={empresa.fotoApoio} style={{ width: 72, height: 52, objectFit: 'cover', borderRadius: 6, border: `1px solid ${D.border}` }} />
-                : <div style={{ width: 72, height: 52, background: '#f2f0e8', borderRadius: 6, border: `1px solid ${D.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: D.gold }}>BANNER</div>
-              }
-              <div>
-                <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', background: D.gold, color: D.header, borderRadius: 6, cursor: 'pointer', fontSize: 11, fontWeight: 700 }}>
-                  🖼 Foto de apoio
-                  <input type="file" accept="image/*" style={{ display: 'none' }} onChange={e => {
-                    const file = e.target.files?.[0]; if (!file) return;
-                    const r = new FileReader(); r.onload = ev => atualizarEmpresa({ fotoApoio: ev.target?.result as string }); r.readAsDataURL(file);
-                  }} />
-                </label>
-                {empresa.fotoApoio && <button onClick={() => atualizarEmpresa({ fotoApoio: undefined })} style={{ marginLeft: 6, background: 'none', border: 'none', color: D.danger, cursor: 'pointer', fontSize: 11 }}>Remover</button>}
-                <p className="lbl-hint">Landscape wide — banner interno</p>
-              </div>
-            </div>
+            {/* REMOVIDO (set/2026): o upload "Foto de apoio" (banner interno,
+                landscape wide) foi retirado daqui porque o cliente relatou o
+                banner fotográfico do topo da pág. 2 da Proposta como
+                "cortado, feio, esquisito" — o container (100% da largura ×
+                110pt) tinha proporção 5,41:1, bem diferente de qualquer foto
+                landscape comum (~1,5:1 a 2:1), então objectFit:'cover'
+                cortava agressivamente qualquer imagem enviada aqui, incluindo
+                a logo/marca que a maioria dessas fotos carrega. Deixar este
+                upload no ar, sem nenhum lugar que o usasse, seria um controle
+                morto e enganoso. PropostaComercialPDF.tsx agora usa uma faixa
+                de marca sólida (logo + nome da empresa) no lugar do banner —
+                ver comentário no componente BrandBar daquele arquivo. O campo
+                `empresa.fotoApoio` continua declarado em data/empresa.ts (não
+                removido) só para não quebrar a leitura de perfis/.lumensolar
+                salvos antes desta mudança que ainda tragam esse campo. */}
           </div>
         </div>
       </div>

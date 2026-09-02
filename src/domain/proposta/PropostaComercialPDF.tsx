@@ -7,7 +7,7 @@ import {
   Document, Page, Text, View, StyleSheet, Image, Svg, Rect, G, Path, Line, Circle, Polyline,
 } from '@react-pdf/renderer';
 import { DISTRIBUIDORAS } from '../../data/distribuidoras';
-import { IMG_CAPA, IMG_APOIO } from '../../assets/imagens';
+import { IMG_CAPA } from '../../assets/imagens';
 import { MESES_LABELS } from '../../data/hspMensal';
 import { PRESETS_MODULO } from '../../data/presetsModulo';
 import { formatarNomeModulo, formatarTipoModulo } from '../kit/formatarModulo';
@@ -120,6 +120,21 @@ const S = StyleSheet.create({
   footer: { position: 'absolute', bottom: 16, left: 28, right: 28, flexDirection: 'row', justifyContent: 'space-between', borderTopWidth: 1, borderTopColor: C.border, paddingTop: 5 },
   footerTxt: { fontSize: 7, color: C.muted },
   pageNum: { fontSize: 7, color: C.muted },
+
+  // ── Faixa de marca (topo, páginas internas) ──
+  // ADICIONADO (set/2026): substitui a antiga foto de banner (110pt de altura
+  // × 100% da largura = proporção 5,41:1) que cortava a logo da empresa fora
+  // do quadro (ver comentário no componente BrandBar, abaixo). Reaproveita a
+  // MESMA paleta escura+dourada já usada na capa (C.dark/C.gold), para o
+  // documento inteiro manter uma identidade visual coesa do início ao fim,
+  // em vez de uma foto que só aparecia em 1 das 5 páginas internas.
+  brandBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: C.dark, paddingHorizontal: 28, paddingVertical: 10, borderBottomWidth: 3, borderBottomColor: C.gold },
+  brandLogo: { width: 30, height: 30, objectFit: 'contain' },
+  brandMono: { width: 30, height: 30, borderRadius: 15, backgroundColor: C.gold, alignItems: 'center', justifyContent: 'center' },
+  brandMonoTxt: { color: C.dark, fontSize: 13, fontFamily: 'Helvetica-Bold' },
+  brandNome: { color: C.gold, fontSize: 10, fontFamily: 'Helvetica-Bold', letterSpacing: 0.5 },
+  brandTag: { color: '#8a8aac', fontSize: 7, marginTop: 1 },
+  brandDoc: { color: '#8a8aac', fontSize: 8, fontFamily: 'Helvetica-Bold', letterSpacing: 1.2 },
 });
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -140,6 +155,54 @@ const Footer = ({ empresa }: { empresa: any }) => (
     <Text style={S.pageNum} render={({ pageNumber, totalPages }) => `${pageNumber}/${totalPages}`} />
   </View>
 );
+
+// SUBSTITUÍDO (set/2026): a página "Por que solar?" (a única das 5 páginas
+// internas que tinha isso) abria com <Image src={empresa.fotoApoio ||
+// IMG_APOIO} style={{width:'100%', height:110, objectFit:'cover',
+// objectPosition:'center 60%'}} /> — um banner fotográfico de 100% da
+// largura da página (595,28pt) por só 110pt de altura, proporção 5,41:1.
+// A foto padrão (IMG_APOIO) é 1400×933px, proporção 1,5:1, com a logo
+// "LUMEN SOLUÇÕES" no terço superior-esquerdo do quadro — bem longe do
+// centro. Um recorte objectFit:'cover' tão agressivo (de 1,5:1 para 5,41:1)
+// descarta a maior parte da altura da foto; combinado com
+// objectPosition:'center 60%' (que ainda empurra o corte para BAIXO do
+// centro vertical), a faixa de logo ficava inteiramente fora do quadro,
+// sobrando só uma tira desconectada de telhado/painéis solares — o
+// "cortado, feio, esquisito" relatado pelo cliente. Reportado com foto
+// própria do usuário (2 anexos = a mesma IMG_APOIO), pedindo "um banner ou
+// apenas a logo da empresa", com tom "mais profissional".
+//
+// Correção: nenhuma foto sujeita a recorte de proporção — uma faixa de
+// marca sólida (mesma paleta dark+gold da capa), com a logo real da
+// empresa (empresa.logoBase64, já suportada em outros documentos como
+// MemorialDescritivo.tsx) quando cadastrada, ou um monograma circular
+// dourado com a inicial do nome como fallback. Adicionada não só na página
+// que tinha o problema, mas nas 5 páginas internas (antes só a pág. 1 tinha
+// qualquer cabeçalho de marca) — mesmo raciocínio já usado no rodapé
+// (Footer, acima), repetido via `fixed` em todas elas, para o documento
+// inteiro ter uma identidade visual coesa do início ao fim.
+const BrandBar = ({ empresa }: { empresa: any }) => {
+  const nome = (empresa.nomeFantasia || empresa.razaoSocial || '').trim();
+  const inicial = nome ? nome.charAt(0).toUpperCase() : 'L';
+  return (
+    <View style={S.brandBar} fixed>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+        {empresa.logoBase64
+          ? <Image src={empresa.logoBase64} style={S.brandLogo} />
+          : (
+            <View style={S.brandMono}>
+              <Text style={S.brandMonoTxt}>{inicial}</Text>
+            </View>
+          )}
+        <View>
+          <Text style={S.brandNome}>{nome ? nome.toUpperCase() : 'ENERGIA SOLAR'}</Text>
+          <Text style={S.brandTag}>Energia solar fotovoltaica</Text>
+        </View>
+      </View>
+      <Text style={S.brandDoc}>PROPOSTA COMERCIAL</Text>
+    </View>
+  );
+};
 
 // BUG CORRIGIDO (ago/2026): os círculos de "Por que investir em energia
 // solar?" mostravam texto cru como se fosse ícone ("R$", "%", "UP", "CO",
@@ -482,8 +545,7 @@ export function PropostaComercialPDF({ data }: { data: any }) {
 
       {/* ════ PÁG 1: POR QUE SOLAR? ════ */}
       <Page size="A4" style={S.page}>
-        {/* Banner de topo */}
-        <Image src={empresa.fotoApoio || IMG_APOIO} style={{ width: '100%', height: 110, objectFit: 'cover', objectPosition: 'center 60%' }} />
+        <BrandBar empresa={empresa} />
         <View style={S.row} wrap={false}>
           <View style={S.band} />
           <View style={S.body}>
@@ -548,6 +610,7 @@ export function PropostaComercialPDF({ data }: { data: any }) {
 
       {/* ════ PÁG 2: SISTEMA PROPOSTO ════ */}
       <Page size="A4" style={S.page}>
+        <BrandBar empresa={empresa} />
         <View style={S.row}>
           <View style={S.band} />
           <View style={S.body}>
@@ -622,6 +685,7 @@ export function PropostaComercialPDF({ data }: { data: any }) {
 
       {/* ════ PÁG 3: ANÁLISE FINANCEIRA ════ */}
       <Page size="A4" style={S.page}>
+        <BrandBar empresa={empresa} />
         <View style={S.row}>
           <View style={[S.band, { backgroundColor: C.gold }]} />
           <View style={S.body}>
@@ -684,6 +748,7 @@ export function PropostaComercialPDF({ data }: { data: any }) {
 
       {/* ════ PÁG 4: INVESTIMENTO E FINANCIAMENTO ════ */}
       <Page size="A4" style={S.page}>
+        <BrandBar empresa={empresa} />
         <View style={S.row}>
           <View style={S.band} />
           <View style={S.body}>
@@ -800,6 +865,7 @@ export function PropostaComercialPDF({ data }: { data: any }) {
 
       {/* ════ PÁG 5: VALIDADE E ASSINATURAS ════ */}
       <Page size="A4" style={S.page}>
+        <BrandBar empresa={empresa} />
         <View style={S.row}>
           <View style={[S.band, { backgroundColor: C.dark }]} />
           <View style={S.body}>

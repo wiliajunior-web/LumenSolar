@@ -1,6 +1,27 @@
 import { describe, it, expect } from 'vitest';
+import { Image } from '@react-pdf/renderer';
 import { PropostaComercialPDF } from './PropostaComercialPDF';
 import { extractPdfTextJoined, extractPdfText } from './pdfTextTestHelper';
+
+// Coleta todos os nós <Image> de uma árvore de elementos react-pdf (mesma
+// estratégia de recursão do pdfTextTestHelper, mas devolvendo os PROPS de
+// cada <Image> em vez do texto — precisamos inspecionar `src`/`style`, não
+// texto). `Image` importado de '@react-pdf/renderer' é a mesma constante de
+// string ('IMAGE') usada em `node.type` pelos elementos JSX compilados,
+// então `node.type === Image` identifica o nó de forma confiável.
+function findImages(node: any): any[] {
+  if (node === null || node === undefined || typeof node === 'boolean') return [];
+  if (typeof node === 'string' || typeof node === 'number') return [];
+  if (Array.isArray(node)) return node.flatMap(findImages);
+  if (node && typeof node === 'object' && 'props' in node) {
+    if (node.type === Image) return [node.props, ...findImages(node.props?.children)];
+    if (typeof node.type === 'function') {
+      try { return findImages(node.type(node.props ?? {})); } catch { return []; }
+    }
+    return findImages(node.props?.children);
+  }
+  return [];
+}
 
 // PropostaComercialPDF.tsx (o gerador realmente usado pelo botão "Gerar PDF
 // Proposta" em App.tsx — nome de arquivo "Proposta_<cliente>_<data>.pdf",
@@ -289,5 +310,74 @@ describe('PropostaComercialPDF — gráfico de economia acumulada / payback (set
     const texto = normEspacos(extractPdfTextJoined(PropostaComercialPDF({ data })));
     expect(texto).toContain('Economia acumulada ao longo de 3 anos');
     expect(texto).not.toContain('Ponto de equilíbrio (payback)');
+  });
+});
+
+describe('PropostaComercialPDF — faixa de marca no topo das páginas internas, sem foto cortada (set/2026)', () => {
+  // BUG CORRIGIDO (set/2026): cliente reportou (com foto própria anexada,
+  // que bateu com a arte padrão IMG_APOIO embutida) que o topo da pág. 2 da
+  // Proposta ("Por que solar?") mostrava "uma imagem cortada, fica feio
+  // esquisito esteticamente" e pediu algo "mais profissional" — "um banner
+  // ou apenas a logo da empresa".
+  //
+  // Causa raiz: <Image src={empresa.fotoApoio || IMG_APOIO} style={{width:
+  // '100%', height:110, objectFit:'cover', objectPosition:'center 60%'}} />
+  // — um container de proporção 5,41:1 (595,28pt largura ÷ 110pt altura)
+  // recortando uma foto de origem 1400×933px (proporção 1,5:1) cuja logo
+  // fica no terço superior-esquerdo do quadro, não no centro. O recorte
+  // agressivo + objectPosition puxando ainda mais pra baixo descartava a
+  // logo inteira, sobrando só uma tira de telhado/painéis desconectada.
+  //
+  // Correção: banner fotográfico removido de TODAS as páginas internas (só
+  // existia na pág. 1 antes; agora nenhuma tem foto de banner), substituído
+  // por uma faixa de marca sólida (BrandBar: logo real da empresa OU
+  // monograma dourado + nome + "PROPOSTA COMERCIAL"), que não depende da
+  // proporção de nenhuma foto e por isso nunca corta nada.
+
+  it('nenhum <Image> do documento usa a geometria de banner que causava o corte (largura 100% × altura 110pt)', () => {
+    const data = dataBase();
+    const imagens = findImages(PropostaComercialPDF({ data }));
+    const bannerCortado = imagens.some(p => {
+      const st = Array.isArray(p?.style) ? Object.assign({}, ...p.style) : (p?.style ?? {});
+      return st.height === 110 && (st.width === '100%' || st.objectPosition === 'center 60%');
+    });
+    expect(bannerCortado).toBe(false);
+  });
+
+  it('sem empresa.fotoApoio nem empresa.logoBase64 cadastrados: só a imagem de capa (fotoCapa/IMG_CAPA) existe no documento inteiro — nenhuma foto no topo das páginas internas', () => {
+    const data = dataBase(); // fixture não define fotoApoio nem logoBase64
+    const imagens = findImages(PropostaComercialPDF({ data }));
+    expect(imagens.length).toBe(1); // só o fundo full-bleed da capa
+  });
+
+  it('cada uma das 5 páginas internas mostra "PROPOSTA COMERCIAL" e o nome da empresa na faixa de marca do topo', () => {
+    const data = dataBase();
+    const texto = extractPdfTextJoined(PropostaComercialPDF({ data }));
+    // 5 páginas internas ("Por que solar", "Sistema", "Análise financeira",
+    // "Investimento", "Condições") + a faixa de marca em cada uma delas.
+    const ocorrencias = (texto.match(/PROPOSTA COMERCIAL/g) ?? []).length;
+    expect(ocorrencias).toBe(5);
+    expect(texto).toContain('LUMEN SOLAR'); // empresa.nomeFantasia em maiúsculas
+  });
+
+  it('sem nomeFantasia nem razaoSocial cadastrados: cai no fallback "ENERGIA SOLAR" e monograma "L", sem lançar exceção nem mostrar "undefined"', () => {
+    const data = dataBase({ empresa: { ...dataBase().empresa, nomeFantasia: undefined, razaoSocial: undefined } });
+    expect(() => PropostaComercialPDF({ data })).not.toThrow();
+    const texto = extractPdfTextJoined(PropostaComercialPDF({ data }));
+    expect(texto).toContain('ENERGIA SOLAR');
+    expect(texto).not.toContain('undefined');
+  });
+
+  it('empresa.logoBase64 cadastrada: usa a logo real (um <Image> por página interna) em vez do monograma', () => {
+    const data = dataBase({ empresa: { ...dataBase().empresa, logoBase64: 'data:image/png;base64,FAKE_LOGO' } });
+    const imagens = findImages(PropostaComercialPDF({ data }));
+    const logosNaFaixaDeMarca = imagens.filter(p => p.src === 'data:image/png;base64,FAKE_LOGO');
+    expect(logosNaFaixaDeMarca.length).toBe(5); // uma por página interna
+  });
+
+  it('empresa.fotoApoio (campo legado/@deprecated) cadastrada NÃO volta a aparecer como banner — o campo é ignorado pela faixa de marca', () => {
+    const data = dataBase({ empresa: { ...dataBase().empresa, fotoApoio: 'data:image/jpeg;base64,FAKE_BANNER_ANTIGO' } });
+    const imagens = findImages(PropostaComercialPDF({ data }));
+    expect(imagens.some(p => p.src === 'data:image/jpeg;base64,FAKE_BANNER_ANTIGO')).toBe(false);
   });
 });
