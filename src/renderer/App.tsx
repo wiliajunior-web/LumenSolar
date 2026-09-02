@@ -2309,7 +2309,45 @@ function ImportarDatasheet({ tipo, onExtracted }: { tipo: 'modulo' | 'inversor';
   const [erro, setErro] = React.useState('');
   const apiKey = useProjetoStore(s => (s.empresa as any).anthropicApiKey || '');
   const fileRef = React.useRef<HTMLInputElement>(null);
+  // BUG CORRIGIDO (set/2026, mesma auditoria do "reconhecer TUDO que foi
+  // anexado"): o schema de extração do INVERSOR pede pra IA devolver
+  // "_configuracao" (recomendação do fabricante: mín/máx módulos em série,
+  // strings recomendadas, observações) — mas `onExtracted(extraido)` passava
+  // o objeto INTEIRO pra `atualizarKit`, que só entende campos de
+  // `EntradaKit`. "_configuracao" virava uma propriedade solta no kit, nunca
+  // exibida em lugar nenhum — justamente a recomendação mais útil do
+  // datasheet do inversor (evita configurar um FDI inválido, ver card "FDI —
+  // Fator de Dimensionamento do Inversor" logo abaixo) era extraída e
+  // jogada fora. Corrigido: "_configuracao" é retirado do objeto ANTES de
+  // chamar onExtracted (não polui o kit) e mostrado aqui como informação —
+  // não é aplicado automaticamente em numStrings/modulosPorString porque
+  // isso exigiria decidir sozinho um valor de engenharia sem confirmação do
+  // usuário; melhor mostrar a recomendação do fabricante e deixar o usuário
+  // aplicar com conhecimento de causa.
+  const [configRecomendada, setConfigRecomendada] = React.useState<null | {
+    modulosPorUnidade?: number; maxModulosParalelo?: number;
+    minModulosSerie?: number; maxModulosSerie?: number;
+    stringsRecomendadas?: number; observacoesFabricante?: string;
+  }>(null);
 
+  // BUG CORRIGIDO (set/2026, achado auditando a pergunta direta do usuário
+  // "como faço a IA reconhecer TUDO que foi anexado"): duas classes de
+  // problema neste schema, achadas comparando campo a campo com
+  // `EntradaKit` (useProjetoStore.ts):
+  //   1. "pesoKg" não batia com o campo real (`pesoKgModulo`) — o peso do
+  //      módulo era extraído com sucesso e depois silenciosamente descartado
+  //      (virava uma propriedade solta em `kit`, nunca lida por nenhum
+  //      input). Corrigido usando o nome real do campo.
+  //   2. "coefTempPmaxPorCent"/"noct" também não batiam com nenhum campo de
+  //      `EntradaKit` na época — corrigido formalizando os 2 campos na
+  //      interface (ver comentário completo lá) e renomeando aqui para
+  //      "coeficienteTemperaturaPmaxPercent"/"noct". "coefTempVocPorCent" e
+  //      "coefTempIscPorCent" foram REMOVIDOS do schema (não silenciosamente
+  //      — documentando aqui o motivo): nenhum lugar do app usa coeficiente
+  //      de temperatura de Voc/Isc em nenhum cálculo (só Pmax entra na
+  //      fórmula de perda por temperatura, ver calcularPerdas.ts) — pedir
+  //      pra IA extrair um valor que nada consome só gasta orçamento de
+  //      precisão do modelo à toa.
   const PROMPT_MODULO = `Analise este datasheet de módulo fotovoltaico e extraia APENAS as especificações técnicas em JSON puro (sem markdown, sem backticks, sem explicações).
 Retorne SOMENTE este JSON:
 {
@@ -2320,18 +2358,16 @@ Retorne SOMENTE este JSON:
   "imppA": 0,
   "vocV": 0,
   "iscA": 0,
-  "coefTempPmaxPorCent": 0,
-  "coefTempVocPorCent": 0,
-  "coefTempIscPorCent": 0,
+  "coeficienteTemperaturaPmaxPercent": 0,
   "noct": 0,
   "comprimentoMm": 0,
   "larguraMm": 0,
-  "pesoKg": 0,
+  "pesoKgModulo": 0,
   "garantiaProdutoAnos": 0,
   "garantiaPotenciaAnos": 0,
   "potenciaGarantidaPercent": 80
 }
-Use valores numéricos reais. coefTempPmax deve ser negativo (ex: -0.35). Se não encontrar um valor, use 0.`;
+Use valores numéricos reais. coeficienteTemperaturaPmaxPercent deve ser negativo (ex: -0.35). Se não encontrar um valor, use 0.`;
 
   const PROMPT_INVERSOR = [
     'Analise este datasheet de inversor solar fotovoltaico e extraia APENAS as especificacoes tecnicas em JSON puro (sem markdown, sem backticks, sem explicacoes).',
@@ -2409,6 +2445,7 @@ Use valores numéricos reais. coefTempPmax deve ser negativo (ex: -0.35). Se nã
     if (!file) return;
     if (!apiKey) { setEstado('erro'); setErro('Chave API Anthropic não configurada. Vá em ⚙ Empresa e cadastre a chave sk-ant-...'); return; }
     setEstado('lendo');
+    setConfigRecomendada(null);
     try {
       // Ler PDF como base64
       const base64 = await new Promise<string>((res, rej) => {
@@ -2443,9 +2480,16 @@ Use valores numéricos reais. coefTempPmax deve ser negativo (ex: -0.35). Se nã
       const texto = data.content?.[0]?.text || '';
       const jsonStr = texto.replace(/```json?|```/g, '').trim();
       const extraido = JSON.parse(jsonStr);
+      // Retira "_configuracao" ANTES de mesclar no kit — ver comentário
+      // completo em `configRecomendada` acima. Sem isso ela virava uma
+      // propriedade solta e nunca aparecia em lugar nenhum da tela.
+      const { _configuracao, ...specs } = extraido;
       const caminhoCopia = await salvarCopiaDatasheet(file);
-      if (caminhoCopia) extraido[campoCaminho] = caminhoCopia;
-      onExtracted(extraido);
+      if (caminhoCopia) specs[campoCaminho] = caminhoCopia;
+      onExtracted(specs);
+      if (tipo === 'inversor' && _configuracao && typeof _configuracao === 'object') {
+        setConfigRecomendada(_configuracao);
+      }
       setEstado('ok');
       setTimeout(() => setEstado('idle'), 3000);
     } catch(err) {
@@ -2477,35 +2521,54 @@ Use valores numéricos reais. coefTempPmax deve ser negativo (ex: -0.35). Se nã
   const texts  = { idle: label, lendo:'📖 Lendo PDF...', extraindo:'🤖 Extraindo dados...', ok:'✅ Dados importados!', erro:`❌ ${erro.slice(0,60)}` };
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-      <input ref={fileRef} type="file" accept=".pdf" style={{ display:'none' }} onChange={processar} />
-      <button
-        onClick={() => fileRef.current?.click()}
-        disabled={estado === 'lendo' || estado === 'extraindo'}
-        style={{
-          padding:'7px 16px', borderRadius:8, border:`1px solid ${colors[estado]}`,
-          background: estado !== 'idle' ? colors[estado]+'44' : 'transparent',
-          color: estado === 'ok' ? '#15803d' : estado === 'erro' ? '#dc2626' : estado === 'idle' ? '#6f6d63' : '#4c4fb0',
-          fontSize:12, fontWeight:600, cursor: estado === 'idle' ? 'pointer' : 'default',
-          transition:'all .2s', whiteSpace:'nowrap',
-        }}
-        title={estado === 'erro' ? erro : `Faça upload do PDF do datasheet ${tipo === 'modulo' ? 'do módulo' : 'do inversor'}`}
-      >
-        {texts[estado]}
-      </button>
-      <input ref={anexoRef} type="file" accept=".pdf" style={{ display:'none' }} onChange={anexarSemIA} />
-      <button
-        onClick={() => anexoRef.current?.click()}
-        disabled={anexando}
-        style={{
-          padding:'7px 12px', borderRadius:8, border:`1px solid ${D.border}`,
-          background:'transparent', color: D.textMuted, fontSize:12, fontWeight:600,
-          cursor: anexando ? 'default' : 'pointer', whiteSpace:'nowrap',
-        }}
-        title="Salvar o PDF do datasheet sem extrair dados por IA — não precisa de chave de API"
-      >
-        {anexando ? '📎 Salvando...' : '📎 Só anexar (sem IA)'}
-      </button>
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <input ref={fileRef} type="file" accept=".pdf" style={{ display:'none' }} onChange={processar} />
+        <button
+          onClick={() => fileRef.current?.click()}
+          disabled={estado === 'lendo' || estado === 'extraindo'}
+          style={{
+            padding:'7px 16px', borderRadius:8, border:`1px solid ${colors[estado]}`,
+            background: estado !== 'idle' ? colors[estado]+'44' : 'transparent',
+            color: estado === 'ok' ? '#15803d' : estado === 'erro' ? '#dc2626' : estado === 'idle' ? '#6f6d63' : '#4c4fb0',
+            fontSize:12, fontWeight:600, cursor: estado === 'idle' ? 'pointer' : 'default',
+            transition:'all .2s', whiteSpace:'nowrap',
+          }}
+          title={estado === 'erro' ? erro : `Faça upload do PDF do datasheet ${tipo === 'modulo' ? 'do módulo' : 'do inversor'}`}
+        >
+          {texts[estado]}
+        </button>
+        <input ref={anexoRef} type="file" accept=".pdf" style={{ display:'none' }} onChange={anexarSemIA} />
+        <button
+          onClick={() => anexoRef.current?.click()}
+          disabled={anexando}
+          style={{
+            padding:'7px 12px', borderRadius:8, border:`1px solid ${D.border}`,
+            background:'transparent', color: D.textMuted, fontSize:12, fontWeight:600,
+            cursor: anexando ? 'default' : 'pointer', whiteSpace:'nowrap',
+          }}
+          title="Salvar o PDF do datasheet sem extrair dados por IA — não precisa de chave de API"
+        >
+          {anexando ? '📎 Salvando...' : '📎 Só anexar (sem IA)'}
+        </button>
+      </div>
+      {configRecomendada && (
+        <div style={{ marginTop: 10, padding: '10px 12px', borderRadius: 8, border: `1px solid ${D.gold}`, background: D.goldMuted, fontSize: 12, color: D.text }}>
+          <strong>📐 Configuração recomendada pelo fabricante (do datasheet):</strong>
+          <div style={{ marginTop: 4, display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {configRecomendada.modulosPorUnidade ? <span>Módulos por unidade: {configRecomendada.modulosPorUnidade}</span> : null}
+            {configRecomendada.maxModulosParalelo ? <span>Máx. em paralelo: {configRecomendada.maxModulosParalelo}</span> : null}
+            {(configRecomendada.minModulosSerie || configRecomendada.maxModulosSerie) ? (
+              <span>Módulos em série: {configRecomendada.minModulosSerie || '?'}–{configRecomendada.maxModulosSerie || '?'}</span>
+            ) : null}
+            {configRecomendada.stringsRecomendadas ? <span>Strings recomendadas: {configRecomendada.stringsRecomendadas}</span> : null}
+            {configRecomendada.observacoesFabricante ? <span style={{ fontStyle: 'italic' }}>"{configRecomendada.observacoesFabricante}"</span> : null}
+          </div>
+          <p style={{ margin: '6px 0 0', color: D.textMuted, fontSize: 11 }}>
+            Não aplicado automaticamente — confira contra o cálculo de FDI abaixo e ajuste "Número de strings"/"Módulos por string" manualmente se preciso.
+          </p>
+        </div>
+      )}
     </div>
   );
 }
@@ -2920,6 +2983,23 @@ function TabKit({ onPrev, onNext }: { onPrev:()=>void; onNext:()=>void }) {
             <Campo label="Potência garantida ao final (%)" hint="Ex: 80% ao final de 25 anos"><input className="inp inp-num" type="number" value={s.kit.potenciaGarantidaPercent} onChange={e => s.atualizarKit({ potenciaGarantidaPercent: Number(e.target.value) })} /></Campo>
             <Campo label="Certificações" hint="Ex: INMETRO, IEC 61215, IEC 61730"><input className="inp" value={s.kit.certificacoes} onChange={e => s.atualizarKit({ certificacoes: e.target.value })} /></Campo>
           </div>
+          {/* ADICIONADO (set/2026, correção de bug: estes 2 valores já eram
+              extraídos pela IA do datasheet mas descartados antes de chegar
+              aqui — ver comentário completo em EntradaKit.noct/
+              coeficienteTemperaturaPmaxPercent. Deixados como campos
+              editáveis (não só um texto de exibição) para o usuário conferir/
+              corrigir o valor importado ou preencher manualmente. Quando
+              vazios, o cálculo de perda por temperatura usa o preset
+              genérico do dropdown "tipo de módulo" — comportamento antigo,
+              preservado. */}
+          <div className="g2" style={{ rowGap: 14, marginTop: 12 }}>
+            <Campo label="Coeficiente de temperatura Pmax (%/°C)" hint="Do datasheet — negativo, ex: -0.35. Em branco, usa a estimativa do tipo de módulo selecionado." tip="Quanto a potência do módulo cai por grau Celsius acima de 25°C (STC). Usado no cálculo de perda por temperatura (Tcél = Tamb + NOCT − 20).">
+              <input className="inp inp-num" type="number" step="0.01" value={s.kit.coeficienteTemperaturaPmaxPercent ?? ''} onChange={e => s.atualizarKit({ coeficienteTemperaturaPmaxPercent: e.target.value === '' ? undefined : Number(e.target.value) })} placeholder="Ex: -0.35" />
+            </Campo>
+            <Campo label="NOCT (°C)" hint="Do datasheet. Em branco, usa a estimativa do tipo de módulo selecionado." tip="Temperatura Nominal de Operação da Célula — temperatura da célula sob condições padrão de teste (800 W/m², 20°C ambiente, vento 1m/s). Quanto maior, mais o módulo aquece em operação real.">
+              <input className="inp inp-num" type="number" step="1" value={s.kit.noct ?? ''} onChange={e => s.atualizarKit({ noct: e.target.value === '' ? undefined : Number(e.target.value) })} placeholder="Ex: 45" />
+            </Campo>
+          </div>
         </div>
       </div>
 
@@ -2959,16 +3039,18 @@ function TabKit({ onPrev, onNext }: { onPrev:()=>void; onNext:()=>void }) {
             </Campo>
           </div>
 
-          {/* Tipo do inversor (extraído do datasheet) */}
-          {(s.kit as any).tipoInversor && (
+          {/* Tipo do inversor (extraído do datasheet) — campo formalizado em
+              EntradaKit.tipoInversor em set/2026 (antes só existia via
+              `(kit as any)`, ver comentário completo na interface). */}
+          {s.kit.tipoInversor && (
             <div style={{ marginTop:10, display:'flex', alignItems:'center', gap:8 }}>
               <span style={{ fontSize:11, fontWeight:700, padding:'3px 12px', borderRadius:20,
-                background:(s.kit as any).tipoInversor === 'microinversor' ? '#7c3aed22' : (s.kit as any).tipoInversor === 'hibrido' ? '#d9770622' : '#2563eb22',
-                color:      (s.kit as any).tipoInversor === 'microinversor' ? '#a78bfa'   : (s.kit as any).tipoInversor === 'hibrido' ? '#fb923c'   : '#60a5fa',
+                background:s.kit.tipoInversor === 'microinversor' ? '#7c3aed22' : s.kit.tipoInversor === 'hibrido' ? '#d9770622' : '#2563eb22',
+                color:      s.kit.tipoInversor === 'microinversor' ? '#a78bfa'   : s.kit.tipoInversor === 'hibrido' ? '#fb923c'   : '#60a5fa',
                 border:     '1px solid currentColor',
               }}>
-                {(s.kit as any).tipoInversor === 'microinversor' ? '⚡ Microinversor' :
-                 (s.kit as any).tipoInversor === 'hibrido' ? '🔋 Híbrido' : '🔌 Inversor String'}
+                {s.kit.tipoInversor === 'microinversor' ? '⚡ Microinversor' :
+                 s.kit.tipoInversor === 'hibrido' ? '🔋 Híbrido' : '🔌 Inversor String'}
               </span>
             </div>
           )}

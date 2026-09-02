@@ -24,12 +24,27 @@ function resetStore() {
   // ("mesma lógica duplicada diverge") corrigido nesta rodada. `contas` aqui
   // difere do default (mês 1 com consumo real) porque os testes de Grupo B
   // abaixo precisam de consumo médio > 0 para calcularTudo() não lançar.
+  //
+  // BUG CORRIGIDO (set/2026, achado escrevendo os testes de coeficiente/NOCT
+  // abaixo): `kit` nunca era resetado aqui — só `cliente`/`consumo`. Isso
+  // não dava problema até agora porque nenhum teste anterior fazia uma
+  // asserção numérica exata que dependesse de `kit` estar limpo (o teste de
+  // "kit.quantidade preenchido..." é sempre o último do seu describe a tocar
+  // em quantidade). Mas é uma falha de isolamento real: o Vitest roda os
+  // describes do mesmo arquivo na mesma instância do store (singleton
+  // Zustand, sem module reset entre testes) — qualquer `atualizarKit(...)`
+  // em um teste sobrevive para o próximo, na ordem em que os arquivos/blocos
+  // aparecem. Confirmado na prática: os novos testes de coeficiente/NOCT
+  // (abaixo) recebiam `kit.quantidade` e `kit.noct` sobrando do describe
+  // "dimensionamento reflete kit.quantidade real" — números de geração
+  // completamente errados sem nenhum erro de sintaxe pra apontar a causa.
   useProjetoStore.setState({
     cliente: clientePadrao(),
     consumo: {
       ...consumoPadrao(),
       contas: Array.from({length:12},(_,i)=>({mes:`M${i+1}`,kWh: i===0?500:0, valorRS: i===0?400:0})),
     },
+    kit: kitPadrao(),
   });
 }
 
@@ -164,6 +179,92 @@ describe('useProjetoStore.calcularTudo() — [REGRESSÃO ago/2026] dimensionamen
     // A geração/indicadores agora batem com o kit real, não mais com a
     // recomendação — a raiz do bug corrigido nesta auditoria.
     expect(s2.dimensionamento!.geracaoMensalEstimadaKWh).not.toBeCloseTo(recomendado.geracaoMensalEstimadaKWh, 1);
+  });
+});
+
+// [BUG CORRIGIDO set/2026] `coeficienteTemperaturaPmaxPercent`/`noct` REAIS do
+// datasheet (importados via IA em ImportarDatasheet, App.tsx, ou digitados
+// manualmente) eram salvos no kit mas NUNCA chegavam a calcularTudo() — a
+// perda por temperatura sempre usava o preset genérico do dropdown "tipo de
+// módulo", mesmo com o valor real do equipamento disponível. Achado
+// auditando a pergunta direta do usuário "como faço a IA reconhecer TUDO que
+// foi anexado". Ver comentário completo em EntradaKit.coeficienteTemperatura-
+// PmaxPercent (useProjetoStore.ts).
+describe('useProjetoStore.calcularTudo() — [BUG CORRIGIDO set/2026] coeficienteTemperaturaPmaxPercent/noct reais sobrepõem o preset', () => {
+  beforeEach(() => resetStore());
+
+  it('kit sem coeficiente/NOCT do datasheet: usa o preset do tipo de módulo (comportamento antigo, preservado)', () => {
+    useProjetoStore.getState().calcularTudo();
+    const s = useProjetoStore.getState();
+    const preset = PRESETS_MODULO['bifacial_ntype']; // tipoModulo padrão de kitPadrao()
+    const perdas = calcularPerdas(
+      { coeficienteTemperaturaPmax: preset.coef, noct: preset.noct, toleranciaPercent: 0, bifacial: preset.bifacial, ganhoBifacialPercent: preset.ganho },
+      { eficienciaMaximaPercent: 98.4 },
+      { temperaturaAmbienteMediaC: 24, perdaSombreamentoPercent: 2, perdaSujidadePercent: 2 }
+    );
+    expect(s.detalhamentoPerdas).toEqual(perdas.detalhamento);
+  });
+
+  it('kit COM coeficiente/NOCT reais (ex: importados de um datasheet real): usa o valor real, não o preset — e o resultado numérico muda de verdade', () => {
+    const preset = PRESETS_MODULO['bifacial_ntype'];
+    // Valores conferidos manualmente antes de escrever a expectativa (não é
+    // um valor arbitrário ajustado pra bater com a implementação):
+    // preset bifacial_ntype = {coef:-0.29, noct:45} → Tcél=24+(45-20)=49°C,
+    // ΔT=24°C, perdaTemp=0.29/100×24=6.96%.
+    // Override real do datasheet = {coef:-0.40, noct:50} → Tcél=24+(50-20)=54°C,
+    // ΔT=29°C, perdaTemp=0.40/100×29=11.6% — mais que o dobro do preset,
+    // então o teste tem margem de sobra para detectar se o override não
+    // estiver sendo aplicado.
+    const s = useProjetoStore.getState();
+    s.atualizarKit({ coeficienteTemperaturaPmaxPercent: -0.40, noct: 50 });
+    useProjetoStore.getState().calcularTudo();
+    const s2 = useProjetoStore.getState();
+
+    const perdasComOverride = calcularPerdas(
+      { coeficienteTemperaturaPmax: -0.40, noct: 50, toleranciaPercent: 0, bifacial: preset.bifacial, ganhoBifacialPercent: preset.ganho },
+      { eficienciaMaximaPercent: 98.4 },
+      { temperaturaAmbienteMediaC: 24, perdaSombreamentoPercent: 2, perdaSujidadePercent: 2 }
+    );
+    expect(perdasComOverride.perdaTemperatura).toBeCloseTo(0.116, 3); // conferido manualmente acima
+    expect(s2.detalhamentoPerdas).toEqual(perdasComOverride.detalhamento);
+
+    const perdasPreset = calcularPerdas(
+      { coeficienteTemperaturaPmax: preset.coef, noct: preset.noct, toleranciaPercent: 0, bifacial: preset.bifacial, ganhoBifacialPercent: preset.ganho },
+      { eficienciaMaximaPercent: 98.4 },
+      { temperaturaAmbienteMediaC: 24, perdaSombreamentoPercent: 2, perdaSujidadePercent: 2 }
+    );
+    expect(perdasComOverride.perdaTotalLiquida).toBeGreaterThan(perdasPreset.perdaTotalLiquida);
+
+    // Não é só um número solto no detalhamento — o override também muda o
+    // dimensionamento recomendado (kWp/geração) de verdade, porque
+    // `dimensionarSistema()` recebe `perdasSistema` como parâmetro direto.
+    const hsp = hspPorUF('MG');
+    const dimensionamentoComOverride = dimensionarSistema({
+      consumoMedioMensalKWh: 500, hspLocal: hsp, perdasSistema: perdasComOverride.perdaTotalLiquida,
+      potenciaModuloWp: 550, percentualCompensacaoDesejado: 1.0,
+    });
+    const dimensionamentoPreset = dimensionarSistema({
+      consumoMedioMensalKWh: 500, hspLocal: hsp, perdasSistema: perdasPreset.perdaTotalLiquida,
+      potenciaModuloWp: 550, percentualCompensacaoDesejado: 1.0,
+    });
+    expect(s2.dimensionamento).not.toBeNull();
+    expect(s2.dimensionamento!.geracaoMensalEstimadaKWh).toBeCloseTo(dimensionamentoComOverride.geracaoMensalEstimadaKWh, 2);
+    expect(dimensionamentoComOverride.geracaoMensalEstimadaKWh).toBeLessThan(dimensionamentoPreset.geracaoMensalEstimadaKWh);
+  });
+
+  it('só o coeficiente informado (NOCT em branco): usa o coeficiente real + NOCT do preset — os dois sobrepõem de forma independente', () => {
+    const preset = PRESETS_MODULO['bifacial_ntype'];
+    const s = useProjetoStore.getState();
+    s.atualizarKit({ coeficienteTemperaturaPmaxPercent: -0.50 }); // noct fica undefined
+    useProjetoStore.getState().calcularTudo();
+    const s2 = useProjetoStore.getState();
+
+    const perdasEsperadas = calcularPerdas(
+      { coeficienteTemperaturaPmax: -0.50, noct: preset.noct, toleranciaPercent: 0, bifacial: preset.bifacial, ganhoBifacialPercent: preset.ganho },
+      { eficienciaMaximaPercent: 98.4 },
+      { temperaturaAmbienteMediaC: 24, perdaSombreamentoPercent: 2, perdaSujidadePercent: 2 }
+    );
+    expect(s2.detalhamentoPerdas).toEqual(perdasEsperadas.detalhamento);
   });
 });
 

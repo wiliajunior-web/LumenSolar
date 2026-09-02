@@ -189,6 +189,42 @@ export interface EntradaKit {
   datasheetInversorCaminho?: string;
   /** Link/URL de referência do inversor — opcional, digitado manualmente. */
   datasheetInversorLink?: string;
+  // FORMALIZADOS (set/2026, auditoria ao responder "como faço a IA reconhecer
+  // TUDO que foi anexado" — pergunta direta do usuário): estes 2 campos já
+  // eram devolvidos pela extração por IA do datasheet do módulo
+  // (ImportarDatasheet, App.tsx) só que com nomes que NÃO batiam com nenhum
+  // campo desta interface (`coefTempPmaxPorCent`, sem equivalente aqui) — o
+  // JSON extraído era passado direto pra `atualizarKit(dados: any)`, que
+  // aceita qualquer coisa porque `dados` é `any` (TypeScript não pega excesso
+  // de propriedade em variável tipada `any`). Resultado prático: o
+  // coeficiente de temperatura e o NOCT REAIS do datasheet do cliente eram
+  // extraídos com sucesso pela IA e então IGNORADOS — `calcularTudo()`
+  // (abaixo) sempre usava um valor GENÉRICO de preset (`PRESETS_MODULO`,
+  // baseado só no dropdown "tipo de módulo": mono/poli/bifacial etc.), nunca
+  // o valor real do equipamento comprado. Isso subestima ou superestima a
+  // perda por temperatura de verdade (ver fórmula Tcél=Tamb+(NOCT-20) em
+  // calcularPerdas.ts) sem nenhum aviso — o mesmo padrão "implementado mas
+  // nunca chega a ser usado" do botão ImportarDatasheet que nunca era
+  // renderizado. Corrigido: `noct` já batia por coincidência com o nome
+  // usado em `EspecificacoesModulo`/`PresetModulo`; `coeficienteTemperaturaPmaxPercent`
+  // foi renomeado no prompt de extração (App.tsx) pra bater com este campo.
+  // Ambos ficam OPCIONAIS — quando ausentes, `calcularTudo()` cai de volta
+  // no preset genérico (comportamento antigo, preservado para todo kit sem
+  // datasheet importado).
+  /** Coeficiente de temperatura de Pmax real do módulo (%/°C, negativo) — do datasheet. Ex.: -0.29. Sobrepõe o preset genérico em calcularTudo() quando preenchido. */
+  coeficienteTemperaturaPmaxPercent?: number;
+  /** NOCT real do módulo (°C) — do datasheet. Ex.: 45. Sobrepõe o preset genérico em calcularTudo() quando preenchido. */
+  noct?: number;
+  /**
+   * Tipo do inversor conforme identificado pela IA no datasheet — já era
+   * usado em App.tsx (badge "⚡ Microinversor"/"🔋 Híbrido"/"🔌 Inversor
+   * String") mas só via `(kit as any).tipoInversor`, o MESMO padrão que já
+   * causou um bug real antes (ver comentário de `corrMaxMpptA` acima: campos
+   * acessados só via `as any`, nunca no tipo, sobreviveram sem o TypeScript
+   * conseguir avisar quando `novaProposta()`/importação esquecessem de
+   * resetá-los). Formalizado aqui pelo mesmo motivo.
+   */
+  tipoInversor?: 'string' | 'microinversor' | 'hibrido';
 }
 
 export interface EntradaPrecificacao {
@@ -431,8 +467,16 @@ export const useProjetoStore = create<ProjetoState>((set, get) => ({
       ? validas.filter(c=>c.valorRS>0).reduce((a,c)=>a+c.valorRS,0)/validas.filter(c=>c.valorRS>0).length : 0;
 
     const hsp = hspPorUF(cliente.uf);
+    // BUG CORRIGIDO (set/2026): `coeficienteTemperaturaPmax`/`noct` REAIS do
+    // datasheet (importados via IA — ver comentário completo em
+    // `EntradaKit.coeficienteTemperaturaPmaxPercent` acima) eram extraídos
+    // com sucesso mas nunca chegavam a esta função — o cálculo de perda por
+    // temperatura sempre usava o preset genérico do dropdown "tipo de
+    // módulo", mesmo quando o valor real do equipamento já estava disponível
+    // no state. `?? ` preserva o comportamento antigo (preset) para todo kit
+    // sem datasheet importado — só usa o valor real quando presente.
     const perdas = calcularPerdas(
-      {coeficienteTemperaturaPmax:preset.coef,noct:preset.noct,toleranciaPercent:0,bifacial:preset.bifacial,ganhoBifacialPercent:preset.ganho},
+      {coeficienteTemperaturaPmax:kit.coeficienteTemperaturaPmaxPercent ?? preset.coef,noct:kit.noct ?? preset.noct,toleranciaPercent:0,bifacial:preset.bifacial,ganhoBifacialPercent:preset.ganho},
       {eficienciaMaximaPercent:kit.eficienciaInversorPercent},
       {temperaturaAmbienteMediaC:24,perdaSombreamentoPercent:2,perdaSujidadePercent:2}
     );
