@@ -83,6 +83,45 @@ describe('área e peso', () => {
     const area20 = areaTotalNecessariaM2(20, 620);
     expect(area20).toBeGreaterThan(area12);
   });
+
+  // [BUG CORRIGIDO set/2026, achado auditando a Proposta Comercial de um caso
+  // real (Ana Maria Vieira de Sá e Silva)]: a função sempre usava a heurística
+  // por faixa de potência mesmo com as dimensões REAIS do módulo já digitadas
+  // em TabKit (kit.comprimentoMm/larguraMm) — MemorialDescritivo.tsx e
+  // gerarFormularioCemig.ts já preferiam a dimensão real (cada um com sua
+  // própria cópia da fórmula), mas a Proposta PDF/Excel de Auditoria/App.tsx
+  // (TabResultado) continuavam mostrando a estimativa genérica mesmo quando
+  // o dado real e mais preciso já existia.
+  describe('[BUG CORRIGIDO set/2026] dimensão real do módulo tem prioridade sobre a estimativa por Wp', () => {
+    it('caso real auditado (LEAPTON LP182210, 2383×1134mm, 620Wp, 7 módulos): usa a dimensão real (~20,8 m²), não a estimativa genérica (19,6 m²)', () => {
+      const areaComDimensaoReal = areaTotalNecessariaM2(7, 620, 2383, 1134);
+      const areaSoEstimativa = areaTotalNecessariaM2(7, 620); // comportamento antigo, sem dimensão real
+      // Valor conferido à mão: 2,383m × 1,134m = 2,702322 m²/módulo × 7 × 1,10 = 20,8079 m².
+      expect(areaComDimensaoReal).toBeCloseTo(20.808, 2);
+      expect(areaSoEstimativa).toBeCloseTo(19.635, 2); // heurística por faixa de Wp (2,55 m²) × 7 × 1,10 — é o valor que a Proposta mostrava, errado, antes desta correção
+      expect(areaComDimensaoReal).not.toBeCloseTo(areaSoEstimativa, 0);
+    });
+
+    it('sem dimensão real informada (kit legado, comprimentoMm/larguraMm=0 ou ausentes): cai para a estimativa por Wp, sem lançar exceção', () => {
+      expect(areaTotalNecessariaM2(7, 620, 0, 0)).toBeCloseTo(19.635, 2);
+      expect(areaTotalNecessariaM2(7, 620, undefined, undefined)).toBeCloseTo(19.635, 2);
+    });
+
+    it('só uma das duas dimensões informada (dado incompleto): NÃO usa a dimensão real parcial — cai para a estimativa completa, não gera NaN', () => {
+      const area = areaTotalNecessariaM2(7, 620, 2383, 0);
+      expect(area).toBeCloseTo(19.635, 2);
+      expect(Number.isNaN(area)).toBe(false);
+    });
+
+    it('pesoDistribuidoKgM2 usa a MESMA área real (não divide pela estimativa enquanto multiplica pelo peso real)', () => {
+      const pesoComDimensaoReal = pesoDistribuidoKgM2(7, 620, 2383, 1134);
+      const pesoSoEstimativa = pesoDistribuidoKgM2(7, 620);
+      // Valor conferido à mão: pesoModulo(620Wp)=28kg; área real=20,8079 m² (acima).
+      // peso = (7×28 + 20,8079×3) / 20,8079 = (196 + 62,4236) / 20,8079 ≈ 12,42 kg/m².
+      expect(pesoComDimensaoReal).toBeCloseTo(12.42, 1);
+      expect(pesoComDimensaoReal).not.toBeCloseTo(pesoSoEstimativa, 1);
+    });
+  });
 });
 
 describe('simularFinanciamento', () => {

@@ -778,11 +778,21 @@ export function gerarExcelAuditoria(dados: any, pastaDestino: string = process.c
   for (let k = 1; k <= 48; k++) {
     const rr = PRC_T1 + k - 1;
     setNum(ws6, rr, 1, k, F_INT);
-    ws6[`B${rr}`] = { t:'n', f: k===1 ? `=B${r-9}` : `=F${rr-1}`, v:0, z:F_BRL };
-    ws6[`C${rr}`] = { t:'n', f:`=B${rr}*$B$${PRC_TAX}`, v:0, z:F_BRL };
-    ws6[`D${rr}`] = { t:'n', f:`=$B$${PRC_PMT}-C${rr}`, v:0, z:F_BRL };
-    ws6[`E${rr}`] = { t:'n', f:`=$B$${PRC_PMT}`, v:0, z:F_BRL };
-    ws6[`F${rr}`] = { t:'n', f:`=MAX(0,B${rr}-D${rr})`, v:0, z:F_BRL };
+    // BUG CORRIGIDO (set/2026, achado auditando o Excel de Auditoria de um
+    // caso real): estas 5 células eram montadas como objeto literal direto
+    // (`ws6[...] = {t:'n', f:\`=...\`}`), passando por cima do `setFrm()` que
+    // já tinha sido corrigido em ago/2026 para tirar o "=" duplicado — o
+    // MESMO bug (ver comentário completo em setFrm() acima) sobrevivia aqui
+    // porque a correção de ago/2026 só tocou as chamadas a setFrm(), não
+    // essas 5 linhas que constroem a célula na mão. Confirmado no .xlsx real
+    // gerado pelo app: célula B (linha 1 da Tabela Price) saía com
+    // `<f>=B...</f>` — "=" duplicado, fora da especificação OOXML. Agora
+    // passa por setFrm() como todo o resto do arquivo.
+    setFrm(ws6, rr, 2, k===1 ? `=B${r-9}` : `=F${rr-1}`, F_BRL);
+    setFrm(ws6, rr, 3, `=B${rr}*$B$${PRC_TAX}`, F_BRL);
+    setFrm(ws6, rr, 4, `=$B$${PRC_PMT}-C${rr}`, F_BRL);
+    setFrm(ws6, rr, 5, `=$B$${PRC_PMT}`, F_BRL);
+    setFrm(ws6, rr, 6, `=MAX(0,B${rr}-D${rr})`, F_BRL);
   }
 
   updateRef(ws6, PRC_T1+48, 6);
@@ -809,17 +819,24 @@ export function gerarExcelAuditoria(dados: any, pastaDestino: string = process.c
   if (r !== FC_T0) throw new Error(`gerarExcelAuditoria: layout do Fluxo_Caixa mudou (r=${r}, FC_T0=${FC_T0}) — atualize a constante FC_T0 no início da função.`);
   setNum(ws7, r, 1, 0, F_INT);
   setNum(ws7, r, 2, 1); setNum(ws7, r, 3, 1); setNum(ws7, r, 4, 0, F_BRL);
-  ws7[`E${r}`] = { t:'n', f:`=-B${FC_INV}`, v:0, z:F_BRL };
-  ws7[`F${r}`] = { t:'n', f:`=E${r}`, v:0, z:F_BRL }; r++;
+  // BUG CORRIGIDO (set/2026) — mesma classe do bug corrigido acima na Tabela
+  // Price: objeto literal direto pulava a remoção do "=" duplicado que
+  // `setFrm()` já faz. Este é o pior ponto pra isso acontecer — é o Fluxo de
+  // Caixa que alimenta TIR/VPL/Payback/Economia 25 anos da aba Resumo — por
+  // isso a linha 0 (investimento) e as 25 linhas do loop abaixo (as fórmulas
+  // que a auditoria encontrou malformadas no .xlsx real) agora passam por
+  // setFrm() também.
+  setFrm(ws7, r, 5, `=-B${FC_INV}`, F_BRL);
+  setFrm(ws7, r, 6, `=E${r}`, F_BRL); r++;
 
   for (let k = 1; k <= 25; k++) {
     const rr = FC_T0 + k;
     setNum(ws7, rr, 1, k, F_INT);
-    ws7[`B${rr}`] = { t:'n', f:`=POWER(1-$B$${FC_DEG},${k-1})`, v:0, z:'0.000%' };
-    ws7[`C${rr}`] = { t:'n', f:`=POWER(1+$B$${FC_REA},${k-1})`, v:0, z:'0.000%' };
-    ws7[`D${rr}`] = { t:'n', f:`=$B$${FC_ECO}*12*B${rr}*C${rr}`, v:0, z:F_BRL };
-    ws7[`E${rr}`] = { t:'n', f:`=D${rr}`, v:0, z:F_BRL };
-    ws7[`F${rr}`] = { t:'n', f:`=F${rr-1}+E${rr}`, v:0, z:F_BRL };
+    setFrm(ws7, rr, 2, `=POWER(1-$B$${FC_DEG},${k-1})`, '0.000%');
+    setFrm(ws7, rr, 3, `=POWER(1+$B$${FC_REA},${k-1})`, '0.000%');
+    setFrm(ws7, rr, 4, `=$B$${FC_ECO}*12*B${rr}*C${rr}`, F_BRL);
+    setFrm(ws7, rr, 5, `=D${rr}`, F_BRL);
+    setFrm(ws7, rr, 6, `=F${rr-1}+E${rr}`, F_BRL);
   }
 
   r = FC_T0 + 27;

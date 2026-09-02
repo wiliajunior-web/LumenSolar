@@ -50,3 +50,18 @@ describe('DiagramaUnifilarBasico — rótulo da distribuidora ("REDE ...")', () 
     expect(texto).toContain('REDE CEMIG');
   });
 });
+
+// [BUG CORRIGIDO set/2026] achado auditando o DUB de um caso real (Ana Maria
+// Vieira de Sá e Silva): a seção dos cabos saía "2.5mm2"/"4mm2" — "mm2" cru,
+// sem sobrescrito — nos rótulos do diagrama E nas duas tabelas de proteção.
+// A mesma classe de bug já tinha sido corrigida na Proposta Comercial
+// (PropostaComercialPDF.test.ts, "símbolos m²/mm²") mas nunca chegou a ser
+// auditada neste outro documento, que usa a mesma unidade.
+describe('DiagramaUnifilarBasico — símbolo mm² (não mm2) nas seções de cabo', () => {
+  it('rótulos do diagrama e tabelas de proteção CA/CC usam "mm²", nunca "mm2" cru', () => {
+    const data = dataBase();
+    const texto = extractPdfTextJoined(DiagramaUnifilarBasico({ data }));
+    expect(texto).toMatch(/mm²/);
+    expect(texto).not.toMatch(/mm2\b/);
+  });
+});

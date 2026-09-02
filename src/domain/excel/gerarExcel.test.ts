@@ -307,3 +307,53 @@ describe('gerarExcelAuditoria — REGRESSÃO ago/2026 (rodada 10): 6 bugs de fó
     expect(valorPorLabel(ws, 'Tarifa real')).toBeCloseTo(1.5, 6);
   });
 });
+
+// [BUG CORRIGIDO set/2026] achado auditando o Excel de Auditoria de um caso
+// real (Ana Maria Vieira de Sá e Silva): a correção de ago/2026 em setFrm()
+// (ver comentário completo na função, no início de gerarExcel.ts) só cobria
+// as ~86 chamadas que já passavam por setFrm() — mas a Tabela_Price (48
+// linhas × 5 colunas de fórmula) e o Fluxo_Caixa (linha do ano 0 + 25 linhas
+// × 5 colunas) montavam a célula como objeto literal direto
+// (`ws[...] = {t:'n', f:\`=...\`}`), sem passar pelo strip do "=" inicial —
+// exatamente o MESMO bug, sobrevivendo num código adjacente que a correção
+// de ago/2026 não tocou. Confirmado no .xlsx real gerado pelo app (lido com
+// openpyxl fora deste projeto): célula `Fluxo_Caixa!E10` saía com
+// `<f>=-B3</f>` — o "=" duplicado (o de fora, que o Excel mostra, mais este
+// aqui dentro do XML) viola a especificação OOXML (ECMA-376) para o elemento
+// <f>, que não deve conter o sinal de igual.
+//
+// Este teste é deliberadamente genérico (varre TODA célula de fórmula do
+// arquivo inteiro, não só as que motivaram a correção) — é a forma de
+// garantir que nenhuma outra célula, atual ou futura, reintroduza esse
+// padrão bypassando setFrm().
+describe('gerarExcelAuditoria — [BUG CORRIGIDO set/2026] nenhuma célula de fórmula tem "=" duplicado', () => {
+  afterEach(() => limparArquivosGerados());
+
+  it('em TODAS as abas, nenhuma célula com fórmula (.f) começa com "=" — inclusive Tabela_Price e Fluxo_Caixa', () => {
+    const dados = {
+      cliente: { nome: 'Cliente Fórmulas' },
+      kit: { potenciaModuloWp: 620, quantidade: 7, custoKitRS: 6325.84, numStrings: 1, modulosPorString: 7 },
+    };
+    gerarExcelAuditoria(dados as any, DIR_TESTE);
+    const gerados = readdirSync(DIR_TESTE).filter(f => f.startsWith('Auditoria_') && f.endsWith('.xlsx'));
+    const wb = XLSX.readFile(path.join(DIR_TESTE, gerados[0]));
+
+    const celulasComBug: string[] = [];
+    let totalCelulasComFormula = 0;
+    for (const nomeAba of wb.SheetNames) {
+      const ws = wb.Sheets[nomeAba];
+      for (const key of Object.keys(ws)) {
+        if (key.startsWith('!')) continue;
+        const f = ws[key]?.f;
+        if (typeof f !== 'string') continue;
+        totalCelulasComFormula++;
+        if (f.startsWith('=')) celulasComBug.push(`${nomeAba}!${key} = "${f}"`);
+      }
+    }
+
+    // Confirma que o teste está de fato exercitando células com fórmula (não
+    // passando "no verde" por engano, ex: sheet vazia ou nome de aba errado).
+    expect(totalCelulasComFormula).toBeGreaterThan(100);
+    expect(celulasComBug).toEqual([]);
+  });
+});

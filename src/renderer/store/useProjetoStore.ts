@@ -629,8 +629,12 @@ export const useProjetoStore = create<ProjetoState>((set, get) => ({
       paybackDescontado:formatarPayback(fluxo.paybackDescontadoAnos),
       economiaTotalHorizonte:fluxo.economiaTotalHorizonte,
       economia25Anos:fluxo.economiaTotalHorizonte,
-      areaNecessariaM2:areaTotalNecessariaM2(dimensionamento.numeroModulos,kit.potenciaModuloWp),
-      pesoDistribuidoKgM2:pesoDistribuidoKgM2(dimensionamento.numeroModulos,kit.potenciaModuloWp),
+      // set/2026: passa as dimensões reais do módulo (kit.comprimentoMm/
+      // larguraMm, já coletadas em TabKit) para que a área/peso batam com o
+      // que MemorialDescritivo.tsx e gerarFormularioCemig.ts já calculavam
+      // corretamente — ver comentário completo em areaTotalNecessariaM2().
+      areaNecessariaM2:areaTotalNecessariaM2(dimensionamento.numeroModulos,kit.potenciaModuloWp,kit.comprimentoMm,kit.larguraMm),
+      pesoDistribuidoKgM2:pesoDistribuidoKgM2(dimensionamento.numeroModulos,kit.potenciaModuloWp,kit.comprimentoMm,kit.larguraMm),
       geracaoMensalKWh:gen12,
       simulacoesFinanciamento:simulacoes,
       fluxoAnualHorizonte:fluxo.fluxoAnual,

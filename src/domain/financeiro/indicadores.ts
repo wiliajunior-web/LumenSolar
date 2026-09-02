@@ -53,7 +53,7 @@ export function formatarPayback(anosDecimal: number | null): string {
 
 // ─── Área necessária ────────────────────────────────────────────────────────
 
-/** Área aproximada por módulo em m², baseada na potência em Wp. */
+/** Área aproximada por módulo em m², baseada na potência em Wp — FALLBACK usado só quando as dimensões reais do módulo (comprimentoMm/larguraMm) não são conhecidas. Não é de norma nenhuma, é heurística por faixa de potência. */
 export function areaModuloM2(potenciaWp: number): number {
   if (potenciaWp < 350) return 1.65;
   if (potenciaWp < 450) return 1.90;
@@ -63,16 +63,36 @@ export function areaModuloM2(potenciaWp: number): number {
   return 3.10;
 }
 
-/** Área total estimada necessária no telhado (com fator de espacejamento de 10%). */
-export function areaTotalNecessariaM2(numModulos: number, potenciaModuloWp: number): number {
-  return numModulos * areaModuloM2(potenciaModuloWp) * 1.10;
+/**
+ * Área total estimada necessária no telhado (com fator de espacejamento de 10%).
+ *
+ * BUG CORRIGIDO (set/2026, achado auditando a Proposta Comercial de um caso
+ * real): esta função SEMPRE usava a heurística de `areaModuloM2()` (faixa de
+ * potência), mesmo quando o usuário já tinha digitado as dimensões REAIS do
+ * módulo (`kit.comprimentoMm`/`larguraMm`, TabKit/datasheet) — o
+ * MemorialDescritivo.tsx e o gerarFormularioCemig.ts já preferiam a dimensão
+ * real, cada um com sua própria cópia inline da fórmula (comprimento × largura
+ * × 1.1), mas a Proposta Comercial (PDF), o Excel de Auditoria e o card
+ * "Área necessária"/"Peso distribuído" em App.tsx (TabResultado) continuavam
+ * lendo `indicadores.areaNecessariaM2`, calculado só pela heurística — no caso
+ * auditado (LEAPTON LP182210, 2383×1134mm, 620Wp, 7 módulos): heurística dava
+ * 19,6 m², dimensão real dá 20,8 m² — quase 6% de diferença, e o peso
+ * distribuído (usado no aviso de reforço estrutural em App.tsx, limiar
+ * >12kg/m²) saía proporcionalmente errado também. Centralizado aqui: dimensão
+ * real tem prioridade sempre que informada; a heurística por Wp vira só o
+ * fallback para casos/kits sem essas dimensões preenchidas.
+ */
+export function areaTotalNecessariaM2(numModulos: number, potenciaModuloWp: number, comprimentoModuloMm?: number, larguraModuloMm?: number): number {
+  const areaModuloReal = (comprimentoModuloMm && larguraModuloMm) ? (comprimentoModuloMm / 1000) * (larguraModuloMm / 1000) : 0;
+  const areaPorModulo = areaModuloReal > 0 ? areaModuloReal : areaModuloM2(potenciaModuloWp);
+  return numModulos * areaPorModulo * 1.10;
 }
 
-/** Peso distribuído estimado por m² de telhado (kg/m²). */
-export function pesoDistribuidoKgM2(numModulos: number, potenciaModuloWp: number): number {
+/** Peso distribuído estimado por m² de telhado (kg/m²). Recebe as dimensões reais do módulo (ver areaTotalNecessariaM2) para que a área usada no denominador seja a mesma exibida ao cliente/instalador nos outros documentos. */
+export function pesoDistribuidoKgM2(numModulos: number, potenciaModuloWp: number, comprimentoModuloMm?: number, larguraModuloMm?: number): number {
   // Módulos modernos: ~8-12 kg cada. Estrutura adiciona ~3kg/m².
   const pesoModulo = potenciaModuloWp < 550 ? 22 : potenciaModuloWp < 650 ? 28 : 33;
-  const areaTotal = areaTotalNecessariaM2(numModulos, potenciaModuloWp);
+  const areaTotal = areaTotalNecessariaM2(numModulos, potenciaModuloWp, comprimentoModuloMm, larguraModuloMm);
   if (areaTotal <= 0) return 0;
   return (numModulos * pesoModulo + areaTotal * 3) / areaTotal;
 }

@@ -161,9 +161,9 @@ function DiagramaSvg({ dados }: { dados: ReturnType<typeof montarDadosDiagrama> 
 
       {/* Rótulos de proteção — sempre centrados sob o segmento a que se referem, nunca sobre um bloco */}
       <RotuloSegmento entreIdx={1} offsetY={-16} texto={`Disjuntor ${disjCA}A`} cor={BLUE} bold />
-      <RotuloSegmento entreIdx={1} offsetY={4} texto={`Cabo CA ${secaoCA}mm2`} cor={MUTED} />
+      <RotuloSegmento entreIdx={1} offsetY={4} texto={`Cabo CA ${secaoCA}mm²`} cor={MUTED} />
       <RotuloSegmento entreIdx={2} offsetY={-16} texto={`Fusível ${fusivel||'-'}A`} cor={BLUE} bold />
-      <RotuloSegmento entreIdx={2} offsetY={4} texto={`Cabo CC ${secaoCC}mm2`} cor={MUTED} />
+      <RotuloSegmento entreIdx={2} offsetY={4} texto={`Cabo CC ${secaoCC}mm²`} cor={MUTED} />
       <RotuloSegmento entreIdx={2} offsetY={17} texto={`DPS CC ${dpsCC}kA`} cor={BLUE} />
 
       <Text style={{ position:'absolute', left:xs[1]-14, top:yLine+bH+29, width:56, fontSize:6.3, textAlign:'center', color:'#d97706' }}>
@@ -265,7 +265,7 @@ export function DiagramaUnifilarBasico({ data }: { data: any }) {
           </View>
           {[
             ['Corrente de projeto (Ib)', `${N(dados.caboCA.ibA)} A`],
-            ['Seção do cabo CA', `${dados.caboCA.secaoMm2} mm2`],
+            ['Seção do cabo CA', `${dados.caboCA.secaoMm2} mm²`],
             ['Disjuntor CA (In)', `${dados.caboCA.disjuntorA} A`],
             ['DPS CA', `${dados.dpsCA} kA — ${safe(calcularDPSCA(dados.potCA).descricao)}`],
             ['Queda de tensão CA', `${N(dados.caboCA.quedaTensaoPct,2)}% ${dados.caboCA.quedaTensaoOk ? '(<= 4%, OK)' : '(> 4%, ATENÇÃO)'}`],
@@ -286,7 +286,7 @@ export function DiagramaUnifilarBasico({ data }: { data: any }) {
           {[
             ['Configuração das strings', `${dados.nStrings} string(s) x ${dados.modPorString} módulo(s) = ${dados.qtdModulos} módulos`],
             ['Corrente de curto-circuito total (Isc)', `${N(dados.protecaoCC.correnteCurtoCircuitoTotalA)} A`],
-            ['Seção do cabo CC (solar)', `${dados.protecaoCC.secaoCaboMm2} mm2`],
+            ['Seção do cabo CC (solar)', `${dados.protecaoCC.secaoCaboMm2} mm²`],
             ['Fusível de string', dados.protecaoCC.fusivelStringA > 0 ? `${dados.protecaoCC.fusivelStringA} A` : 'a definir'],
             ['DPS CC', `${dados.protecaoCC.dpsClasseKA} kA`],
             ['Voc do sistema (STC)', `${N(dados.protecaoCC.vocSistemaV,0)} V`],
