@@ -58,10 +58,85 @@ function obterIpcRenderer(): typeof import('electron').ipcRenderer {
  * disponível — por exemplo em testes/scripts que chamam os geradores
  * diretamente fora do Electron (eles já passam pastaDestino próprio ou usam
  * o default do parâmetro, então nem chegam a chamar esta função).
+ *
+ * ADICIONADO (set/2026, pedido direto do usuário: "o ideal é que o usuário
+ * escolha onde quer salvar"): antes desta mudança, a pasta Documentos do
+ * Windows era a ÚNICA opção, sem nenhuma forma de o usuário escolher outro
+ * lugar (pendrive, pasta de rede, pasta específica de um cliente/projeto).
+ * Agora `obterPastaDocumentos()` primeiro confere se existe uma pasta
+ * PREFERIDA salva (`obterPastaPreferida()`, localStorage — sobrevive entre
+ * sessões, mesmo padrão já usado para `salvarEmpresa()`); só cai pro padrão
+ * do Windows se não houver preferência OU se a preferência salva não existir
+ * mais no disco (pendrive desconectado, pasta apagada/renomeada) — nesse
+ * caso a preferência inválida é apagada automaticamente (não fica tentando
+ * gravar num caminho morto pra sempre) e um aviso vai pro console.
  */
 let cache: string | null = null;
 
+const CHAVE_PASTA_PREFERIDA = 'lumen:pastaDocumentosPreferida';
+
+/** Pasta escolhida manualmente pelo usuário (via `escolherPastaDocumentos()`), ou `null` se nunca escolheu. */
+export function obterPastaPreferida(): string | null {
+  try {
+    return localStorage.getItem(CHAVE_PASTA_PREFERIDA) || null;
+  } catch {
+    return null;
+  }
+}
+
+function salvarPastaPreferida(pasta: string): void {
+  try {
+    localStorage.setItem(CHAVE_PASTA_PREFERIDA, pasta);
+  } catch (e) {
+    console.warn('[pastaDocumentos] não foi possível salvar a pasta preferida:', e);
+  }
+}
+
+/** Remove a preferência salva — volta a usar a pasta Documentos padrão do Windows. */
+export function limparPastaPreferida(): void {
+  try {
+    localStorage.removeItem(CHAVE_PASTA_PREFERIDA);
+  } catch (e) {
+    console.warn('[pastaDocumentos] não foi possível limpar a pasta preferida:', e);
+  }
+  cache = null;
+}
+
+/**
+ * Abre o diálogo nativo do Windows pra escolher a pasta. Devolve a pasta
+ * escolhida (e já salva como preferência) ou `null` se o usuário cancelou —
+ * o chamador deve tratar `null` como "nada mudou", nunca como erro.
+ */
+export async function escolherPastaDocumentos(): Promise<string | null> {
+  const escolhida: string | null = await obterIpcRenderer().invoke('escolher-pasta-documentos');
+  if (!escolhida) return null;
+  salvarPastaPreferida(escolhida);
+  return escolhida;
+}
+
 export async function obterPastaDocumentos(): Promise<string> {
+  // BUG CORRIGIDO (set/2026, achado escrevendo o teste de regressão — a pasta
+  // preferida some no meio da sessão — antes de existir de verdade): a
+  // preferência era conferida só na PRIMEIRA chamada; depois disso `cache`
+  // (pensado só pra evitar round-trip de IPC repetido durante "Pacote
+  // Completo", que chama esta função 7x seguidas) fazia `obterPastaDocumentos()`
+  // devolver o caminho preferido antigo sem NUNCA mais checar se ele ainda
+  // existe — um pendrive desconectado ou pasta apagada no meio da sessão só
+  // seria percebido quando `fs.writeFileSync` finalmente lançasse um erro de
+  // I/O real lá na frente, em vez do fallback automático pro padrão do
+  // Windows já documentado acima. Corrigido: a preferência agora é
+  // revalidada em TODA chamada (fs.existsSync é síncrono e barato — nada a
+  // ver com o custo do IPC, que é o que o cache realmente evita); o cache só
+  // se aplica ao caminho padrão do Windows resolvido via IPC.
+  const preferida = obterPastaPreferida();
+  if (preferida) {
+    if (fs.existsSync(preferida) && fs.statSync(preferida).isDirectory()) {
+      return preferida;
+    }
+    console.warn(`[pastaDocumentos] pasta preferida "${preferida}" não existe mais — voltando ao padrão do Windows.`);
+    limparPastaPreferida(); // não mexe em `cache` do padrão — só limpa a preferência morta
+  }
+
   if (cache) return cache;
   try {
     const pasta: string = await obterIpcRenderer().invoke('obter-pasta-documentos');

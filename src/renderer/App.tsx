@@ -994,6 +994,30 @@ function TabHome({ onNovaProposta, onAbrirProposta, onImportar }: { onNovaPropos
 // ─── Tab Empresa ─────────────────────────────────────────────────────────────
 function TabEmpresa({ onClose }: { onClose: () => void }) {
   const { empresa, atualizarEmpresa } = useProjetoStore();
+  // ADICIONADO (set/2026, pedido direto do usuário: "o ideal é que o usuário
+  // escolha onde quer salvar"): estado local só pra mostrar a pasta atual e
+  // reagir à escolha — a fonte da verdade fica em localStorage
+  // (pastaDocumentos.ts), isso aqui é só o que a tela mostra.
+  const [pastaAtual, setPastaAtual] = React.useState<string>('Carregando...');
+  const [pastaEhPadrao, setPastaEhPadrao] = React.useState(true);
+  React.useEffect(() => {
+    (async () => {
+      const { obterPastaDocumentos, obterPastaPreferida } = await import('./services/pastaDocumentos');
+      setPastaAtual(await obterPastaDocumentos());
+      setPastaEhPadrao(!obterPastaPreferida());
+    })();
+  }, []);
+  async function alterarPastaDocumentos() {
+    const { escolherPastaDocumentos } = await import('./services/pastaDocumentos');
+    const escolhida = await escolherPastaDocumentos();
+    if (escolhida) { setPastaAtual(escolhida); setPastaEhPadrao(false); }
+  }
+  async function restaurarPastaPadrao() {
+    const { limparPastaPreferida, obterPastaDocumentos } = await import('./services/pastaDocumentos');
+    limparPastaPreferida();
+    setPastaAtual(await obterPastaDocumentos());
+    setPastaEhPadrao(true);
+  }
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
@@ -1074,6 +1098,24 @@ function TabEmpresa({ onClose }: { onClose: () => void }) {
                 <p className="lbl-hint">Landscape wide — banner interno</p>
               </div>
             </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="card" style={{ marginBottom: 14 }}>
+        <div className="card-head">Onde salvar os documentos</div>
+        <div className="card-body">
+          <p className="lbl-hint" style={{ marginBottom: 12 }}>
+            Todo PDF, Excel e arquivo de projeto (.lumensolar) gerado pelo app grava aqui.
+            {pastaEhPadrao ? ' Ainda não escolheu — usando a pasta Documentos padrão do Windows.' : ''}
+          </p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <code style={{
+              flex: '1 1 320px', padding: '8px 12px', background: '#f2f0e8', borderRadius: 6,
+              border: `1px solid ${D.border}`, fontSize: 12, color: '#3a3830', wordBreak: 'break-all',
+            }}>{pastaAtual}</code>
+            <Btn onClick={alterarPastaDocumentos} variant="ghost">📁 Alterar pasta</Btn>
+            {!pastaEhPadrao && <Btn onClick={restaurarPastaPadrao} variant="ghost">↺ Usar padrão do Windows</Btn>}
           </div>
         </div>
       </div>

@@ -124,6 +124,32 @@ function createWindow() {
 // lugar que o usuário não escolheu e dificilmente encontraria depois.
 ipcMain.handle('obter-pasta-documentos', () => app.getPath('documents'));
 
+// ADICIONADO (set/2026): feedback real de usuário — "o ideal é que o usuário
+// escolha onde quer salvar" — `obter-pasta-documentos` acima só devolve o
+// padrão do Windows (Documentos), sem nenhuma forma de o usuário escolher
+// outro lugar (um pendrive, uma pasta de rede, uma pasta específica do
+// cliente). Abre o diálogo NATIVO de escolha de pasta do próprio Windows —
+// `dialog.showOpenDialog` só existe no processo principal (por isso é IPC,
+// mesmo padrão de `obter-pasta-documentos`). `properties: ['openDirectory',
+// 'createDirectory']` deixa o usuário criar uma pasta nova ali mesmo, sem
+// precisar sair do diálogo. Devolve `null` se o usuário cancelar — o
+// chamador (`escolherPastaDocumentos` em pastaDocumentos.ts) trata isso como
+// "não mudou nada", nunca como pasta vazia/raiz.
+ipcMain.handle('escolher-pasta-documentos', async () => {
+  const opcoes = {
+    title: 'Escolha onde salvar os documentos do LumenSolar',
+    defaultPath: app.getPath('documents'),
+    properties: ['openDirectory', 'createDirectory'] as const,
+  };
+  // `win` pode em teoria já ter sido fechado entre o clique e a resposta do
+  // IPC — `dialog.showOpenDialog` aceita rodar sem janela-pai (só perde o
+  // comportamento modal), então não vale a pena falhar a escolha de pasta
+  // por causa disso.
+  const resultado = win ? await dialog.showOpenDialog(win, opcoes) : await dialog.showOpenDialog(opcoes);
+  if (resultado.canceled || !resultado.filePaths[0]) return null;
+  return resultado.filePaths[0];
+});
+
 // BUG CORRIGIDO (set/2026, auditoria de código adjacente ao revisar este mesmo
 // arquivo por outro motivo): o comentário original aqui dizia "não tenta
 // engolir o erro e continuar rodando em estado desconhecido" — mas o código
