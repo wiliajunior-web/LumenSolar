@@ -233,6 +233,28 @@ export interface EntradaPrecificacao {
   aliquotaImpostos: number; margemDesejada: number;
 }
 
+// ADICIONADO (set/2026, pedido direto do usuário: "devo poder escolher se as
+// simulações de financiamento vão sair na proposta em cada caso específico"):
+// antes desta mudança, `PropostaComercialPDF` (a proposta comercial enviada
+// ao cliente) sempre mostrava as opções Solfácil 48×/60× quando
+// `indicadores.simulacoesFinanciamento` existia — o que é sempre, porque
+// `calcularTudo()` roda as duas simulações incondicionalmente. Não havia
+// nenhuma forma de omitir essa seção para um caso específico (ex: cliente
+// que já avisou que paga à vista, ou cujo perfil não combina com oferecer
+// parcelamento). Deliberadamente FORA de `EntradaPrecificacao`/não faz parte
+// de `assinaturaEntradasCalculo()` (useProjetoStore.ts) — é uma opção de
+// APRESENTAÇÃO do documento, não uma entrada de CÁLCULO; incluir aqui faria
+// o app pedir "recalcule antes de gerar" só por causa de um checkbox
+// cosmético, sem nenhum número ter mudado de verdade.
+export interface OpcoesProposta {
+  /** Se falso, a seção "Opções de financiamento" (Solfácil 48×/60×) não aparece na Proposta Comercial (PDF) deste caso. Padrão: true (preserva o comportamento anterior). */
+  mostrarFinanciamentoNaProposta: boolean;
+}
+
+export function opcoesPropostaPadrao(): OpcoesProposta {
+  return { mostrarFinanciamentoNaProposta: true };
+}
+
 export interface IndicadoresFinanceiros {
   tirAnualPercent: number | null;
   roiMultiplo: number;
@@ -246,6 +268,23 @@ export interface IndicadoresFinanceiros {
   pesoDistribuidoKgM2: number;
   geracaoMensalKWh: number[];
   simulacoesFinanciamento: SimulacaoFinanciamento[];
+  /**
+   * ADICIONADO (set/2026, auditoria de design da Proposta Comercial — usuário
+   * relatou "o PDF ficou muito genérico... o gráfico de barras não ocupa
+   * sequer toda a largura da página"): `calcularFluxoCaixa()` já computava
+   * este array (fluxo de caixa ano a ano, índice 0 = investimento inicial
+   * negativo, índices 1..25 = economia líquida de cada ano, já considerando
+   * degradação dos módulos + reajuste tarifário + escalonamento real do Fio
+   * B ano a ano) só para extrair payback/TIR/VPL — o array em si nunca saía
+   * da função `calcularTudo()`. Ao investigar por que a página "Análise
+   * financeira" da proposta tinha ~55% da página em branco, esse foi o dado
+   * mais óbvio faltando: um gráfico de economia acumulada/ponto de equilíbrio
+   * é o gráfico mais padrão de qualquer proposta financeira de energia solar,
+   * e os dados pra ele já existiam prontos — só não saíam do store. Formalizado
+   * aqui para a Proposta Comercial (PropostaComercialPDF.tsx) poder desenhar
+   * esse gráfico sem duplicar o cálculo.
+   */
+  fluxoAnualHorizonte: number[];
 }
 
 export const MESES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
@@ -354,6 +393,8 @@ interface ProjetoState {
   localizacao: DadosLocalizacao;
   kit: EntradaKit;
   preco: EntradaPrecificacao;
+  /** Opções de APRESENTAÇÃO do documento (não de cálculo) — ver comentário completo em `OpcoesProposta`. */
+  opcoesProposta: OpcoesProposta;
   consumoMedioMensalKWh: number | null;
   valorMedioMensalRS: number | null;
   dimensionamento: ResultadoDimensionamento | null;
@@ -403,6 +444,7 @@ interface ProjetoState {
   atualizarLocalizacao: (p: Partial<DadosLocalizacao>) => void;
   atualizarKit: (p: Partial<EntradaKit>) => void;
   atualizarPreco: (p: Partial<EntradaPrecificacao>) => void;
+  atualizarOpcoesProposta: (p: Partial<OpcoesProposta>) => void;
   recalcularDefaultsPreco: () => void;
   calcularTudo: () => void;
   marcarDocumentoGerado: (id: string) => void;
@@ -417,6 +459,7 @@ export const useProjetoStore = create<ProjetoState>((set, get) => ({
   localizacao: LOCALIZACAO_PADRAO,
   kit: kitPadrao(),
   preco: precoPadrao(DADOS_EMPRESA_PADRAO),
+  opcoesProposta: opcoesPropostaPadrao(),
   consumoMedioMensalKWh:null, valorMedioMensalRS:null,
   dimensionamento:null, enquadramento:null,
   custosRecorrentes:null, precificacao:null,
@@ -434,6 +477,7 @@ export const useProjetoStore = create<ProjetoState>((set, get) => ({
   atualizarLocalizacao: p => set(s => ({ localizacao:{...s.localizacao,...p} })),
   atualizarKit: p => set(s => ({ kit:{...s.kit,...p} })),
   atualizarPreco: p => set(s => ({ preco:{...s.preco,...p} })),
+  atualizarOpcoesProposta: p => set(s => ({ opcoesProposta:{...s.opcoesProposta,...p} })),
   marcarDocumentoGerado: id => set(s => ({ checklistDocumentacao: marcarItemGerado(s.checklistDocumentacao, id, new Date().toISOString()) })),
   marcarDocumentoAnexado: (id, anexado, observacao) => set(s => ({ checklistDocumentacao: marcarItemAnexado(s.checklistDocumentacao, id, anexado, observacao) })),
   resetarChecklistDocumentacao: () => set({ checklistDocumentacao: CHECKLIST_PADRAO_CEMIG_MICROGD }),
@@ -589,6 +633,7 @@ export const useProjetoStore = create<ProjetoState>((set, get) => ({
       pesoDistribuidoKgM2:pesoDistribuidoKgM2(dimensionamento.numeroModulos,kit.potenciaModuloWp),
       geracaoMensalKWh:gen12,
       simulacoesFinanciamento:simulacoes,
+      fluxoAnualHorizonte:fluxo.fluxoAnual,
     };
     // Assinatura calculada com o estado FINAL (get() de novo, não as variáveis
     // desestruturadas no topo da função): `preco` pode ter sido auto-preenchido

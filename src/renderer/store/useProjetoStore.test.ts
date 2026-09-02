@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
   useProjetoStore, clientePadrao, consumoPadrao, kitPadrao, precoPadrao,
-  assinaturaEntradasCalculo,
+  opcoesPropostaPadrao, assinaturaEntradasCalculo,
 } from './useProjetoStore';
 import { calcularDimensionamentoGrupoA } from '@domain/dimensionamento/calcularGrupoA';
 import { calcularPerdas } from '@domain/dimensionamento/calcularPerdas';
@@ -45,6 +45,11 @@ function resetStore() {
       contas: Array.from({length:12},(_,i)=>({mes:`M${i+1}`,kWh: i===0?500:0, valorRS: i===0?400:0})),
     },
     kit: kitPadrao(),
+    // set/2026: mesma classe de bug de isolamento já documentada acima para
+    // `kit` — `opcoesProposta` também precisa ser resetado aqui, senão um
+    // `atualizarOpcoesProposta({mostrarFinanciamentoNaProposta:false})` de um
+    // teste anterior (describe abaixo) sobrevive para os próximos.
+    opcoesProposta: opcoesPropostaPadrao(),
   });
 }
 
@@ -381,5 +386,65 @@ describe('assinaturaEntradasCalculo / ultimoCalculoAssinatura — detecção de 
     const s = useProjetoStore.getState();
     expect(s.consumo.grupoTensao).toBe('A');
     expect(assinaturaEntradasCalculo(s)).not.toBe(s.ultimoCalculoAssinatura);
+  });
+
+  // [FUNCIONALIDADE ADICIONADA set/2026] `opcoesProposta` é opção de
+  // APRESENTAÇÃO do PDF (mostrar ou não financiamento Solfácil por caso), não
+  // um dado de cálculo — deliberadamente mantida FORA de
+  // `assinaturaEntradasCalculo()`. Se entrasse na assinatura, marcar/
+  // desmarcar o checkbox "Mostrar opções de financiamento" (TabPreco)
+  // acionaria o aviso de "cálculo desatualizado, recalcule antes de gerar" —
+  // confuso para uma mudança puramente cosmética que não recalcula nada.
+  it('alternar opcoesProposta.mostrarFinanciamentoNaProposta NÃO marca o cálculo como desatualizado (é opção de apresentação, não entrada de cálculo)', () => {
+    useProjetoStore.getState().calcularTudo();
+    const antes = useProjetoStore.getState();
+    expect(assinaturaEntradasCalculo(antes)).toBe(antes.ultimoCalculoAssinatura);
+
+    useProjetoStore.getState().atualizarOpcoesProposta({ mostrarFinanciamentoNaProposta: false });
+    const depois = useProjetoStore.getState();
+    expect(depois.opcoesProposta.mostrarFinanciamentoNaProposta).toBe(false);
+    expect(assinaturaEntradasCalculo(depois)).toBe(depois.ultimoCalculoAssinatura); // continua "em dia"
+  });
+});
+
+// [FUNCIONALIDADE ADICIONADA set/2026, pedido direto do usuário: "devo poder
+// escolher se as simulações de financiamento vão sair na proposta em cada
+// caso específico"] — cobre a fábrica/ação da store; a renderização
+// condicional real no PDF (esconder cards Solfácil, trocar título/card de
+// benefício) é coberta em PropostaComercialPDF.test.ts.
+describe('opcoesProposta — toggle de apresentação (financiamento na Proposta Comercial)', () => {
+  beforeEach(() => resetStore());
+
+  it('opcoesPropostaPadrao(): mostrarFinanciamentoNaProposta=true por padrão (preserva comportamento anterior ao toggle)', () => {
+    expect(opcoesPropostaPadrao()).toEqual({ mostrarFinanciamentoNaProposta: true });
+  });
+
+  it('duas chamadas de opcoesPropostaPadrao() retornam objetos independentes (sem referência compartilhada)', () => {
+    const a = opcoesPropostaPadrao();
+    const b = opcoesPropostaPadrao();
+    expect(a).not.toBe(b);
+  });
+
+  it('estado inicial da store já vem com opcoesProposta padrão (mostrarFinanciamentoNaProposta=true)', () => {
+    expect(useProjetoStore.getState().opcoesProposta).toEqual({ mostrarFinanciamentoNaProposta: true });
+  });
+
+  it('atualizarOpcoesProposta faz merge parcial (não substitui o objeto inteiro)', () => {
+    useProjetoStore.getState().atualizarOpcoesProposta({ mostrarFinanciamentoNaProposta: false });
+    expect(useProjetoStore.getState().opcoesProposta).toEqual({ mostrarFinanciamentoNaProposta: false });
+
+    useProjetoStore.getState().atualizarOpcoesProposta({ mostrarFinanciamentoNaProposta: true });
+    expect(useProjetoStore.getState().opcoesProposta).toEqual({ mostrarFinanciamentoNaProposta: true });
+  });
+
+  it('calcularTudo() expõe indicadores.fluxoAnualHorizonte (fluxo de caixa ano-a-ano de calcularFluxoCaixa(), antes calculado e descartado)', () => {
+    useProjetoStore.getState().calcularTudo();
+    const s = useProjetoStore.getState();
+    expect(s.indicadores).not.toBeNull();
+    expect(Array.isArray(s.indicadores!.fluxoAnualHorizonte)).toBe(true);
+    // fluxo[0] é o investimento inicial (negativo); o horizonte é de 25 anos
+    // (mesma constante usada por calcularFluxoCaixa()/payback/TIR/VPL).
+    expect(s.indicadores!.fluxoAnualHorizonte.length).toBe(26);
+    expect(s.indicadores!.fluxoAnualHorizonte[0]).toBeLessThan(0);
   });
 });

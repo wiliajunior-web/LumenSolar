@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useProjetoStore, PRESETS_MODULO, MESES, type TipoModuloPreset, clientePadrao, consumoPadrao, kitPadrao, precoPadrao, assinaturaEntradasCalculo } from './store/useProjetoStore';
+import { useProjetoStore, PRESETS_MODULO, MESES, type TipoModuloPreset, clientePadrao, consumoPadrao, kitPadrao, precoPadrao, opcoesPropostaPadrao, assinaturaEntradasCalculo } from './store/useProjetoStore';
 import { salvarArquivo, importarArquivo, listarRecentes, removerRecente, carregarEmpresa, salvarEmpresa, gerarId, type MetadataProposta } from './services/persistence';
 import { validarCliente, validarConsumo, validarKit, validarPreco, validarProjetoCompleto, validarCPF, validarCNPJ, formatarCPF, type StatusPasso } from './services/validation';
 import { DISTRIBUIDORAS } from '@data/distribuidoras';
@@ -618,6 +618,13 @@ export default function App() {
       localizacao: LOCALIZACAO_PADRAO,
       kit: kitPadrao(),
       preco: precoPadrao(empresaAtual),
+      // ADICIONADO (set/2026): mesma classe de bug já corrigida várias vezes
+      // nesta função (kit/localizacao/resultadoGrupoA) — sem resetar aqui,
+      // `opcoesProposta` (o toggle "mostrar financiamento na proposta")
+      // sobreviveria da proposta ANTERIOR: desmarcar para um cliente que
+      // paga à vista e clicar "+ Nova Proposta" deixaria o próximo cliente
+      // também sem a seção de financiamento, sem nenhum aviso.
+      opcoesProposta: opcoesPropostaPadrao(),
       dimensionamento: null, enquadramento: null, custosRecorrentes: null, precificacao: null, indicadores: null,
       // resultadoGrupoA também faltava no reset antigo — uma proposta Grupo A
       // seguida de "Nova Proposta" deixava o resultado do cliente ANTERIOR no
@@ -652,6 +659,7 @@ export default function App() {
       // (copiar, enviar por e-mail, Google Drive). Ver comentário completo em
       // `empresaSemSegredos` (src/data/empresa.ts).
       empresa: empresaSemSegredos(s.empresa), cliente: s.cliente, consumo: s.consumo, localizacao: s.localizacao, kit: s.kit, preco: s.preco,
+      opcoesProposta: s.opcoesProposta,
       checklistDocumentacao: s.checklistDocumentacao,
     };
     const nomeArq = await salvarArquivo(data);
@@ -702,6 +710,9 @@ export default function App() {
       localizacao: { ...LOCALIZACAO_PADRAO, ...(data.localizacao || {}) },
       kit: { ...kitPadrao(), ...(data.kit || {}) },
       preco: { ...precoPadrao(empresaAtual), ...(data.preco || {}) },
+      // Arquivos .lumensolar salvos antes desta funcionalidade não têm este
+      // campo — cai no padrão (true, mostra financiamento) em vez de undefined.
+      opcoesProposta: { ...opcoesPropostaPadrao(), ...(data.opcoesProposta || {}) },
       empresa: Object.keys(empresaFaltante).length ? { ...empresaAtual, ...empresaFaltante } : empresaAtual,
       // Um arquivo .lumensolar salvo (ver `salvar()` acima) nunca inclui
       // dimensionamento/precificação/indicadores — só as entradas. Qualquer
@@ -3121,6 +3132,31 @@ function TabPreco({ onPrev, onCalc }: { onPrev:()=>void; onCalc:()=>void }) {
         </div>
       </div>
 
+      {/* ADICIONADO (set/2026, pedido direto do usuário: "devo poder escolher
+          se as simulações de financiamento vão sair na proposta em cada
+          caso específico"): antes desta mudança a Proposta Comercial
+          sempre mostrava as opções Solfácil 48×/60× quando calculadas —
+          sem nenhuma forma de omitir isso para um cliente específico (ex:
+          já avisou que paga à vista). Fica em TabPreco (não em ⚙
+          Configurações) de propósito: é uma decisão por PROPOSTA, não uma
+          configuração da empresa — o padrão (empresa) continua sendo
+          calcular as duas simulações sempre; este toggle só decide se elas
+          aparecem no PDF deste caso. */}
+      <div className="card" style={{ marginBottom: 14 }}>
+        <div className="card-head">Apresentação da proposta</div>
+        <div className="card-body">
+          <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+            <input type="checkbox" id="mostrarFinanciamento" checked={s.opcoesProposta.mostrarFinanciamentoNaProposta}
+              onChange={e => s.atualizarOpcoesProposta({ mostrarFinanciamentoNaProposta: e.target.checked })}
+              style={{ width:16, height:16, cursor:'pointer' }} />
+            <label htmlFor="mostrarFinanciamento" style={{ fontSize:13, color:D.textSub, cursor:'pointer' }}>
+              💳 Mostrar opções de financiamento (Solfácil 48×/60×) na Proposta Comercial (PDF) deste cliente
+            </label>
+          </div>
+          <p className="lbl-hint" style={{ marginTop: 8 }}>Desmarque para clientes que já indicaram pagamento à vista, ou cujo perfil não combina com oferecer parcelamento — o PDF sai só com a opção à vista.</p>
+        </div>
+      </div>
+
       {/* Preview do preço */}
       {precoVenda > 0 && (
         <div style={{ background: D.header, borderRadius: 12, padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
@@ -3208,6 +3244,10 @@ function TabResultado({ onPrev, onEmpresa }: { onPrev:()=>void; onEmpresa:()=>vo
       localizacao: s.localizacao,
       // Kit completo (Memorial usa vocV, iscA, garantias, etc.)
       kit,
+      // Opção de apresentação: mostrar ou não a seção de financiamento na
+      // Proposta Comercial deste caso específico — ver comentário completo
+      // em `OpcoesProposta` (useProjetoStore.ts).
+      opcoesProposta: s.opcoesProposta,
       // Dimensionamento e financeiro (não-nulos: verificado no guard acima)
       dimensionamento, custosRecorrentes,
       precificacao, enquadramento,

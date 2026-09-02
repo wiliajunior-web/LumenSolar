@@ -10,6 +10,15 @@ import { extractPdfTextJoined, extractPdfText } from './pdfTextTestHelper';
 // auditoria sobre PDF/JSON reais de um caso de cliente e confirmados lendo
 // o arquivo inteiro.
 
+// Alguns textos são compostos por múltiplos nós <Text> (ex: "...de {N} anos"
+// vira 3 nós React separados: "...de ", N, " anos") — extractPdfTextJoined
+// junta cada nó com um único espaço, então os espaços já presentes nas pontas
+// de cada string somam com o espaço do join e viram espaço duplo no meio da
+// frase. Normaliza para comparação, sem esconder problema de conteúdo real.
+function normEspacos(s: string): string {
+  return s.replace(/\s+/g, ' ');
+}
+
 function dataBase(overrides: any = {}) {
   return {
     empresa: {
@@ -22,6 +31,12 @@ function dataBase(overrides: any = {}) {
       marcaModulo: 'Leapton', modeloModulo: 'LP182', potenciaModuloWp: 620, tipoModulo: 'monocristalino',
       quantidade: 12, marcaInversor: 'Growatt', modeloInversor: 'MIC3000TL-X2', potenciaInversorKW: 3,
       percentualCompensacaoDesejado: 1.5,
+      // Valores default reais de kitPadrao() (useProjetoStore.ts) — sem eles,
+      // a seção "Garantias do fabricante" (pág. 2, ADICIONADO set/2026)
+      // renderiza literalmente "undefined anos"/"undefined%" no PDF do
+      // cliente, já que EntradaKit os declara `number` obrigatório mas este
+      // fixture de teste não os tinha antes da auditoria de set/2026.
+      garantiaProdutoAnos: 12, garantiaPotenciaAnos: 25, potenciaGarantidaPercent: 80,
     },
     dimensionamento: {
       potenciaInstaladaRealKWp: 7.44, numeroModulos: 12,
@@ -136,5 +151,143 @@ describe('PropostaComercialPDF — símbolos m²/mm² (não m2/mm2)', () => {
     expect(texto).toContain('6mm²');
     expect(texto).not.toContain(' m2');
     expect(texto).not.toContain('6mm2');
+  });
+});
+
+describe('PropostaComercialPDF — Garantias do fabricante (pág. 2, set/2026)', () => {
+  // ADICIONADO junto com a auditoria de "PDF genérico" (set/2026): usa
+  // kit.garantiaProdutoAnos/garantiaPotenciaAnos/potenciaGarantidaPercent —
+  // campos já coletados em TabKit (App.tsx) mas nunca antes exibidos nesta
+  // proposta. `EntradaKit` os declara `number` obrigatório (kitPadrao() já
+  // preenche 12/25/80 por padrão), então não deveriam vir undefined em uso
+  // normal — mas como o componente não tem guarda própria, um dado
+  // incompleto (ex: caso salvo por uma versão muito antiga do app, antes de
+  // esses campos existirem) apareceria como "undefined anos"/"undefined%"
+  // literalmente no PDF do cliente. Teste de regressão explícito.
+  it('com valores de garantia presentes: mostra os anos/percentual reais, nunca "undefined"', () => {
+    const data = dataBase();
+    const texto = extractPdfTextJoined(PropostaComercialPDF({ data }));
+    expect(texto).toContain('Garantias do fabricante');
+    expect(texto).toContain('12 anos');
+    expect(texto).toContain('25 anos');
+    expect(texto).toContain('80%');
+    expect(texto).not.toContain('undefined');
+  });
+});
+
+describe('PropostaComercialPDF — opções de financiamento por caso (set/2026)', () => {
+  // FUNCIONALIDADE ADICIONADA (set/2026, pedido direto do usuário: "devo
+  // poder escolher se as simulações de financiamento vão sair na proposta
+  // em cada caso específico"). `data.opcoesProposta.mostrarFinanciamentoNaProposta`
+  // é opção de APRESENTAÇÃO (fica fora de EntradaPrecificacao/
+  // assinaturaEntradasCalculo — ver useProjetoStore.ts), padrão `true` quando
+  // ausente (compatibilidade com casos/arquivos antigos sem o campo).
+  const simulacoes = [
+    { descricao: 'Solfácil 48x', parcelaMensal: 320.15, totalPago: 15367.2, paybackAnos: 5.1 },
+    { descricao: 'Solfácil 60x', parcelaMensal: 268.4, totalPago: 16104.0, paybackAnos: 5.4 },
+  ];
+
+  it('padrão (sem opcoesProposta definido): mostra as duas simulações Solfácil, como antes', () => {
+    const data = dataBase({ indicadores: { ...dataBase().indicadores, simulacoesFinanciamento: simulacoes } });
+    const texto = extractPdfTextJoined(PropostaComercialPDF({ data }));
+    expect(texto).toContain('Investimento e financiamento');
+    expect(texto).toContain('Opções de financiamento');
+    expect(texto).toContain('Solfácil 48x');
+    expect(texto).toContain('Solfácil 60x');
+    expect(texto).toContain('Financiamento facilitado'); // card de benefício da pág. 1
+  });
+
+  it('mostrarFinanciamentoNaProposta=true (explícito): igual ao padrão', () => {
+    const data = dataBase({
+      indicadores: { ...dataBase().indicadores, simulacoesFinanciamento: simulacoes },
+      opcoesProposta: { mostrarFinanciamentoNaProposta: true },
+    });
+    const texto = extractPdfTextJoined(PropostaComercialPDF({ data }));
+    expect(texto).toContain('Solfácil 48x');
+    expect(texto).toContain('Solfácil 60x');
+  });
+
+  it('mostrarFinanciamentoNaProposta=false: some com os cards Solfácil e com o card de benefício "Financiamento facilitado"', () => {
+    const data = dataBase({
+      indicadores: { ...dataBase().indicadores, simulacoesFinanciamento: simulacoes },
+      opcoesProposta: { mostrarFinanciamentoNaProposta: false },
+    });
+    const texto = extractPdfTextJoined(PropostaComercialPDF({ data }));
+    expect(texto).not.toContain('Solfácil 48x');
+    expect(texto).not.toContain('Solfácil 60x');
+    expect(texto).not.toContain('Financiamento facilitado');
+  });
+
+  it('mostrarFinanciamentoNaProposta=false: título e rótulo da seção trocam para singular/à vista, e "À vista" continua aparecendo', () => {
+    const data = dataBase({
+      indicadores: { ...dataBase().indicadores, simulacoesFinanciamento: simulacoes },
+      opcoesProposta: { mostrarFinanciamentoNaProposta: false },
+    });
+    const texto = extractPdfTextJoined(PropostaComercialPDF({ data }));
+    expect(texto).toContain('Investimento'); // título vira "Investimento" (sem "e financiamento")
+    expect(texto).not.toContain('Investimento e financiamento');
+    expect(texto).toContain('Condição de pagamento'); // rótulo da seção vira singular
+    expect(texto).not.toContain('Opções de financiamento');
+    expect(texto).toContain('À vista');
+  });
+
+  it('mostrarFinanciamentoNaProposta=false: card de benefício da pág. 1 vira "Baixa manutenção"', () => {
+    const data = dataBase({
+      indicadores: { ...dataBase().indicadores, simulacoesFinanciamento: simulacoes },
+      opcoesProposta: { mostrarFinanciamentoNaProposta: false },
+    });
+    const texto = extractPdfTextJoined(PropostaComercialPDF({ data }));
+    expect(texto).toContain('Baixa manutenção');
+  });
+
+  it('mostrarFinanciamentoNaProposta=false MAS sem simulações calculadas: não lança exceção (guarda dupla — toggle E dado)', () => {
+    const data = dataBase({ opcoesProposta: { mostrarFinanciamentoNaProposta: false } });
+    expect(() => PropostaComercialPDF({ data })).not.toThrow();
+  });
+});
+
+describe('PropostaComercialPDF — gráfico de economia acumulada / payback (set/2026)', () => {
+  // FUNCIONALIDADE ADICIONADA (set/2026, auditoria de "PDF genérico"): usa
+  // `indicadores.fluxoAnualHorizonte` (fluxo de caixa ano-a-ano já calculado
+  // por calcularFluxoCaixa()/calcularTudo(), antes descartado). fluxo[0] é o
+  // investimento inicial NEGATIVO; fluxo[1..N] é a economia líquida anual.
+
+  it('com fluxoAnualHorizonte presente: renderiza o título com o nº de anos correto e a legenda', () => {
+    // 3 anos: -10000 investimento, depois 4000/ano => acumulado -6000,-2000,+2000 (payback no ano 3)
+    const fluxo = [-10000, 4000, 4000, 4000];
+    const data = dataBase({ indicadores: { ...dataBase().indicadores, fluxoAnualHorizonte: fluxo } });
+    const texto = normEspacos(extractPdfTextJoined(PropostaComercialPDF({ data })));
+    expect(texto).toContain('Economia acumulada ao longo de 3 anos');
+    expect(texto).toContain('Saldo acumulado (economia menos investimento)');
+    expect(texto).toContain('Ponto de equilíbrio (payback) — ano 3');
+  });
+
+  it('sem fluxoAnualHorizonte (indicadores antigos / caso legado): não renderiza a seção nem lança exceção', () => {
+    const data = dataBase(); // indicadores sem fluxoAnualHorizonte, como em casos/arquivos salvos antes de set/2026
+    expect(() => PropostaComercialPDF({ data })).not.toThrow();
+    const texto = extractPdfTextJoined(PropostaComercialPDF({ data }));
+    expect(texto).not.toContain('Economia acumulada ao longo de');
+  });
+
+  it('fluxoAnualHorizonte com um único elemento (só o investimento, sem nenhum ano de retorno): não lança exceção e não renderiza o gráfico', () => {
+    const data = dataBase({ indicadores: { ...dataBase().indicadores, fluxoAnualHorizonte: [-10000] } });
+    expect(() => PropostaComercialPDF({ data })).not.toThrow();
+    const texto = extractPdfTextJoined(PropostaComercialPDF({ data }));
+    expect(texto).not.toContain('Economia acumulada ao longo de');
+  });
+
+  it('fluxoAnualHorizonte vazio: não lança exceção e não renderiza o gráfico', () => {
+    const data = dataBase({ indicadores: { ...dataBase().indicadores, fluxoAnualHorizonte: [] } });
+    expect(() => PropostaComercialPDF({ data })).not.toThrow();
+    const texto = extractPdfTextJoined(PropostaComercialPDF({ data }));
+    expect(texto).not.toContain('Economia acumulada ao longo de');
+  });
+
+  it('payback nunca atingido no horizonte (sistema não se paga): não mostra rótulo de ponto de equilíbrio, mas mostra o restante do gráfico', () => {
+    const fluxo = [-10000, 1000, 1000, 1000]; // acumulado fica sempre negativo
+    const data = dataBase({ indicadores: { ...dataBase().indicadores, fluxoAnualHorizonte: fluxo } });
+    const texto = normEspacos(extractPdfTextJoined(PropostaComercialPDF({ data })));
+    expect(texto).toContain('Economia acumulada ao longo de 3 anos');
+    expect(texto).not.toContain('Ponto de equilíbrio (payback)');
   });
 });
