@@ -170,8 +170,12 @@ function AvisoGrupoA({ r }: { r: ResultadoGrupoA }) {
   return (
     <Page size="A4" style={S.pageInterna}>
       <View style={{ padding: 32 }}>
+        {/* "[ATENÇÃO]" em vez de "⚠" (U+26A0) — mesmo bug de Superscript.tsx
+            (src/domain/proposta/): esse glifo não desenha em Helvetica,
+            confirmado rasterizando um PDF de teste. Ver comentário completo
+            em PropostaComercialPDF.tsx, mesma correção aplicada lá. */}
         <Text style={{ fontSize: 16, fontFamily: 'Helvetica-Bold', color: '#b91c1c', marginBottom: 10 }}>
-          ⚠ Cliente Grupo A (Média Tensão) — verificar números antes de enviar
+          [ATENÇÃO] Cliente Grupo A (Média Tensão) — verificar números antes de enviar
         </Text>
         <Text style={{ fontSize: 10, color: COR_TEXTO, marginBottom: 14, lineHeight: 1.5 }}>
           As páginas seguintes deste documento (potência, número de módulos, geração, conta
@@ -205,14 +209,14 @@ function AvisoGrupoA({ r }: { r: ResultadoGrupoA }) {
         </View>
         {r.houveUltrapassagemDemanda && (
           <Text style={{ fontSize: 9, color: '#92400e', marginBottom: 10, lineHeight: 1.4 }}>
-            ⚠ Há ultrapassagem de demanda medida ({N(r.custoUltrapassagemDemandaRS)} R$/mês adicionais).
+            [ATENÇÃO] Há ultrapassagem de demanda medida ({N(r.custoUltrapassagemDemandaRS)} R$/mês adicionais).
             A fórmula de cobrança de ultrapassagem usada aqui não foi confirmada contra o texto
             literal da REN ANEEL 1.000/2021 nem contra a ND da distribuidora — confirme antes de
             repassar este valor ao cliente.
           </Text>
         )}
         {r.alertas.map((a, i) => (
-          <Text key={i} style={{ fontSize: 9, color: '#92400e', marginBottom: 4 }}>⚠ {a}</Text>
+          <Text key={i} style={{ fontSize: 9, color: '#92400e', marginBottom: 4 }}>{`[ATENÇÃO] ${a}`}</Text>
         ))}
         <Text style={{ fontSize: 8, color: COR_CINZA, marginTop: 10 }}>
           Payback, TIR e simulações de financiamento das páginas seguintes não foram recalculados

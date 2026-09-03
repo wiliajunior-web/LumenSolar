@@ -88,6 +88,24 @@ describe('PropostaPDF — página AvisoGrupoA', () => {
     expect(buf).toBeTruthy();
   });
 
+  // BUG CORRIGIDO (set/2026): o aviso de Grupo A usava o caractere "⚠"
+  // (WARNING SIGN, U+26A0) — mesma família de bug do "²" em Superscript.tsx:
+  // não desenha NENHUM glifo em Helvetica (confirmado rasterizando um PDF
+  // de teste isolado), sumindo por completo dessa página de aviso crítico
+  // (onde os números do resto do documento estão errados pra este tipo de
+  // cliente). Corrigido pra "[ATENÇÃO]" (mesmo padrão de "[OK]" já usado em
+  // PropostaComercialPDF.tsx) — texto simples, sempre renderiza.
+  it('aviso de Grupo A usa "[ATENÇÃO]", nunca o caractere "⚠" cru', () => {
+    const data: PropostaData = {
+      ...propostaDataBase,
+      consumo: { grupoTensao: 'A' },
+      resultadoGrupoA: resultadoGrupoAExemplo,
+    };
+    const texto = extractPdfTextJoined(React.createElement(PropostaPDF, { data }) as any);
+    expect(texto).not.toContain('⚠');
+    expect(texto).toContain('[ATENÇÃO] Cliente Grupo A');
+  });
+
   it('gera o PDF sem erro para cliente Grupo A com alerta de ultrapassagem de demanda', async () => {
     const data: PropostaData = {
       ...propostaDataBase,
@@ -96,6 +114,18 @@ describe('PropostaPDF — página AvisoGrupoA', () => {
     };
     const buf = await pdf(React.createElement(PropostaPDF, { data }) as any).toBuffer();
     expect(buf).toBeTruthy();
+  });
+
+  it('alerta de ultrapassagem de demanda e alertas gerais usam "[ATENÇÃO]", nunca "⚠" cru', () => {
+    const data: PropostaData = {
+      ...propostaDataBase,
+      consumo: { grupoTensao: 'A' },
+      resultadoGrupoA: { ...resultadoGrupoAExemplo, houveUltrapassagemDemanda: true, custoUltrapassagemDemandaRS: 1200, alertas: ['Ultrapassagem de demanda: 30.0kW acima do contratado'] },
+    };
+    const texto = extractPdfTextJoined(React.createElement(PropostaPDF, { data }) as any);
+    expect(texto).not.toContain('⚠');
+    expect(texto).toContain('[ATENÇÃO] Há ultrapassagem de demanda medida');
+    expect(texto).toContain('[ATENÇÃO] Ultrapassagem de demanda: 30.0kW');
   });
 });
 
@@ -160,6 +190,16 @@ describe('PropostaComercialPDF — página AvisoGrupoA', () => {
     const data = { ...dataComercialBase, consumo: { grupoTensao: 'A' }, resultadoGrupoA: resultadoGrupoAExemplo };
     const buf = await pdf(React.createElement(PropostaComercialPDF, { data }) as any).toBuffer();
     expect(buf).toBeTruthy();
+  });
+
+  // BUG CORRIGIDO (set/2026): mesmo bug do "⚠" documentado acima em
+  // "PropostaPDF — página AvisoGrupoA" — este arquivo tem sua PRÓPRIA cópia
+  // da página de aviso (AvisoGrupoA local a PropostaComercialPDF.tsx).
+  it('aviso de Grupo A usa "[ATENÇÃO]", nunca o caractere "⚠" cru', () => {
+    const data = { ...dataComercialBase, consumo: { grupoTensao: 'A' }, resultadoGrupoA: resultadoGrupoAExemplo };
+    const texto = extractPdfTextJoined(React.createElement(PropostaComercialPDF, { data }) as any);
+    expect(texto).not.toContain('⚠');
+    expect(texto).toContain('[ATENÇÃO] Cliente Grupo A');
   });
 
   // BUG CORRIGIDO (ago/2026): a página de capa usava uma <Image> de fundo

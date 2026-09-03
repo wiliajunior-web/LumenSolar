@@ -426,8 +426,18 @@ const AvisoGrupoA = ({ empresa, cliente, r }: { empresa: any; cliente: any; r: a
     <View style={S.row}>
       <View style={{ width: 14, backgroundColor: '#b91c1c' }} />
       <View style={S.body}>
+        {/* "[ATENÇÃO]" em vez do caractere "⚠" (WARNING SIGN, U+26A0) — set/2026:
+            mesma família de bug de Superscript.tsx, confirmada aqui também
+            rasterizando um PDF de teste: "⚠" não desenha NADA em Helvetica
+            (nem em Helvetica-Bold), some por completo, deixando só um
+            espaço em branco antes do texto — numa página de aviso crítico
+            (Grupo A/Média Tensão, onde os números do resto do documento
+            estão errados), isso é o pior lugar possível pra um ícone sumir
+            sem aviso. Reaproveita o padrão "[OK]" já usado noutro ponto
+            deste mesmo arquivo (linha ~748) — texto simples, sem depender
+            de nenhum glifo especial, sempre renderiza. */}
         <Text style={{ fontSize: 16, fontFamily: 'Helvetica-Bold', color: '#b91c1c', marginBottom: 4 }}>
-          ⚠ Cliente Grupo A (Média Tensão)
+          [ATENÇÃO] Cliente Grupo A (Média Tensão)
         </Text>
         <Text style={{ fontSize: 10, color: C.muted, marginBottom: 14 }}>
           {cliente.nome} — verifique estes números antes de enviar a proposta
@@ -462,7 +472,7 @@ const AvisoGrupoA = ({ empresa, cliente, r }: { empresa: any; cliente: any; r: a
         </View>
         {r.houveUltrapassagemDemanda && (
           <Text style={{ fontSize: 8, color: '#92400e', marginBottom: 8, lineHeight: 1.4 }}>
-            ⚠ Há ultrapassagem de demanda medida. A fórmula de cobrança de ultrapassagem usada
+            [ATENÇÃO] Há ultrapassagem de demanda medida. A fórmula de cobrança de ultrapassagem usada
             aqui não foi confirmada contra o texto literal da REN ANEEL 1.000/2021 nem contra a
             ND da distribuidora — confirme antes de repassar este valor ao cliente.
           </Text>
