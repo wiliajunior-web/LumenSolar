@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { MemorialDescritivo } from './MemorialDescritivo';
-import { extractPdfTextJoined } from './pdfTextTestHelper';
+import { extractPdfTextJoined, findNodesOfType } from './pdfTextTestHelper';
+import { Sup } from './Superscript';
 
 // MemorialDescritivo.tsx não tinha NENHUMA cobertura de teste antes desta
 // rodada. Bugs descobertos por auditoria de subagente e confirmados lendo o
@@ -142,11 +143,22 @@ describe('MemorialDescritivo — formatação numérica e símbolos', () => {
     expect(texto).not.toContain('34.5 kg');
   });
 
-  it('área do telhado e área do módulo saem com "m²" (sobrescrito), não "m2"', () => {
+  // BUG CORRIGIDO (set/2026): este teste (ago/2026) verificava a string
+  // "m²" no texto extraído — mas isso só prova que o caractere certo está
+  // na árvore de elementos, não que a fonte usada no PDF de verdade tem um
+  // glifo pra desenhá-lo (rasterizando o PDF real com pdftoppm e inspecionando
+  // os pixels: "²" não desenha NADA em Helvetica/Helvetica-Bold, mesmo com
+  // o caractere certo codificado — ver Superscript.tsx). Corrigido usando
+  // <Sup> (um "2" ASCII normal, que desenha em qualquer fonte).
+  it('área do telhado e área do módulo usam <Sup>, nunca o caractere "²" cru', () => {
     const data = dataBase();
-    const texto = extractPdfTextJoined(MemorialDescritivo({ data }));
-    expect(texto).toContain('m²');
+    const arvore = MemorialDescritivo({ data });
+    const texto = extractPdfTextJoined(arvore);
+    expect(texto).not.toContain('²');
     expect(texto).not.toContain('m2');
+    const sups = findNodesOfType(arvore, Sup);
+    expect(sups.length).toBeGreaterThanOrEqual(2); // área do telhado (pág. localização) + área do módulo (tabela)
+    sups.forEach(s => expect(s.children.join('')).toBe('2'));
   });
 
   it('coeficiente de temperatura sai com "°C", não "oC"', () => {

@@ -3,12 +3,14 @@
  * Baseado no modelo exigido pela CEMIG (ND 5.30) e padrões ANEEL.
  * Referência normativa: Lei 14.300/2022, REN ANEEL 1000/2021.
  */
+import type { ReactNode } from 'react';
 import { Document, Page, Text, View, StyleSheet, Image } from '@react-pdf/renderer';
 import { DISTRIBUIDORAS } from '../../data/distribuidoras';
 import { PRESETS_MODULO } from '../../data/presetsModulo';
 import { TIPO_TELHADO_LABELS } from '../../data/localizacao';
 import { formatarNomeModulo, formatarTipoModulo } from '../kit/formatarModulo';
 import { formatarCrea } from '../empresa/cadastroEmpresa';
+import { Sup } from './Superscript';
 
 const DARK = '#0a0a1e';
 const GOLD = '#c9a227';
@@ -112,7 +114,7 @@ function Footer({ empresa }: { empresa:any }) {
   );
 }
 
-function SpecRow({ label, val, alt }: { label:string; val:string; alt?:boolean }) {
+function SpecRow({ label, val, alt }: { label:string; val:ReactNode; alt?:boolean }) {
   return (
     <View style={alt ? S.tblRowAlt : S.tblRow}>
       <Text style={S.tblCellLeft}>{label}</Text>
@@ -275,7 +277,7 @@ export function MemorialDescritivo({ data }: { data:any }) {
 
           <Text style={S.secNum}>1  LOCALIZAÇÃO DO SISTEMA FOTOVOLTAICO</Text>
           <Text style={S.para}>
-            A instalação irá ocupar aproximadamente <Text style={S.bold}>{area} m²</Text> do telhado, área esta a ser coberta pelos módulos fotovoltaicos que estarão distribuídos em um arranjo com{' '}
+            A instalação irá ocupar aproximadamente <Text style={S.bold}>{area} m<Sup base={9}>2</Sup></Text> do telhado, área esta a ser coberta pelos módulos fotovoltaicos que estarão distribuídos em um arranjo com{' '}
             <Text style={S.bold}>{dim.numeroModulos} módulos</Text>. A instalação será realizada no{' '}
             <Text style={S.bold}>{TIPO_TELHADO_LABELS[localizacao.tipoTelhado] ?? localizacao.tipoTelhado}</Text> do(a){' '}
             <Text style={S.bold}>{cliente.nome}</Text>, no município de{' '}
@@ -352,7 +354,7 @@ export function MemorialDescritivo({ data }: { data:any }) {
               ['Corrente de Curto-Circuito (Isc)', kit.iscA > 0 ? `${fmtN(kit.iscA,2)} A` : '-'],
               ['Comprimento',                      kit.comprimentoMm > 0 ? `${kit.comprimentoMm} mm` : '-'],
               ['Largura',                          kit.larguraMm > 0 ? `${kit.larguraMm} mm` : '-'],
-              ['Área do Módulo',                   kit.comprimentoMm > 0 && kit.larguraMm > 0 ? `${fmtN((kit.comprimentoMm*kit.larguraMm)/1e6,4)} m²` : '-'],
+              ['Área do Módulo',                   kit.comprimentoMm > 0 && kit.larguraMm > 0 ? <>{fmtN((kit.comprimentoMm*kit.larguraMm)/1e6,4)} m<Sup base={8}>2</Sup></> : '-'],
               ['Peso',                             kit.pesoKgModulo > 0 ? `${fmtN(kit.pesoKgModulo,1)} kg` : '-'],
               ['Coef. Temperatura Pmax',           `${PRESETS_MODULO[kit.tipoModulo as keyof typeof PRESETS_MODULO]?.coef ?? -0.34}%/°C`],
               ['Garantia de Potência',             kit.garantiaPotenciaAnos > 0 ? `${kit.garantiaPotenciaAnos} anos (${kit.potenciaGarantidaPercent}%)` : '25 anos'],

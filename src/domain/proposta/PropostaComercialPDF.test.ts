@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { Image } from '@react-pdf/renderer';
 import { PropostaComercialPDF } from './PropostaComercialPDF';
-import { extractPdfTextJoined, extractPdfText } from './pdfTextTestHelper';
+import { extractPdfTextJoined, extractPdfText, findNodesOfType } from './pdfTextTestHelper';
+import { Sup } from './Superscript';
 
 // Coleta todos os nós <Image> de uma árvore de elementos react-pdf (mesma
 // estratégia de recursão do pdfTextTestHelper, mas devolvendo os PROPS de
@@ -164,14 +165,33 @@ describe('PropostaComercialPDF — rodapé e capa com cadastro incompleto', () =
   });
 });
 
-describe('PropostaComercialPDF — símbolos m²/mm² (não m2/mm2)', () => {
-  it('área no telhado e bitola dos cabos saem com sobrescrito correto', () => {
+describe('PropostaComercialPDF — símbolos m²/mm² (sobrescrito real, não o caractere "²" cru, set/2026)', () => {
+  // BUG CORRIGIDO (set/2026): este teste (ago/2026) verificava a string
+  // "m²"/"mm²" no texto extraído — mas extractPdfText só prova que o
+  // CARACTERE certo está na árvore de elementos, não que existe um GLIFO
+  // desenhado pra ele na fonte usada no PDF de verdade. Descoberto
+  // rasterizando o PDF real (pdftoppm) e inspecionando os pixels: "²" não
+  // desenha NADA nas fontes core deste app (Helvetica/Helvetica-Bold),
+  // mesmo com o caractere certo codificado no PDF (o bug ficou escondido
+  // desde ago/2026 porque a única verificação era justamente essa extração
+  // de texto). Ver comentário completo em Superscript.tsx. Corrigido usando
+  // um componente <Sup> (um "2" ASCII normal, que desenha em QUALQUER
+  // fonte, com verticalAlign:'super' — propriedade real do
+  // @react-pdf/renderer) em vez do caractere "²" cru — o teste certo agora
+  // é "existe um nó <Sup> de verdade na árvore", não "a string extraída
+  // contém ²".
+  it('área no telhado e bitola dos cabos usam <Sup>, nunca o caractere "²" cru', () => {
     const data = dataBase({ indicadores: { ...dataBase().indicadores, areaNecessariaM2: 42.5 } });
-    const texto = extractPdfTextJoined(PropostaComercialPDF({ data }));
-    expect(texto).toContain('m²');
-    expect(texto).toContain('6mm²');
-    expect(texto).not.toContain(' m2');
+    const arvore = PropostaComercialPDF({ data });
+    const texto = extractPdfTextJoined(arvore);
+    expect(texto).not.toContain('²'); // nunca mais o caractere quebrado
+    expect(texto).not.toContain(' m2'); // nem a forma antiga sem sobrescrito
     expect(texto).not.toContain('6mm2');
+    expect(texto).toContain('42,5'); // a base do número continua lá
+    expect(texto).toContain('6mm');
+    const sups = findNodesOfType(arvore, Sup);
+    expect(sups.length).toBeGreaterThanOrEqual(2); // área no telhado + cabeamento
+    sups.forEach(s => expect(s.children.join('')).toBe('2'));
   });
 });
 

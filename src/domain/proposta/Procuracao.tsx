@@ -62,6 +62,16 @@ const S = StyleSheet.create({
 // real via @react-pdf/renderer com uma amostra de todos esses caracteres e
 // extraído de volta com `pdftotext -layout` — todos os glifos saíram
 // corretos, byte a byte. Mantida só como guarda contra undefined/null.
+//
+// RESSALVA (set/2026): essa "verificação empírica" tinha uma lacuna — ver
+// Superscript.tsx. `pdftotext` só lê o mapa ToUnicode do PDF (prova que o
+// CARACTERE certo está codificado), não prova que existe um GLIFO desenhado
+// pra ele na fonte. "²"/"³" especificamente passam nessa checagem de texto
+// mas NÃO desenham nada em nenhuma fonte core, mesmo fazendo parte de
+// cp1252 — só descoberto rasterizando um PDF real (pdftoppm) e inspecionando
+// os pixels, no DUB (DiagramaUnifilarBasico.tsx). Os demais símbolos
+// citados acima (acentos, nº, °, travessão, aspas) foram reconferidos e
+// continuam OK — a ressalva é só pra "²"/"³".
 const safe = (s?: string) => s || '';
 
 const fmtCPF = (v?: string) => {

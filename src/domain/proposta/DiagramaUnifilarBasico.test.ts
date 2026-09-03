@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { DiagramaUnifilarBasico } from './DiagramaUnifilarBasico';
-import { extractPdfTextJoined } from './pdfTextTestHelper';
+import { extractPdfTextJoined, findNodesOfType } from './pdfTextTestHelper';
+import { Sup } from './Superscript';
 
 // DiagramaUnifilarBasico.tsx (DUB) não tinha NENHUMA cobertura de teste
 // antes desta rodada. Bug descoberto por auditoria de subagente e
@@ -57,11 +58,33 @@ describe('DiagramaUnifilarBasico — rótulo da distribuidora ("REDE ...")', () 
 // A mesma classe de bug já tinha sido corrigida na Proposta Comercial
 // (PropostaComercialPDF.test.ts, "símbolos m²/mm²") mas nunca chegou a ser
 // auditada neste outro documento, que usa a mesma unidade.
-describe('DiagramaUnifilarBasico — símbolo mm² (não mm2) nas seções de cabo', () => {
-  it('rótulos do diagrama e tabelas de proteção CA/CC usam "mm²", nunca "mm2" cru', () => {
+// BUG CORRIGIDO (set/2026): o teste abaixo (set/2026, versão original)
+// verificava a string "mm²" no texto extraído — mas isso só prova que o
+// caractere certo está na árvore de elementos React, não que a fonte usada
+// no PDF de verdade tem um glifo pra desenhá-lo. Descoberto rasterizando o
+// PDF real deste EXATO documento (pdftoppm -> PNG) e inspecionando os
+// pixels: a linha "Seção do cabo CA" saía visualmente "2.5 mm" — sem
+// NENHUM sobrescrito, nem sequer um glifo ".notdef" visível, simplesmente
+// em branco — porque "²"/"³" não desenham em nenhuma fonte core do
+// @react-pdf/renderer (Helvetica/Helvetica-Bold/Times), mesmo com o
+// caractere certo codificado no PDF (confirmado com pdftotext -layout, que
+// EXTRAIU "mm²" corretamente do mesmo PDF cujo render visual não mostrava
+// nada — prova que pdftotext só lê o mapa ToUnicode, não o glifo
+// desenhado). Ver comentário completo em Superscript.tsx. Corrigido usando
+// <Sup> (um "2" ASCII normal com verticalAlign:'super', que desenha em
+// qualquer fonte) em vez do caractere "²" cru.
+describe('DiagramaUnifilarBasico — símbolo mm² como sobrescrito real (não o caractere "²" cru, nem "mm2"), set/2026', () => {
+  it('rótulos do diagrama e tabelas de proteção CA/CC usam <Sup>, nunca o caractere "²" cru nem "mm2"', () => {
     const data = dataBase();
-    const texto = extractPdfTextJoined(DiagramaUnifilarBasico({ data }));
-    expect(texto).toMatch(/mm²/);
+    const arvore = DiagramaUnifilarBasico({ data });
+    const texto = extractPdfTextJoined(arvore);
+    expect(texto).not.toMatch(/²/);
     expect(texto).not.toMatch(/mm2\b/);
+    expect(texto).toMatch(/mm/); // a base do texto continua lá
+    const sups = findNodesOfType(arvore, Sup);
+    // 2 rótulos no diagrama (Cabo CA, Cabo CC) + 2 linhas de tabela (Seção
+    // do cabo CA, Seção do cabo CC) = 4 usos de <Sup> nesta página.
+    expect(sups.length).toBe(4);
+    sups.forEach(s => expect(s.children.join('')).toBe('2'));
   });
 });

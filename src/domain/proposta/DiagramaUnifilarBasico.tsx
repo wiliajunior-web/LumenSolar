@@ -15,9 +15,11 @@
  * na própria página, não só em um campo interno — é o mesmo princípio da
  * ART: o software prepara os dados, não assume a responsabilidade técnica.
  */
+import type { ReactNode } from 'react';
 import { Document, Page, Text, View, StyleSheet, Svg, Line, Rect, Circle, Path } from '@react-pdf/renderer';
 import { calcularCaboCA } from '@domain/dimensionamento/calcularCaboCA';
 import { calcularProtecaoCC, calcularDPSCA } from '@domain/dimensionamento/calcularProtecaoCC';
+import { Sup } from './Superscript';
 import { PRESETS_MODULO } from '@data/presetsModulo';
 import { DISTRIBUIDORAS } from '@data/distribuidoras';
 
@@ -30,14 +32,20 @@ const LINE = '#2a2a2a';
 
 // BUG CORRIGIDO (ago/2026): esta função convertia todo acentuado (e °, ², ³,
 // travessão) para ASCII, sob a premissa de que "react-pdf com Helvetica não
-// cobre todo Unicode". Premissa falsa — ver o comentário completo em
-// `Procuracao.tsx` (mesma correção aplicada lá primeiro): o Helvetica padrão
-// do @react-pdf/renderer usa WinAnsiEncoding (cp1252), que cobre acentuação
-// PT-BR e esses símbolos; MemorialDescritivo.tsx e PropostaComercialPDF.tsx
+// cobre todo Unicode". Premissa falsa PARA ACENTOS — ver o comentário
+// completo em `Procuracao.tsx` (mesma correção aplicada lá primeiro): o
+// Helvetica padrão do @react-pdf/renderer usa WinAnsiEncoding (cp1252), que
+// cobre acentuação PT-BR; MemorialDescritivo.tsx e PropostaComercialPDF.tsx
 // já renderizavam acentos corretamente com a mesma fontFamily. Isso fazia o
 // nome do cliente ("Ana Maria Vieira de Sá e Silva"), a distribuidora, a
 // descrição do DPS e os alertas saírem sem acento no DUB, mesmo com o dado
 // de origem correto. Mantida só como guarda contra undefined/null.
+//
+// RESSALVA (set/2026): "²"/"³" especificamente NÃO seguem essa mesma regra
+// — ver Superscript.tsx. Apesar de fazerem parte de cp1252, o glifo desses
+// dois símbolos não desenha em NENHUMA fonte core (confirmado rasterizando
+// um PDF real, não só lendo código/pdftotext). Por isso "mm²" neste arquivo
+// usa o componente <Sup>, nunca o caractere "²" cru — não reintroduzir.
 const safe = (s?: string) => s || '';
 
 const S = StyleSheet.create({
@@ -94,7 +102,7 @@ function DiagramaSvg({ dados }: { dados: ReturnType<typeof montarDadosDiagrama> 
   const midY = yLine + bH/2;
 
   // Rótulo centrado sob um segmento de linha (entre o fim de um bloco e o início do próximo)
-  function RotuloSegmento({ entreIdx, offsetY, texto, cor, bold }: { entreIdx: number; offsetY: number; texto: string; cor: string; bold?: boolean }) {
+  function RotuloSegmento({ entreIdx, offsetY, texto, cor, bold }: { entreIdx: number; offsetY: number; texto: ReactNode; cor: string; bold?: boolean }) {
     const segX = xs[entreIdx] + bW;
     const segW = gap;
     return (
@@ -160,10 +168,15 @@ function DiagramaSvg({ dados }: { dados: ReturnType<typeof montarDadosDiagrama> 
       </View>
 
       {/* Rótulos de proteção — sempre centrados sob o segmento a que se referem, nunca sobre um bloco */}
+      {/* "mm²" usa <Sup> (./Superscript.tsx), não o caractere "²" cru — ver
+          o comentário completo lá: o glifo de "²" não desenha em nenhuma
+          fonte core deste app (Helvetica), mesmo com o caractere certo
+          codificado no PDF (bug só visível rasterizando o PDF, não com
+          pdftotext nem com os testes de extração de texto deste projeto). */}
       <RotuloSegmento entreIdx={1} offsetY={-16} texto={`Disjuntor ${disjCA}A`} cor={BLUE} bold />
-      <RotuloSegmento entreIdx={1} offsetY={4} texto={`Cabo CA ${secaoCA}mm²`} cor={MUTED} />
+      <RotuloSegmento entreIdx={1} offsetY={4} texto={<>Cabo CA {secaoCA}mm<Sup base={6}>2</Sup></>} cor={MUTED} />
       <RotuloSegmento entreIdx={2} offsetY={-16} texto={`Fusível ${fusivel||'-'}A`} cor={BLUE} bold />
-      <RotuloSegmento entreIdx={2} offsetY={4} texto={`Cabo CC ${secaoCC}mm²`} cor={MUTED} />
+      <RotuloSegmento entreIdx={2} offsetY={4} texto={<>Cabo CC {secaoCC}mm<Sup base={6}>2</Sup></>} cor={MUTED} />
       <RotuloSegmento entreIdx={2} offsetY={17} texto={`DPS CC ${dpsCC}kA`} cor={BLUE} />
 
       <Text style={{ position:'absolute', left:xs[1]-14, top:yLine+bH+29, width:56, fontSize:6.3, textAlign:'center', color:'#d97706' }}>
@@ -265,7 +278,7 @@ export function DiagramaUnifilarBasico({ data }: { data: any }) {
           </View>
           {[
             ['Corrente de projeto (Ib)', `${N(dados.caboCA.ibA)} A`],
-            ['Seção do cabo CA', `${dados.caboCA.secaoMm2} mm²`],
+            ['Seção do cabo CA', <>{dados.caboCA.secaoMm2} mm<Sup base={8}>2</Sup></>],
             ['Disjuntor CA (In)', `${dados.caboCA.disjuntorA} A`],
             ['DPS CA', `${dados.dpsCA} kA — ${safe(calcularDPSCA(dados.potCA).descricao)}`],
             ['Queda de tensão CA', `${N(dados.caboCA.quedaTensaoPct,2)}% ${dados.caboCA.quedaTensaoOk ? '(<= 4%, OK)' : '(> 4%, ATENÇÃO)'}`],
@@ -286,7 +299,7 @@ export function DiagramaUnifilarBasico({ data }: { data: any }) {
           {[
             ['Configuração das strings', `${dados.nStrings} string(s) x ${dados.modPorString} módulo(s) = ${dados.qtdModulos} módulos`],
             ['Corrente de curto-circuito total (Isc)', `${N(dados.protecaoCC.correnteCurtoCircuitoTotalA)} A`],
-            ['Seção do cabo CC (solar)', `${dados.protecaoCC.secaoCaboMm2} mm²`],
+            ['Seção do cabo CC (solar)', <>{dados.protecaoCC.secaoCaboMm2} mm<Sup base={8}>2</Sup></>],
             ['Fusível de string', dados.protecaoCC.fusivelStringA > 0 ? `${dados.protecaoCC.fusivelStringA} A` : 'a definir'],
             ['DPS CC', `${dados.protecaoCC.dpsClasseKA} kA`],
             ['Voc do sistema (STC)', `${N(dados.protecaoCC.vocSistemaV,0)} V`],

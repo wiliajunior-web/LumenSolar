@@ -8,6 +8,7 @@ import {
 } from '@react-pdf/renderer';
 import { DISTRIBUIDORAS } from '../../data/distribuidoras';
 import { IMG_CAPA } from '../../assets/imagens';
+import { Sup } from './Superscript';
 import { MESES_LABELS } from '../../data/hspMensal';
 import { PRESETS_MODULO } from '../../data/presetsModulo';
 import { formatarNomeModulo, formatarTipoModulo } from '../kit/formatarModulo';
@@ -617,12 +618,19 @@ export function PropostaComercialPDF({ data }: { data: any }) {
             <SectionHeader title="Seu sistema personalizado" sub={`Dimensionado especificamente para compensar o consumo médio de ${N(consumoMedioMensalKWh, 0)} kWh/mês.`} />
 
             {/* Métricas do sistema */}
+            {/* "m²"/"mm²" usam <Sup> (./Superscript.tsx) em vez do caractere
+                "²" cru — o glifo não desenha em NENHUMA fonte core deste app
+                (Helvetica), mesmo com o caractere certo codificado no PDF;
+                bug só aparece rasterizando o PDF de verdade, não com
+                pdftotext nem com os testes de extração de texto (que leem a
+                árvore de elementos React, não o motor de fontes). Ver
+                comentário completo em Superscript.tsx. */}
             <View style={S.sysGrid}>
               {[
                 [N(dim.potenciaInstaladaRealKWp) + ' kWp', 'Potência instalada'],
                 [dim.numeroModulos + ' módulos', kit.marcaModulo || 'Fotovoltaicos'],
                 [N(dim.geracaoMensalEstimadaKWh, 0) + ' kWh/mês', 'Geração estimada'],
-                [N(ind?.areaNecessariaM2 ?? 0) + ' m²', 'Área no telhado'],
+                [<>{N(ind?.areaNecessariaM2 ?? 0)} m<Sup base={18}>2</Sup></>, 'Área no telhado'],
               ].map(([val, lbl], i) => (
                 <View key={i} style={S.sysStat}>
                   <Text style={S.sysStatVal}>{val}</Text>
@@ -643,7 +651,7 @@ export function PropostaComercialPDF({ data }: { data: any }) {
                 ['Módulo fotovoltaico', `${formatarNomeModulo(kit.marcaModulo, kit.modeloModulo)} - ${kit.potenciaModuloWp}Wp ${formatarTipoModulo(kit.tipoModulo, PRESETS_MODULO)}`, `${kit.quantidade} un.`],
                 ['Inversor solar', `${kit.marcaInversor} ${kit.modeloInversor} - ${kit.potenciaInversorKW} kW`, '1 un.'],
                 ['Estrutura de fixação', 'Alumínio anodizado - adequada ao tipo de telhado', '1 cj.'],
-                ['Cabeamento e proteções', 'Cabos solar 6mm², DPS, disjuntores, conectores MC4', '1 cj.'],
+                ['Cabeamento e proteções', <>Cabos solar 6mm<Sup base={9}>2</Sup>, DPS, disjuntores, conectores MC4</>, '1 cj.'],
                 ['Projeto + documentação', 'Projeto elétrico, ART, memorial descritivo', '1 cj.'],
               ].map(([comp, spec, qty], i) => (
                 <View key={i} style={i % 2 === 0 ? S.tblRow : S.tblRowAlt}>
