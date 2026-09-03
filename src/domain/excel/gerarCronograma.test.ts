@@ -215,3 +215,67 @@ describe('gerarCronograma — REGRESSÃO ago/2026 (rodada 13): coluna "Descriç�
     expect(desc).toContain('30 dias');
   });
 });
+
+// REGRESSÃO (set/2026): confirmado no texto do portal Cemig Atende (fluxo
+// Mini/Micro Geração Distribuída): "...critérios da ND-5.30 para conexão em
+// baixa tensão ou ND-5.31 para conexão em média tensão." A etapa "Memorial
+// Descritivo e documentação técnica" e o rodapé citavam "ND 5.30" fixo,
+// mesmo pra cliente Grupo A (média tensão) — ver normaConexaoCemig em
+// ../documentacaoCemig/checklist.ts.
+describe('gerarCronograma — REGRESSÃO set/2026: norma de conexão (ND 5.30 x 5.31) conforme grupoTensao', () => {
+  afterEach(() => limparArquivosGerados());
+
+  function linhaPorEtapa(ws: any, etapa: string): number {
+    for (const key of Object.keys(ws)) {
+      if (/^B\d+$/.test(key) && ws[key].v === etapa) return Number(key.slice(1));
+    }
+    throw new Error(`Etapa não encontrada: ${etapa}`);
+  }
+
+  function ultimaLinhaComTexto(ws: any, coluna: string, contendo: string): string | undefined {
+    for (const key of Object.keys(ws)) {
+      if (key.startsWith(coluna) && /^\d+$/.test(key.slice(coluna.length)) && String(ws[key].v).includes(contendo)) {
+        return String(ws[key].v);
+      }
+    }
+    return undefined;
+  }
+
+  it('cliente Grupo A (média tensão): etapa do Memorial e rodapé citam ND CEMIG 5.31, nunca 5.30', () => {
+    gerarCronograma({
+      nomeCliente: 'Cliente MT', enderecoInstalacao: 'Rua X, 1', dataInicio: '2026-01-05',
+      potenciaKWp: 10, numModulos: 19, empresa: 'Lumen Soluções Ltda',
+      responsavelTecnico: 'Eng. Teste', tipoSistema: 'micro', grupoTensao: 'A',
+    }, DIR_TESTE);
+    const gerados = readdirSync(DIR_TESTE).filter(f => f.startsWith('Cronograma_') && f.endsWith('.xlsx'));
+    const ws = XLSX.readFile(path.join(DIR_TESTE, gerados[0])).Sheets['Cronograma'];
+
+    const linhaMemorial = linhaPorEtapa(ws, 'Memorial Descritivo e documentação técnica');
+    const descMemorial = String(ws[`V${linhaMemorial}`].v);
+    expect(descMemorial).toContain('5.31');
+    expect(descMemorial).not.toContain('5.30');
+
+    const rodape = ultimaLinhaComTexto(ws, 'B', 'Gerado em:');
+    expect(rodape).toContain('5.31');
+    expect(rodape).not.toContain('5.30');
+  });
+
+  it('cliente Grupo B (baixa tensão) ou sem grupoTensao informado: etapa do Memorial e rodapé citam ND CEMIG 5.30', () => {
+    gerarCronograma({
+      nomeCliente: 'Cliente BT', enderecoInstalacao: 'Rua X, 1', dataInicio: '2026-01-05',
+      potenciaKWp: 10, numModulos: 19, empresa: 'Lumen Soluções Ltda',
+      responsavelTecnico: 'Eng. Teste', tipoSistema: 'micro',
+    }, DIR_TESTE);
+    const gerados = readdirSync(DIR_TESTE).filter(f => f.startsWith('Cronograma_') && f.endsWith('.xlsx'));
+    const ws = XLSX.readFile(path.join(DIR_TESTE, gerados[0])).Sheets['Cronograma'];
+
+    const linhaMemorial = linhaPorEtapa(ws, 'Memorial Descritivo e documentação técnica');
+    const descMemorial = String(ws[`V${linhaMemorial}`].v);
+    expect(descMemorial).toContain('5.30');
+    expect(descMemorial).not.toContain('5.31');
+
+    const rodape = ultimaLinhaComTexto(ws, 'B', 'Gerado em:');
+    expect(rodape).toContain('5.30');
+    expect(rodape).not.toContain('5.31');
+  });
+});

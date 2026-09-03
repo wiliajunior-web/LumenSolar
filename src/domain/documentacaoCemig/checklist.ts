@@ -41,6 +41,46 @@ export const CHECKLIST_PADRAO_CEMIG_MICROGD: ItemChecklistDocumentacao[] = [
 ];
 
 /** Atualização imutável — nunca muta o array recebido. */
+/**
+ * Norma aplicável à CONEXÃO (Memorial Descritivo e Planta de Situação), conforme
+ * o grupo de tensão real do cliente.
+ *
+ * ADICIONADO (set/2026): confirmado direto no texto do próprio portal Cemig
+ * Atende (fluxo "Mini/Micro Geração Distribuída", seção ORÇAMENTO DE CONEXÃO):
+ * "Para encaminhamento da solicitação devem ser observados os critérios da
+ * ND-5.30 para conexão em baixa tensão ou ND-5.31 para conexão em média
+ * tensão." O app já distingue Grupo B (baixa tensão) de Grupo A (média
+ * tensão) — ver `grupoTensao` em `useProjetoStore.ts` e `calcularGrupoA` —
+ * mas `CHECKLIST_PADRAO_CEMIG_MICROGD`, `MemorialDescritivo.tsx`,
+ * `PlantaDeSituacao.tsx`, `gerarExcel.ts`, `gerarFormularioCemig.ts` e
+ * `gerarCronograma.ts` citavam "ND 5.30" fixo para todo cliente, inclusive
+ * Grupo A — um documento técnico enviado à distribuidora citando a norma
+ * errada. Esta função centraliza a escolha; os pontos que imprimem a norma
+ * para o usuário devem chamar `normaConexaoCemig(grupoTensao)` (ou
+ * `normaBaseExibicao` abaixo, para itens do checklist) em vez de citar
+ * "ND 5.30"/"ND 5.31" direto no texto.
+ */
+export function normaConexaoCemig(grupoTensao?: 'B' | 'A'): string {
+  return grupoTensao === 'A'
+    ? 'ND CEMIG 5.31 (conexão em média tensão)'
+    : 'ND CEMIG 5.30 (conexão em baixa tensão)';
+}
+
+/**
+ * `normaBase` de exibição para um item do checklist, já resolvendo ND 5.30 vs
+ * 5.31 pelo grupo de tensão real do cliente — ver `normaConexaoCemig`. Só os
+ * itens 'memorial_descritivo' e 'planta_situacao' dependem do grupo de
+ * tensão; os demais (Formulário MicroGD, Procuração, DUB — que é NBR, não ND
+ * CEMIG —, ART, RG/CPF, INMETRO) usam o `normaBase` estático do próprio item,
+ * que não muda com o grupo de tensão do cliente.
+ */
+export function normaBaseExibicao(item: ItemChecklistDocumentacao, grupoTensao?: 'B' | 'A'): string {
+  if (item.id === 'memorial_descritivo' || item.id === 'planta_situacao') {
+    return normaConexaoCemig(grupoTensao);
+  }
+  return item.normaBase;
+}
+
 export function marcarItemGerado(
   checklist: ItemChecklistDocumentacao[],
   id: string,

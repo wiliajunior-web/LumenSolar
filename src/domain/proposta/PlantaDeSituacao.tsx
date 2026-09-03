@@ -1,7 +1,10 @@
 /**
  * PLANTA DE SITUAÇÃO — imagem de satélite georreferenciada + UTM
  * ==================================================================
- * Documento exigido pela CEMIG (ND 5.30) para localizar a instalação. O
+ * Documento exigido pela CEMIG (ND 5.30 para conexão em baixa tensão, ND
+ * 5.31 para média tensão — grupo A; confirmado no texto do portal Cemig
+ * Atende, set/2026, ver `normaConexaoCemig` em
+ * documentacaoCemig/checklist.ts) para localizar a instalação. O
  * mosaico de satélite e o marcador já vêm prontos (bitmap) do serviço
  * `@renderer/services/satelliteMosaic` — este componente só monta a página
  * em volta da imagem: título, dados da UC, coordenadas e a conferência

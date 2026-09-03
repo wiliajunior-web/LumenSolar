@@ -1,6 +1,9 @@
 /**
  * MEMORIAL DESCRITIVO - documento técnico para aprovação junto à distribuidora.
- * Baseado no modelo exigido pela CEMIG (ND 5.30) e padrões ANEEL.
+ * Baseado no modelo exigido pela CEMIG (ND 5.30 para conexão em baixa
+ * tensão, ND 5.31 para média tensão — grupo A; confirmado no texto do
+ * portal Cemig Atende, set/2026, ver `normaConexaoCemig` em
+ * documentacaoCemig/checklist.ts) e padrões ANEEL.
  * Referência normativa: Lei 14.300/2022, REN ANEEL 1000/2021.
  */
 import type { ReactNode } from 'react';

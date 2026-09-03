@@ -4,6 +4,8 @@ import {
   marcarItemGerado,
   marcarItemAnexado,
   resumoChecklist,
+  normaConexaoCemig,
+  normaBaseExibicao,
 } from './checklist';
 
 describe('CHECKLIST_PADRAO_CEMIG_MICROGD', () => {
@@ -28,6 +30,46 @@ describe('CHECKLIST_PADRAO_CEMIG_MICROGD', () => {
       const item = CHECKLIST_PADRAO_CEMIG_MICROGD.find((i) => i.id === id);
       expect(item).toBeDefined();
       expect(item!.tipo).toBe('gerado_automaticamente');
+    }
+  });
+});
+
+// REGRESSÃO (set/2026): confirmado direto no texto do portal Cemig Atende
+// (fluxo Mini/Micro Geração Distribuída, seção ORÇAMENTO DE CONEXÃO):
+// "...critérios da ND-5.30 para conexão em baixa tensão ou ND-5.31 para
+// conexão em média tensão." O app cita "ND 5.30" para todo cliente,
+// inclusive Grupo A (média tensão) — errado pra esse caso.
+describe('normaConexaoCemig', () => {
+  it('Grupo B (baixa tensão) ou sem grupoTensao informado: ND CEMIG 5.30', () => {
+    expect(normaConexaoCemig('B')).toContain('5.30');
+    expect(normaConexaoCemig('B')).not.toContain('5.31');
+    expect(normaConexaoCemig(undefined)).toContain('5.30');
+  });
+
+  it('Grupo A (média tensão): ND CEMIG 5.31, nunca 5.30', () => {
+    const norma = normaConexaoCemig('A');
+    expect(norma).toContain('5.31');
+    expect(norma).not.toContain('5.30');
+  });
+});
+
+describe('normaBaseExibicao', () => {
+  it('memorial_descritivo e planta_situacao resolvem pelo grupo de tensão real, não pelo normaBase estático do item', () => {
+    const memorial = CHECKLIST_PADRAO_CEMIG_MICROGD.find((i) => i.id === 'memorial_descritivo')!;
+    const planta = CHECKLIST_PADRAO_CEMIG_MICROGD.find((i) => i.id === 'planta_situacao')!;
+    expect(normaBaseExibicao(memorial, 'A')).toContain('5.31');
+    expect(normaBaseExibicao(planta, 'A')).toContain('5.31');
+    expect(normaBaseExibicao(memorial, 'B')).toContain('5.30');
+    expect(normaBaseExibicao(planta, 'B')).toContain('5.30');
+  });
+
+  it('demais itens (DUB, ART, Procuração, Formulário, INMETRO) ignoram grupoTensao — usam o normaBase estático', () => {
+    const outros = CHECKLIST_PADRAO_CEMIG_MICROGD.filter(
+      (i) => i.id !== 'memorial_descritivo' && i.id !== 'planta_situacao'
+    );
+    for (const item of outros) {
+      expect(normaBaseExibicao(item, 'A')).toBe(item.normaBase);
+      expect(normaBaseExibicao(item, 'B')).toBe(item.normaBase);
     }
   });
 });

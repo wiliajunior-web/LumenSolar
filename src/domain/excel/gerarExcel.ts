@@ -46,6 +46,7 @@ import { HSP_MEDIO_POR_UF } from '@data/hspPorUF';
 import { formatarNomeModulo } from '@domain/kit/formatarModulo';
 import { formatarCrea } from '@domain/empresa/cadastroEmpresa';
 import { normalizarNomeArquivo } from '@domain/shared/normalizarNomeArquivo';
+import { normaConexaoCemig } from '@domain/documentacaoCemig/checklist';
 
 // ── Tipos SheetJS ─────────────────────────────────────────────────────────────
 type WS  = Record<string, any>;
@@ -457,13 +458,26 @@ export function gerarExcelAuditoria(dados: any, pastaDestino: string = process.c
   setFrm(ws0, r0, 3, `=SUM(Fluxo_Caixa!E${FC_T0+1}:Fluxo_Caixa!E${FC_T0+25})`, F_BRL); r0+=2;
 
   // ── Checklist CEMIG ───────────────────────────────────────────────────────
-  setStr(ws0, r0, 2, '▌ DOCUMENTOS CEMIG (REN 1.000/2021 + ND 5.30)'); r0++;
+  // BUG CORRIGIDO (set/2026): dois problemas nesta lista estática, achados
+  // comparando com o texto oficial do portal Cemig Atende (fluxo Mini/Micro
+  // Geração Distribuída, seção ORÇAMENTO DE CONEXÃO):
+  // 1) "ND 5.30" citado fixo, mesmo para cliente Grupo A (média tensão) — a
+  //    Cemig exige ND-5.31 pra conexão em média tensão, não 5.30 (ver
+  //    `normaConexaoCemig` em documentacaoCemig/checklist.ts).
+  // 2) DUB e Planta de Situação apareciam como "⬜ elaborar manualmente",
+  //    mas o LumenSolar GERA os dois (DiagramaUnifilarBasico.tsx e
+  //    PlantaDeSituacao.tsx) — checklist.ts já marca ambos como
+  //    'gerado_automaticamente', e gerarFormularioCemig.ts já refletia isso
+  //    corretamente; só esta tabela do Excel de auditoria tinha ficado presa
+  //    a uma versão anterior do app, antes desses dois documentos existirem.
+  const normaConexao = normaConexaoCemig(consumo?.grupoTensao);
+  setStr(ws0, r0, 2, `▌ DOCUMENTOS CEMIG (REN 1.000/2021 + ${normaConexao})`); r0++;
   const docsCemig = [
     ['✅', 'Formulário MicroGD CEMIG Rev. N4',      '(gerado pelo LumenSolar)'],
     ['✅', 'Procuração — Art. 9 REN 1.000/2021',    '(gerado pelo LumenSolar)'],
-    ['✅', 'Memorial Descritivo — ND 5.30',         '(gerado pelo LumenSolar)'],
-    ['⬜', 'DUB — Diagrama Unifilar Básico',        '(elaborar manualmente)'],
-    ['⬜', 'Planta de Situação (satélite + UTM)',    '(elaborar manualmente)'],
+    ['✅', `Memorial Descritivo — ${normaConexao}`, '(gerado pelo LumenSolar)'],
+    ['✅', 'DUB — Diagrama Unifilar Básico',        '(gerado pelo LumenSolar)'],
+    ['✅', `Planta de Situação — ${normaConexao}`,  '(gerado pelo LumenSolar)'],
     ['⬜', 'ART do Responsável Técnico',             '(emitir no CREA)'],
     ['⬜', 'RG + CPF titular + Comprovante imóvel', '(documentos do cliente)'],
     ['⬜', 'Certificados INMETRO módulos/inversores','(solicitar ao fornecedor)'],

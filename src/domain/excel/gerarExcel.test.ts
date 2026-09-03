@@ -114,6 +114,68 @@ describe('gerarExcelAuditoria — smoke test (regressão do bug FC_T0 + dependê
   });
 });
 
+// REGRESSÃO (set/2026): comparando com o texto oficial do portal Cemig
+// Atende (fluxo Mini/Micro Geração Distribuída, seção ORÇAMENTO DE CONEXÃO —
+// "...critérios da ND-5.30 para conexão em baixa tensão ou ND-5.31 para
+// conexão em média tensão"), dois problemas na tabela "DOCUMENTOS CEMIG" da
+// aba Resumo: (1) "ND 5.30" citado fixo, errado pra cliente Grupo A (média
+// tensão); (2) DUB e Planta de Situação apareciam como "elaborar
+// manualmente", mas o LumenSolar gera os dois — ver normaConexaoCemig em
+// ../documentacaoCemig/checklist.ts.
+describe('gerarExcelAuditoria — REGRESSÃO set/2026: tabela "DOCUMENTOS CEMIG" da aba Resumo', () => {
+  afterEach(() => limparArquivosGerados());
+
+  function gerarERelerResumo(dados: any): any {
+    gerarExcelAuditoria(dados, DIR_TESTE);
+    const gerados = readdirSync(DIR_TESTE).filter(f => f.startsWith('Auditoria_') && f.endsWith('.xlsx'));
+    const wb = XLSX.readFile(path.join(DIR_TESTE, gerados[gerados.length - 1]));
+    return wb.Sheets['Resumo'];
+  }
+
+  function algumaLinhaContendo(ws: any, coluna: string, contendo: string): string | undefined {
+    for (const key of Object.keys(ws)) {
+      if (key.startsWith(coluna) && /^\d+$/.test(key.slice(coluna.length)) && String(ws[key].v).includes(contendo)) {
+        return String(ws[key].v);
+      }
+    }
+    return undefined;
+  }
+
+  it('cliente Grupo A (média tensão): cabeçalho e linha do Memorial citam ND CEMIG 5.31, nunca 5.30', () => {
+    const ws = gerarERelerResumo({
+      cliente: { nome: 'Cliente MT' },
+      consumo: { grupoTensao: 'A', contas: [] },
+    });
+    const cabecalho = algumaLinhaContendo(ws, 'B', 'DOCUMENTOS CEMIG');
+    expect(cabecalho).toContain('5.31');
+    expect(cabecalho).not.toContain('5.30');
+    const linhaMemorial = algumaLinhaContendo(ws, 'B', 'Memorial Descritivo');
+    expect(linhaMemorial).toContain('5.31');
+  });
+
+  it('cliente Grupo B (baixa tensão) ou sem grupoTensao: cabeçalho e linha do Memorial citam ND CEMIG 5.30', () => {
+    const ws = gerarERelerResumo({ cliente: { nome: 'Cliente BT' } });
+    const cabecalho = algumaLinhaContendo(ws, 'B', 'DOCUMENTOS CEMIG');
+    expect(cabecalho).toContain('5.30');
+    expect(cabecalho).not.toContain('5.31');
+    const linhaMemorial = algumaLinhaContendo(ws, 'B', 'Memorial Descritivo');
+    expect(linhaMemorial).toContain('5.30');
+  });
+
+  it('DUB e Planta de Situação aparecem como gerados pelo LumenSolar (✅), não mais "elaborar manualmente" (⬜) — o app gera os dois', () => {
+    const ws = gerarERelerResumo({ cliente: { nome: 'Cliente Teste' } });
+    const linhaDub = algumaLinhaContendo(ws, 'B', 'DUB');
+    const linhaPlanta = algumaLinhaContendo(ws, 'B', 'Planta de Situação');
+    expect(linhaDub).toContain('✅');
+    expect(linhaPlanta).toContain('✅');
+    expect(linhaDub).not.toContain('elaborar manualmente');
+    expect(linhaPlanta).not.toContain('elaborar manualmente');
+
+    const instrucaoDub = algumaLinhaContendo(ws, 'E', '(gerado pelo LumenSolar)');
+    expect(instrucaoDub).toBeTruthy();
+  });
+});
+
 // [REGRESSÃO ago/2026] o bloco "PROJEÇÃO FIO-B" da aba Resumo ignorava por
 // completo o enquadramento real do cliente — nem `enquadramento` nem
 // `percentuaisFioBPorAno` eram passados a gerarExcelAuditoria() por App.tsx,

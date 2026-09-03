@@ -15,6 +15,7 @@ const XLSX: typeof import('xlsx') = require('xlsx');
 
 import path from 'node:path';
 import { normalizarNomeArquivo } from '@domain/shared/normalizarNomeArquivo';
+import { normaConexaoCemig } from '@domain/documentacaoCemig/checklist';
 
 interface ParamsCronograma {
   nomeCliente: string;
@@ -25,6 +26,11 @@ interface ParamsCronograma {
   empresa: string;
   responsavelTecnico: string;
   tipoSistema: 'micro' | 'mini';   // afeta prazos CEMIG
+  /** ADICIONADO (set/2026): afeta qual norma de conexão é citada (ND 5.30 x
+   * 5.31 — ver `normaConexaoCemig`). Opcional pra não quebrar chamadas
+   * existentes; sem o campo, assume Grupo B (baixa tensão, ND 5.30), o
+   * caso mais comum. */
+  grupoTensao?: 'B' | 'A';
 }
 
 interface Etapa {
@@ -55,6 +61,10 @@ function addWeeks(dateStr: string, weeks: number): string {
 export function gerarCronograma(dados: ParamsCronograma, pastaDestino: string = process.cwd()): void {
   const wb = XLSX.utils.book_new();
   const ws: Record<string, any> = {};
+  // BUG CORRIGIDO (set/2026): "ND 5.30" citado fixo, mesmo pra cliente Grupo A
+  // (média tensão) — ver `normaConexaoCemig` em documentacaoCemig/checklist.ts
+  // (mesma correção aplicada em gerarExcel.ts e gerarFormularioCemig.ts).
+  const normaConexao = normaConexaoCemig(dados.grupoTensao);
 
   // BUG CORRIGIDO (ago/2026): só a duração da própria etapa "Análise CEMIG —
   // Parecer de Acesso" variava com `tipoSistema` (3 semanas MicroGD / 6
@@ -99,7 +109,7 @@ export function gerarCronograma(dados: ParamsCronograma, pastaDestino: string = 
       etapa: 'Memorial Descritivo e documentação técnica',
       semana: 2, duracao: 1,
       responsavel: 'Lumen',
-      descricao: 'Memorial Descritivo (ND 5.30), DUB, Planta de Situação',
+      descricao: `Memorial Descritivo (${normaConexao}), DUB, Planta de Situação`,
     },
     {
       fase: '2. Projeto Executivo',
@@ -297,7 +307,7 @@ export function gerarCronograma(dados: ParamsCronograma, pastaDestino: string = 
   row++;
   set(row, 2, 'Prazo APR Web: documentação deve ser enviada em até 24h após protocolo. Atraso = cancelamento automático.');
   row++;
-  set(row, 2, `Gerado em: ${new Date().toLocaleDateString('pt-BR')} por ${dados.empresa} | CEMIG ND 5.30 + REN ANEEL 1.000/2021`);
+  set(row, 2, `Gerado em: ${new Date().toLocaleDateString('pt-BR')} por ${dados.empresa} | CEMIG ${normaConexao} + REN ANEEL 1.000/2021`);
 
   ws['!ref'] = XLSX.utils.encode_range({ r: 0, c: 0 }, { r: row, c: N_SEMANAS + 6 });
 

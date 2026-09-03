@@ -17,6 +17,7 @@ const XLSX: typeof import('xlsx') = require('xlsx');
 import path from 'node:path';
 import { normalizarNomeArquivo } from '@domain/shared/normalizarNomeArquivo';
 import { parseNumeroBR } from '@domain/shared/parseNumeroBR';
+import { normaConexaoCemig } from '@domain/documentacaoCemig/checklist';
 
 /**
  * Mapa de células do formulário CEMIG MicroGD Rev. N4.
@@ -241,7 +242,12 @@ export function gerarFormularioCemigMicroGD(dados: any, pastaDestino: string = p
     ['3. Verifique os campos de dropdown (Tipo de Solicitação, Tipo de Edificação) — selecionar na lista'],
     ['4. Assine digitalmente ou imprima para assinatura manual (Seção 9)'],
     [''],
-    ['DOCUMENTOS OBRIGATÓRIOS — REN ANEEL 1.000/2021 + ND CEMIG 5.30:'],
+    // BUG CORRIGIDO (set/2026): "ND CEMIG 5.30" citado fixo, mesmo pra
+    // cliente Grupo A (média tensão) — a Cemig exige ND-5.31 pra conexão em
+    // média tensão, confirmado no texto oficial do portal Cemig Atende
+    // (fluxo Mini/Micro Geração Distribuída). Ver `normaConexaoCemig` em
+    // documentacaoCemig/checklist.ts.
+    [`DOCUMENTOS OBRIGATÓRIOS — REN ANEEL 1.000/2021 + ${normaConexaoCemig(consumo?.grupoTensao)}:`],
     ['  ☐  Este formulário preenchido e assinado'],
     ['  ☐  Procuração (gerada pelo LumenSolar — Art. 9 REN 1.000/2021)'],
     ['  ☐  Memorial Descritivo técnico (gerado pelo LumenSolar)'],
@@ -295,12 +301,17 @@ export function checklistDocumentosCEMIG(dados: any): Array<{doc: string; obriga
     return item.tipo === 'gerado_automaticamente' ? !!item.geradoEm : !!item.anexado;
   };
 
+  // BUG CORRIGIDO (set/2026): "ND 5.30" citado fixo — ver mesma correção e
+  // mesma referência (texto oficial do portal Cemig Atende) no comentário
+  // acima de `normaConexaoCemig` em documentacaoCemig/checklist.ts.
+  const normaConexao = normaConexaoCemig(dados?.consumo?.grupoTensao);
+
   return [
     { doc: 'Formulário MicroGD CEMIG (Rev. N4)', obrigatorio: true, geradoPeloApp: true, status: concluido('formulario_microgd') ? 'ok' : 'pendente' },
     { doc: 'Procuração (Art. 9 REN 1.000/2021)', obrigatorio: true, geradoPeloApp: true, status: concluido('procuracao') ? 'ok' : 'pendente' },
-    { doc: 'Memorial Descritivo Técnico (ND 5.30)', obrigatorio: true, geradoPeloApp: true, status: concluido('memorial_descritivo') ? 'ok' : 'pendente' },
+    { doc: `Memorial Descritivo Técnico (${normaConexao})`, obrigatorio: true, geradoPeloApp: true, status: concluido('memorial_descritivo') ? 'ok' : 'pendente' },
     { doc: 'DUB — Diagrama Unifilar Básico', obrigatorio: true, geradoPeloApp: true, status: concluido('dub') ? 'ok' : 'pendente' },
-    { doc: 'Planta de Situação (satélite + UTM)', obrigatorio: true, geradoPeloApp: true, status: concluido('planta_situacao') ? 'ok' : 'pendente' },
+    { doc: `Planta de Situação (${normaConexao})`, obrigatorio: true, geradoPeloApp: true, status: concluido('planta_situacao') ? 'ok' : 'pendente' },
     { doc: 'ART do Responsável Técnico', obrigatorio: true, geradoPeloApp: false, status: concluido('art') ? 'ok' : 'pendente' },
     { doc: 'RG + CPF do Titular da UC', obrigatorio: true, geradoPeloApp: false, status: concluido('rg_cpf_comprovante') ? 'ok' : 'pendente' },
     { doc: 'Comprovante de Propriedade/Posse do Imóvel', obrigatorio: true, geradoPeloApp: false, status: concluido('rg_cpf_comprovante') ? 'ok' : 'pendente' },

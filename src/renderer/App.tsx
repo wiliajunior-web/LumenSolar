@@ -6,7 +6,7 @@ import { DISTRIBUIDORAS } from '@data/distribuidoras';
 import { empresaSemSegredos } from '@data/empresa';
 import { TIPO_TELHADO_LABELS, ORIENTACOES, type TipoTelhado, LOCALIZACAO_PADRAO } from '@data/localizacao';
 import { HSP_MEDIO_POR_UF } from '@data/hspPorUF';
-import { CHECKLIST_PADRAO_CEMIG_MICROGD, resumoChecklist, type ItemChecklistDocumentacao } from '@domain/documentacaoCemig/checklist';
+import { CHECKLIST_PADRAO_CEMIG_MICROGD, resumoChecklist, normaBaseExibicao, type ItemChecklistDocumentacao } from '@domain/documentacaoCemig/checklist';
 import { cadastroEmpresaIncompleto, mensagemCadastroEmpresaIncompleto } from '@domain/empresa/cadastroEmpresa';
 import { latLonParaUTM } from '@domain/geografia/converterCoordenadas';
 import { parseNumeroBR } from '@domain/shared/parseNumeroBR';
@@ -254,7 +254,7 @@ const KPI = ({ label, val, sub, color }: { label: string; val: string; sub?: str
 // ver marcarDocumentoGerado nas funções gerarX(). Itens "anexo_manual"
 // (ART, RG/CPF, INMETRO) são documentos de terceiro que o app não pode
 // gerar (ver checklist.ts) — o usuário confirma manualmente aqui.
-function ChecklistDocumentacaoCard({ checklist }: { checklist: ItemChecklistDocumentacao[] }) {
+function ChecklistDocumentacaoCard({ checklist, grupoTensao }: { checklist: ItemChecklistDocumentacao[]; grupoTensao?: 'B' | 'A' }) {
   // BUG CORRIGIDO (ago/2026): o card começava FECHADO, mostrando só um
   // contador ("3/8 — 37%") sem explicação nenhuma do que falta ou do que
   // aqueles números significam — a única pista de que dava pra clicar era um
@@ -294,7 +294,7 @@ function ChecklistDocumentacaoCard({ checklist }: { checklist: ItemChecklistDocu
                     {item.tipo === 'anexo_manual' && <span style={{ fontSize:10, color:D.textMuted, fontWeight:400 }}> — anexo do usuário/terceiro, não gerado pelo app</span>}
                   </div>
                   <div style={{ fontSize:11, color:D.textMuted }}>
-                    {item.normaBase}
+                    {normaBaseExibicao(item, grupoTensao)}
                     {item.tipo === 'gerado_automaticamente' && item.geradoEm && ` — gerado em ${new Date(item.geradoEm).toLocaleString('pt-BR')}`}
                   </div>
                 </div>
@@ -3441,6 +3441,7 @@ function TabResultado({ onPrev, onEmpresa }: { onPrev:()=>void; onEmpresa:()=>vo
         empresa: d.empresa?.razaoSocial || 'Lumen Soluções Ltda',
         responsavelTecnico: d.empresa?.responsavelTecnico || '',
         tipoSistema: (d.dimensionamento?.potenciaInstaladaRealKWp || 0) > 75 ? 'mini' : 'micro',
+        grupoTensao: (d.consumo as any)?.grupoTensao,
       }, pastaDestino);
     } catch(e) { alert('Erro ao gerar cronograma: ' + (e instanceof Error ? e.message : String(e)));
     } finally { setGerando(false); }
@@ -3724,7 +3725,7 @@ function TabResultado({ onPrev, onEmpresa }: { onPrev:()=>void; onEmpresa:()=>vo
         <KPI label="Preço à vista" val={fmtBRL(pre.precoVenda)} sub={`Payback: ${ind.paybackSimples}`} color={D.gold} />
       </div>
 
-      <ChecklistDocumentacaoCard checklist={s.checklistDocumentacao} />
+      <ChecklistDocumentacaoCard checklist={s.checklistDocumentacao} grupoTensao={(s.consumo as any)?.grupoTensao} />
 
       {/* BUG CORRIGIDO (ago/2026): título e barra de 17 botões de ação (documentos +
           compartilhamento + links de terceiros, tudo misturado, sem rótulo) estavam

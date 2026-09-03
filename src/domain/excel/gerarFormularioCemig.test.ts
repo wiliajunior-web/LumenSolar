@@ -195,6 +195,46 @@ describe('gerarFormularioCemigMicroGD — exercitando a função real de produç
   });
 });
 
+// REGRESSÃO (set/2026): a aba "Instruções" do .xlsx real gerado citava
+// "ND CEMIG 5.30" fixo no cabeçalho da lista de documentos obrigatórios,
+// mesmo pra cliente Grupo A (média tensão) — mesmo bug e mesma correção de
+// checklistDocumentosCEMIG, mas na função que produz o arquivo de verdade
+// (não só a estrutura de dados em memória).
+describe('gerarFormularioCemigMicroGD — aba Instruções cita a norma de conexão certa', () => {
+  afterEach(() => limparArquivosGerados());
+
+  it('cliente Grupo A (média tensão): cabeçalho cita ND CEMIG 5.31, nunca 5.30', () => {
+    const dados = {
+      cliente: { nome: 'Cliente MT', cidade: 'Araguari', uf: 'MG' },
+      consumo: { tipoLigacao: 'trifasica', grupoTensao: 'A' },
+      localizacao: {}, kit: { potenciaModuloWp: 550, quantidade: 10 }, empresa: {},
+    };
+    gerarFormularioCemigMicroGD(dados, DIR_TESTE);
+    const gerados = readdirSync(DIR_TESTE).filter(f => f.startsWith('FormularioCEMIG_MicroGD_') && f.endsWith('.xlsx'));
+    const wb = XLSX.readFile(path.join(DIR_TESTE, gerados[0]));
+    const wsInst = wb.Sheets['Instruções'];
+    const cabecalho = wsInst['A8']?.v as string; // linha "DOCUMENTOS OBRIGATÓRIOS — ..."
+    expect(cabecalho).toContain('DOCUMENTOS OBRIGATÓRIOS');
+    expect(cabecalho).toContain('5.31');
+    expect(cabecalho).not.toContain('5.30');
+  });
+
+  it('cliente Grupo B (baixa tensão) ou sem grupoTensao: cabeçalho cita ND CEMIG 5.30', () => {
+    const dados = {
+      cliente: { nome: 'Cliente BT', cidade: 'Araguari', uf: 'MG' },
+      consumo: { tipoLigacao: 'monofasica' },
+      localizacao: {}, kit: { potenciaModuloWp: 550, quantidade: 10 }, empresa: {},
+    };
+    gerarFormularioCemigMicroGD(dados, DIR_TESTE);
+    const gerados = readdirSync(DIR_TESTE).filter(f => f.startsWith('FormularioCEMIG_MicroGD_') && f.endsWith('.xlsx'));
+    const wb = XLSX.readFile(path.join(DIR_TESTE, gerados[0]));
+    const wsInst = wb.Sheets['Instruções'];
+    const cabecalho = wsInst['A8']?.v as string;
+    expect(cabecalho).toContain('5.30');
+    expect(cabecalho).not.toContain('5.31');
+  });
+});
+
 describe('checklistDocumentosCEMIG', () => {
   it('sem checklistDocumentacao em dados (arquivo .lumensolar antigo): usa o padrão e reporta tudo pendente', () => {
     const lista = checklistDocumentosCEMIG({});
@@ -232,6 +272,26 @@ describe('checklistDocumentosCEMIG', () => {
     const lista = checklistDocumentosCEMIG({ checklistDocumentacao: checklist });
     expect(lista.find((i) => i.doc.includes('RG + CPF'))!.status).toBe('ok');
     expect(lista.find((i) => i.doc.includes('Comprovante de Propriedade'))!.status).toBe('ok');
+  });
+
+  // REGRESSÃO (set/2026): "ND 5.30" citado fixo pro Memorial e pra Planta de
+  // Situação, mesmo pra cliente Grupo A (média tensão) — a Cemig exige
+  // ND-5.31 pra conexão em média tensão (confirmado no texto do portal Cemig
+  // Atende). Ver normaConexaoCemig em ../documentacaoCemig/checklist.ts.
+  it('Memorial Descritivo e Planta de Situação citam ND CEMIG 5.31 para cliente Grupo A (média tensão)', () => {
+    const lista = checklistDocumentosCEMIG({ consumo: { grupoTensao: 'A' } });
+    expect(lista.find((i) => i.doc.includes('Memorial'))!.doc).toContain('5.31');
+    expect(lista.find((i) => i.doc.includes('Planta de Situação'))!.doc).toContain('5.31');
+  });
+
+  it('Memorial Descritivo e Planta de Situação citam ND CEMIG 5.30 para cliente Grupo B (baixa tensão) ou sem grupoTensao informado', () => {
+    const semGrupo = checklistDocumentosCEMIG({});
+    expect(semGrupo.find((i) => i.doc.includes('Memorial'))!.doc).toContain('5.30');
+    expect(semGrupo.find((i) => i.doc.includes('Planta de Situação'))!.doc).toContain('5.30');
+
+    const grupoB = checklistDocumentosCEMIG({ consumo: { grupoTensao: 'B' } });
+    expect(grupoB.find((i) => i.doc.includes('Memorial'))!.doc).toContain('5.30');
+    expect(grupoB.find((i) => i.doc.includes('Planta de Situação'))!.doc).toContain('5.30');
   });
 
   it('itens não obrigatórios (CAR, Análise de Carga) permanecem nao_aplicavel', () => {
