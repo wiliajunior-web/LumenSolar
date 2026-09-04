@@ -34,7 +34,19 @@ export interface CoordenadaUTM {
 // já tratado corretamente no cálculo abaixo, só faltava refletir no rótulo).
 // Convenção: lat=0 (equador) cai na faixa "N" (limite entre as letras MGRS M
 // e N é o próprio equador).
+// ADICIONADO (set/2026, auditoria "rode com valores absurdos"): lat/lon fora da
+// faixa fisicamente válida não crashava nem virava NaN — a fórmula UTM aceita
+// qualquer número e devolve um resultado numericamente "normal" só que sem
+// nenhum sentido geográfico (ex.: lat=200 não é um lugar na Terra, mas o cálculo
+// não reclama). Hoje os dois pontos de entrada (BuscadorCoordenadas em App.tsx e
+// PlantaDeSituacao.tsx) alimentam a função com lat/lon vindos de geocodificação
+// (Nominatim/mosaico de satélite), que já retornam valores válidos — mas a
+// função é exportada e pública, e um valor absurdo aqui não gera erro nenhum
+// para quem chama, só um UTM E/N silenciosamente errado plotado na Planta de
+// Situação. Falha rápido em vez de propagar coordenada sem sentido.
 export function latLonParaUTM(lat: number, lon: number): CoordenadaUTM {
+  if (lat < -90 || lat > 90) throw new Error('Latitude inválida — deve estar entre -90 e 90.');
+  if (lon < -180 || lon > 180) throw new Error('Longitude inválida — deve estar entre -180 e 180.');
   const a = 6378137.0, f = 1 / 298.257223563;
   const b = a * (1 - f), e2 = 1 - (b / a) ** 2;
   const k0 = 0.9996, E0 = 500000;

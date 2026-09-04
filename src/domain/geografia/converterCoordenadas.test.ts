@@ -49,6 +49,31 @@ describe('latLonParaUTM', () => {
   it('[hemisferio] equador (lat=0) é convencionado como "N" (limite MGRS M/N é o próprio equador)', () => {
     expect(latLonParaUTM(0, -48).hemisferio).toBe('N');
   });
+
+  // ADICIONADO (set/2026, auditoria "rode com valores absurdos"): lat/lon fora da
+  // faixa fisicamente válida não crashava nem virava NaN antes deste guard — só
+  // devolvia um UTM E/N "normal" só que geograficamente sem sentido nenhum.
+  describe('[REGRESSÃO set/2026] guard contra lat/lon fisicamente inválidos', () => {
+    it('lança erro para latitude > 90', () => {
+      expect(() => latLonParaUTM(90.1, -48)).toThrow('Latitude inválida');
+    });
+    it('lança erro para latitude < -90', () => {
+      expect(() => latLonParaUTM(-90.1, -48)).toThrow('Latitude inválida');
+    });
+    it('lança erro para longitude > 180', () => {
+      expect(() => latLonParaUTM(-18, 180.1)).toThrow('Longitude inválida');
+    });
+    it('lança erro para longitude < -180', () => {
+      expect(() => latLonParaUTM(-18, -180.1)).toThrow('Longitude inválida');
+    });
+    it('lança erro para valores absurdos fora de qualquer escala geográfica', () => {
+      expect(() => latLonParaUTM(9999, 9999)).toThrow('Latitude inválida');
+    });
+    it('aceita os limites exatos -90/90 e -180/180 (inclusive, polos e antimeridiano são coordenadas válidas)', () => {
+      expect(() => latLonParaUTM(90, 180)).not.toThrow();
+      expect(() => latLonParaUTM(-90, -180)).not.toThrow();
+    });
+  });
 });
 
 describe('distanciaUTM', () => {
