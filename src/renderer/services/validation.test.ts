@@ -114,6 +114,68 @@ describe('Validação — Consumo', () => {
     const r = validarConsumo({ ...consumoCompleto, cipMensalRS: 0 });
     expect(r.erros.some(e => e.campo === 'cip')).toBe(false);
   });
+
+  // ADICIONADO (set/2026, auditoria "rode com valores absurdos"): cliente
+  // Grupo A (média tensão) tinha ZERO validação dos campos que só ele usa
+  // (histórico Ponta/Fora Ponta, tarifas TE, demanda contratada/tarifa de
+  // demanda) — marcar "Grupo A" e calcular sem preencher nada passava direto
+  // (só os campos de Grupo B, já cobertos acima, eram checados), produzindo
+  // um ResultadoGrupoA inteiramente zerado sem nenhum aviso. Ver comentário
+  // completo em validarConsumo (validation.ts) e o teste irmão em
+  // calcularGrupoA.test.ts.
+  describe('Grupo A (média tensão) — campos próprios exigidos', () => {
+    const consumoGrupoAVazio = {
+      ...consumoCompleto, // Grupo B continua exigido mesmo p/ cliente Grupo A — ver comentário em validation.ts
+      grupoTensao: 'A',
+      historicoFP: [], historicoP: [],
+      tePontaKWh: 0, teForaPontaKWh: 0, demandaContratadaKW: 0, tarifaDemandaKW: 0,
+    };
+    const consumoGrupoACompleto = {
+      ...consumoCompleto,
+      grupoTensao: 'A',
+      historicoFP: [1000, 1050, 980, 0,0,0,0,0,0,0,0,0],
+      historicoP: [200, 210, 195, 0,0,0,0,0,0,0,0,0],
+      tePontaKWh: 0.60, teForaPontaKWh: 0.40,
+      demandaContratadaKW: 100, tarifaDemandaKW: 20,
+    };
+
+    it('grupoTensao "A" sem nenhum campo Grupo A preenchido → 4 erros distintos (histórico FP, histórico P, TE Ponta, TE Fora Ponta, demanda contratada, tarifa de demanda)', () => {
+      const r = validarConsumo(consumoGrupoAVazio);
+      expect(r.erros.some(e => e.campo === 'historicoFP')).toBe(true);
+      expect(r.erros.some(e => e.campo === 'historicoP')).toBe(true);
+      expect(r.erros.some(e => e.campo === 'tePontaKWh')).toBe(true);
+      expect(r.erros.some(e => e.campo === 'teForaPontaKWh')).toBe(true);
+      expect(r.erros.some(e => e.campo === 'demandaContratadaKW')).toBe(true);
+      expect(r.erros.some(e => e.campo === 'tarifaDemandaKW')).toBe(true);
+    });
+
+    it('grupoTensao "A" com todos os campos Grupo A preenchidos (e Grupo B também) → completo, sem erros', () => {
+      const r = validarConsumo(consumoGrupoACompleto);
+      expect(r.status).toBe('completo');
+      expect(r.erros).toHaveLength(0);
+    });
+
+    it('grupoTensao "A" com Grupo B completo mas histórico Grupo A com só 2 meses (< 3) → erro específico com contagem', () => {
+      const r = validarConsumo({
+        ...consumoGrupoACompleto,
+        historicoFP: [1000, 1050, 0,0,0,0,0,0,0,0,0,0], // só 2 meses válidos
+      });
+      const erroFP = r.erros.find(e => e.campo === 'historicoFP');
+      expect(erroFP?.mensagem).toContain('2/3');
+    });
+
+    it('grupoTensao "B" (padrão) NÃO exige nenhum campo Grupo A — continua se comportando exatamente como antes', () => {
+      const r = validarConsumo({ ...consumoCompleto, grupoTensao: 'B' });
+      expect(r.status).toBe('completo');
+      expect(r.erros).toHaveLength(0);
+    });
+
+    it('grupoTensao ausente (undefined) — mesma compatibilidade retroativa de "B" (não exige campos Grupo A)', () => {
+      const r = validarConsumo(consumoCompleto); // consumoCompleto não define grupoTensao
+      expect(r.status).toBe('completo');
+      expect(r.erros).toHaveLength(0);
+    });
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════

@@ -172,6 +172,26 @@ export function calcularCustoDemanda(
 
 export function calcularDimensionamentoGrupoA(params: ParamsGrupoA): ResultadoGrupoA {
   const { consumo, tarifa, hspLocal, perdasSistema, potenciaModuloWp, percentualCompensacao = 1.0 } = params;
+
+  // ADICIONADO (set/2026, auditoria "rode com valores absurdos"): a função
+  // irmã `dimensionarSistema` (dimensionar.ts) valida esses 3 mesmos
+  // parâmetros antes de dividir por eles — esta função fazia a MESMA divisão
+  // (geracaoNecessaria / (hspLocal × DIAS_MES × eficiência), eficiência =
+  // 1-perdasSistema) sem nenhum guard. Com hspLocal=0 ou perdasSistema=1, o
+  // resultado é Infinity/NaN correndo solto até o card "Grupo A" da tela de
+  // Consumo e a página AvisoGrupoA do PDF; com perdasSistema>1 (>100%,
+  // digitado por engano), o resultado é negativo mas sem erro nenhum — um
+  // "sistema de -X kWp" sem sentido físico. Estes 3 campos hoje sempre vêm
+  // calculados internamente (hsp de hspPorUF(), perdas de calcularPerdas()),
+  // então não são alcançáveis por digitação direta do usuário na prática —
+  // mas a função é exportada e testável isoladamente, e a mesma proteção já
+  // existe na função irmã; melhor consistente e defendida nas duas.
+  if (hspLocal <= 0) throw new Error('HSP local deve ser maior que zero.');
+  if (perdasSistema < 0 || perdasSistema >= 1) {
+    throw new Error('Perdas do sistema devem estar entre 0 e 1 (exclusivo).');
+  }
+  if (potenciaModuloWp <= 0) throw new Error('Potência do módulo deve ser maior que zero.');
+
   const alertas: string[] = [];
   const observacoes: string[] = [];
 

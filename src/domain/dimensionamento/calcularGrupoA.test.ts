@@ -193,3 +193,78 @@ describe('calcularDimensionamentoGrupoA', () => {
     expect(r.mediaConsumoFPkWh).toBeCloseTo(1000, 1);
   });
 });
+
+// ADICIONADO (set/2026, auditoria "rode com valores absurdos, para ver como
+// o programa se comporta") — calcularDimensionamentoGrupoA fazia a mesma
+// divisão de dimensionarSistema (geracaoNecessaria / (hspLocal × DIAS_MES ×
+// eficiência)) sem nenhum dos 3 guards que a função irmã já tem. Ver
+// comentário completo no topo de calcularDimensionamentoGrupoA.
+describe('calcularDimensionamentoGrupoA — REGRESSÃO set/2026: guards contra valores absurdos (paridade com dimensionarSistema)', () => {
+  const paramsBase = {
+    consumo: {
+      historicoBFP: [1000, 0,0,0,0,0,0,0,0,0,0,0],
+      historicoBP:  [200,  0,0,0,0,0,0,0,0,0,0,0],
+      demandaContratadaKW: 100,
+    },
+    tarifa: { tePontaKWh: 0.60, teForaPontaKWh: 0.40, tusdPontaKWh: 0.30, tusdForaPontaKWh: 0.25, demandaKW: 20 },
+    hspLocal: 5.0,
+    perdasSistema: 0.15,
+    potenciaModuloWp: 550,
+    percentualCompensacao: 1.0,
+  };
+
+  it('hspLocal=0: lança erro em vez de produzir Infinity/NaN', () => {
+    expect(() => calcularDimensionamentoGrupoA({ ...paramsBase, hspLocal: 0 })).toThrow('HSP local deve ser maior que zero.');
+  });
+
+  it('hspLocal negativo: lança erro', () => {
+    expect(() => calcularDimensionamentoGrupoA({ ...paramsBase, hspLocal: -5 })).toThrow('HSP local deve ser maior que zero.');
+  });
+
+  it('perdasSistema=1 (100%): lança erro em vez de dividir por zero (eficiência=0)', () => {
+    expect(() => calcularDimensionamentoGrupoA({ ...paramsBase, perdasSistema: 1 })).toThrow('Perdas do sistema devem estar entre 0 e 1');
+  });
+
+  it('perdasSistema > 1 (ex: usuário digitou 15 em vez de 0.15 — 1500%): lança erro em vez de "sistema negativo"', () => {
+    expect(() => calcularDimensionamentoGrupoA({ ...paramsBase, perdasSistema: 15 })).toThrow('Perdas do sistema devem estar entre 0 e 1');
+  });
+
+  it('perdasSistema negativo: lança erro', () => {
+    expect(() => calcularDimensionamentoGrupoA({ ...paramsBase, perdasSistema: -0.1 })).toThrow('Perdas do sistema devem estar entre 0 e 1');
+  });
+
+  it('potenciaModuloWp=0: lança erro em vez de dividir por zero no número de módulos', () => {
+    expect(() => calcularDimensionamentoGrupoA({ ...paramsBase, potenciaModuloWp: 0 })).toThrow('Potência do módulo deve ser maior que zero.');
+  });
+
+  it('potenciaModuloWp negativo: lança erro', () => {
+    expect(() => calcularDimensionamentoGrupoA({ ...paramsBase, potenciaModuloWp: -550 })).toThrow('Potência do módulo deve ser maior que zero.');
+  });
+
+  it('valores absurdamente grandes (histórico de 1.000.000 kWh/mês, minigeração de escala industrial): não lança, produz resultado finito e positivo', () => {
+    const r = calcularDimensionamentoGrupoA({
+      ...paramsBase,
+      consumo: { ...paramsBase.consumo, historicoBFP: [1_000_000], historicoBP: [200_000], demandaContratadaKW: 50_000 },
+    });
+    expect(Number.isFinite(r.potenciaRealKWp)).toBe(true);
+    expect(Number.isFinite(r.contaAntesRS)).toBe(true);
+    expect(Number.isFinite(r.economiaMensalRS)).toBe(true);
+    expect(r.potenciaRealKWp).toBeGreaterThan(0);
+    expect(r.numeroModulos).toBeGreaterThan(0);
+  });
+
+  it('sem NENHUM dado preenchido (Grupo A marcado mas histórico/tarifas ainda em branco — os defaults de consumoPadrao()): não lança, mas todo o resultado financeiro fica em ZERO — não NaN/Infinity, mas também não é um resultado real. A UI deve bloquear esse caso antes (ver validation.ts validarConsumo)', () => {
+    const r = calcularDimensionamentoGrupoA({
+      consumo: { historicoBFP: [], historicoBP: [], demandaContratadaKW: 0 },
+      tarifa: { tePontaKWh: 0, teForaPontaKWh: 0, tusdPontaKWh: 0, tusdForaPontaKWh: 0, demandaKW: 0 },
+      hspLocal: 5.0,
+      perdasSistema: 0.15,
+      potenciaModuloWp: 550,
+    });
+    expect(r.potenciaRealKWp).toBe(0);
+    expect(r.contaAntesRS).toBe(0);
+    expect(r.economiaMensalRS).toBe(0);
+    expect(Number.isNaN(r.potenciaRealKWp)).toBe(false);
+    expect(Number.isFinite(r.contaAntesRS)).toBe(true);
+  });
+});

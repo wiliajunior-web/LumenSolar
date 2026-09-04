@@ -40,8 +40,48 @@ export function validarConsumo(consumo: any): ResultadoValidacao {
   if (mesesValidos < 3) erros.push({ campo: 'contas', mensagem: `Preencha pelo menos 3 meses de consumo (${mesesValidos}/3 preenchidos)` });
   if (!consumo.tarifaRealKWhComICMS || consumo.tarifaRealKWhComICMS <= 0) erros.push({ campo: 'tarifa', mensagem: 'Tarifa (R$/kWh) obrigatória — veja a coluna Preço Unit. da conta' });
 
+  // ADICIONADO (set/2026, auditoria "rode com valores absurdos"): cliente
+  // Grupo A (média tensão) usa um conjunto de campos totalmente separado do
+  // Grupo B — histórico Ponta/Fora Ponta, tarifas TE por posto, demanda
+  // contratada e tarifa de demanda (ver `consumo.grupoTensao` em
+  // useProjetoStore.ts) — e NENHUM deles era exigido aqui. `consumoPadrao()`
+  // inicia todos esses campos em 0/[]; antes desta correção, marcar "Grupo A"
+  // e clicar direto em "Calcular resultado completo" sem preencher nada
+  // passava pela validação (só os campos de Grupo B acima eram checados).
+  // `calcularDimensionamentoGrupoA` (calcularGrupoA.ts) não lança erro nesse
+  // caso — médias de array vazio viram 0, `Fc` cai no fallback 1 quando
+  // teForaPontaKWh=0 — o resultado é um `ResultadoGrupoA` inteiramente zerado
+  // (0 kWp, R$0,00 de conta/economia), que a página AvisoGrupoA
+  // (PropostaPDF.tsx/PropostaComercialPDF.tsx, commit fe37d2d) imprimiria
+  // como se fosse um resultado real, sem nenhum aviso de dado ausente — o
+  // vendedor levaria ao cliente uma proposta Grupo A com "economia mensal:
+  // R$ 0,00" sem entender por quê. Mesmo padrão de guard já usado para
+  // cadastroEmpresaIncompleto/parcelasOutroFinanciamento: bloqueia aqui com
+  // mensagem amigável, antes do domínio produzir um documento zerado.
+  // NOTA: os campos de Grupo B acima (contas/tarifaRealKWhComICMS) continuam
+  // exigidos MESMO para cliente Grupo A — o dimensionamento/proposta
+  // principal ainda é sempre calculado como Grupo B (ver comentário do campo
+  // `resultadoGrupoA` em useProjetoStore.ts); a página AvisoGrupoA só
+  // complementa com os números corretos, não substitui o resto do documento.
+  if (consumo.grupoTensao === 'A') {
+    const mesesValidosFP = (consumo.historicoFP ?? []).filter((k: number) => k > 0).length;
+    const mesesValidosP = (consumo.historicoP ?? []).filter((k: number) => k > 0).length;
+    if (mesesValidosFP < 3) erros.push({ campo: 'historicoFP', mensagem: `Grupo A: preencha pelo menos 3 meses de histórico Fora Ponta (${mesesValidosFP}/3 preenchidos)` });
+    if (mesesValidosP < 3) erros.push({ campo: 'historicoP', mensagem: `Grupo A: preencha pelo menos 3 meses de histórico Ponta (${mesesValidosP}/3 preenchidos)` });
+    if (!consumo.tePontaKWh || consumo.tePontaKWh <= 0) erros.push({ campo: 'tePontaKWh', mensagem: 'Grupo A: TE Ponta (R$/kWh) obrigatória' });
+    if (!consumo.teForaPontaKWh || consumo.teForaPontaKWh <= 0) erros.push({ campo: 'teForaPontaKWh', mensagem: 'Grupo A: TE Fora Ponta (R$/kWh) obrigatória' });
+    if (!consumo.demandaContratadaKW || consumo.demandaContratadaKW <= 0) erros.push({ campo: 'demandaContratadaKW', mensagem: 'Grupo A: demanda contratada (kW) obrigatória' });
+    if (!consumo.tarifaDemandaKW || consumo.tarifaDemandaKW <= 0) erros.push({ campo: 'tarifaDemandaKW', mensagem: 'Grupo A: tarifa de demanda (R$/kW) obrigatória' });
+  }
+
+  const algumCampoGrupoAPreenchido = consumo.grupoTensao === 'A' && (
+    (consumo.historicoFP ?? []).some((k: number) => k > 0) ||
+    (consumo.historicoP ?? []).some((k: number) => k > 0) ||
+    (consumo.tePontaKWh ?? 0) > 0 ||
+    (consumo.demandaContratadaKW ?? 0) > 0
+  );
   const status: StatusPasso = erros.length === 0 ? 'completo'
-    : mesesValidos > 0 ? 'parcial' : 'vazio';
+    : (mesesValidos > 0 || algumCampoGrupoAPreenchido) ? 'parcial' : 'vazio';
   return { status, erros };
 }
 
