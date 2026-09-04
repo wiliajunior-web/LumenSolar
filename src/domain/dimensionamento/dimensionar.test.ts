@@ -1,5 +1,41 @@
 import { describe, expect, it } from 'vitest';
-import { dimensionarSistema, ajustarDimensionamentoParaQuantidadeReal } from './dimensionar';
+import { dimensionarSistema, ajustarDimensionamentoParaQuantidadeReal, potenciaMinimaKWp } from './dimensionar';
+
+// EXTRAÍDO (set/2026, auditoria de sites de distribuidoras): esta fórmula
+// vivia duplicada e sem teste próprio dentro de `StrategiaKwp` (App.tsx) —
+// mesmo padrão de risco já visto em `converterCoordenadas.ts` (fórmula
+// duplicada, só uma cópia testada). Agora testada aqui e reusada tanto por
+// dimensionarSistema quanto pela Simulação Rápida.
+describe('potenciaMinimaKWp', () => {
+  it('bate com o cálculo interno de dimensionarSistema (mesma fórmula, sem arredondar módulos)', () => {
+    const r = dimensionarSistema({
+      consumoMedioMensalKWh: 500, hspLocal: 5.5, perdasSistema: 0.2, potenciaModuloWp: 550,
+    });
+    expect(potenciaMinimaKWp(500, 5.5, 0.2)).toBeCloseTo(r.potenciaSistemaKWp, 6);
+  });
+
+  it('valor de referência calculado manualmente: 500 / (5,5×30,4167×0,8) = 500/133,83348 ≈ 3,73599 kWp', () => {
+    expect(potenciaMinimaKWp(500, 5.5, 0.2)).toBeCloseTo(3.73599, 4);
+  });
+
+  it('consumo = 0 devolve 0 kWp (não lança erro — caso estruturalmente válido)', () => {
+    expect(potenciaMinimaKWp(0, 5.5, 0.2)).toBe(0);
+  });
+
+  it('lança erro para consumo negativo', () => {
+    expect(() => potenciaMinimaKWp(-1, 5.5, 0.2)).toThrow('Consumo alvo mensal não pode ser negativo.');
+  });
+
+  it('lança erro para HSP <= 0', () => {
+    expect(() => potenciaMinimaKWp(500, 0, 0.2)).toThrow('HSP local deve ser maior que zero.');
+    expect(() => potenciaMinimaKWp(500, -5, 0.2)).toThrow('HSP local deve ser maior que zero.');
+  });
+
+  it('lança erro para perdas fora de [0,1)', () => {
+    expect(() => potenciaMinimaKWp(500, 5.5, 1)).toThrow('Perdas do sistema devem estar entre 0 e 1');
+    expect(() => potenciaMinimaKWp(500, 5.5, -0.1)).toThrow('Perdas do sistema devem estar entre 0 e 1');
+  });
+});
 
 describe('dimensionarSistema', () => {
   it('dimensiona corretamente para um consumo padrão', () => {

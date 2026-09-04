@@ -9,6 +9,34 @@ import { ParametrosDimensionamento, ResultadoDimensionamento } from './types';
 const DIAS_MES = 30.4167;
 
 /**
+ * EXTRAÍDO (set/2026, auditoria de sites de distribuidoras — ver
+ * SimulacaoRapida.tsx): fórmula do "kWp mínimo" que já vivia DUPLICADA,
+ * sem teste, dentro de `StrategiaKwp` em App.tsx (`kWpMinimo = mediaKWh /
+ * (hsp × 30.4167 × (1-perdasPadrao))`) — o mesmo padrão de risco já
+ * documentado em `converterCoordenadas.ts` (fórmula duplicada em dois
+ * lugares, só uma delas testada, sem garantia de que ficam iguais se uma
+ * mudar). Agora há uma função só, testada, usada tanto por
+ * `dimensionarSistema` (abaixo) quanto pela Simulação Rápida.
+ *
+ * Resolve para a potência (kWp) que entrega exatamente `consumoAlvoMensalKWh`
+ * de geração mensal, dado HSP local e perdas do sistema — sem arredondar
+ * para módulos discretos (isso é feito por quem chama, quando aplicável).
+ */
+export function potenciaMinimaKWp(
+  consumoAlvoMensalKWh: number,
+  hspLocal: number,
+  perdasSistema: number
+): number {
+  if (consumoAlvoMensalKWh < 0) throw new Error('Consumo alvo mensal não pode ser negativo.');
+  if (hspLocal <= 0) throw new Error('HSP local deve ser maior que zero.');
+  if (perdasSistema < 0 || perdasSistema >= 1) {
+    throw new Error('Perdas do sistema devem estar entre 0 e 1 (exclusivo).');
+  }
+  // kWp necessário = consumo mensal alvo / (HSP * dias * eficiência)
+  return consumoAlvoMensalKWh / (hspLocal * DIAS_MES * (1 - perdasSistema));
+}
+
+/**
  * Dimensiona um sistema fotovoltaico a partir do consumo médio mensal e da
  * irradiação local, usando o modelo padrão:
  *
@@ -33,8 +61,7 @@ export function dimensionarSistema(params: ParametrosDimensionamento): Resultado
   const consumoAlvoMensalKWh = params.consumoMedioMensalKWh * percentualAlvo;
   const fatorEficiencia = 1 - params.perdasSistema;
 
-  // kWp necessário = consumo mensal alvo / (HSP * dias * eficiência)
-  const potenciaSistemaKWp = consumoAlvoMensalKWh / (params.hspLocal * DIAS_MES * fatorEficiencia);
+  const potenciaSistemaKWp = potenciaMinimaKWp(consumoAlvoMensalKWh, params.hspLocal, params.perdasSistema);
 
   const potenciaModuloKWp = params.potenciaModuloWp / 1000;
   const numeroModulos = Math.ceil(potenciaSistemaKWp / potenciaModuloKWp);

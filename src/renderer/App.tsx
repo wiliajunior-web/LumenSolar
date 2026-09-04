@@ -14,6 +14,7 @@ import { calcularCaboCA } from '@domain/dimensionamento/calcularCaboCA';
 import { calcularDPSCA, calcularProtecaoCC } from '@domain/dimensionamento/calcularProtecaoCC';
 import { calcularFDI, type ResultadoFDI } from '@domain/dimensionamento/calcularFDI';
 import { calcularBancoBaterias, type TipoBateria, type TipoSistema } from '@domain/dimensionamento/calcularBateria';
+import { potenciaMinimaKWp } from '@domain/dimensionamento/dimensionar';
 // Excel gerarExcel importado dinamicamente para não impactar o bundle inicial
 
 // ─── Sistema de Design ───────────────────────────────────────────────────────
@@ -323,8 +324,9 @@ const STEPS: { id: Aba; label: string; icon: string }[] = [
   { id: 'resultado', label: 'Resultado',    icon: '★' },
 ];
 
-const Sidebar = ({ aba, setAba, logo, nomeEmpresa, onEmpresa, stepStatus }: {
+const Sidebar = ({ aba, setAba, logo, nomeEmpresa, onEmpresa, onSimulacaoRapida, stepStatus }: {
   aba: Aba; setAba: (a: Aba) => void; logo?: string; nomeEmpresa: string; onEmpresa: () => void;
+  onSimulacaoRapida: () => void;
   stepStatus: Record<string, StatusPasso>;
 }) => {
   const abaIdx = STEPS.findIndex(s => s.id === aba);
@@ -398,13 +400,29 @@ const Sidebar = ({ aba, setAba, logo, nomeEmpresa, onEmpresa, stepStatus }: {
         })}
       </nav>
 
-      {/* Empresa button */}
-      <div style={{ padding: '16px 20px', borderTop: `1px solid #e6e3d6` }}>
+      {/* Simulação Rápida + Empresa buttons */}
+      <div style={{ padding: '16px 20px 0', borderTop: `1px solid #e6e3d6`, display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {/* ADICIONADO (set/2026, auditoria de sites de distribuidoras solares —
+            Aldo Solar, Solfácil, BelEnergy): as três oferecem uma simulação
+            rápida (poucos campos → kWp/geração em segundos) como porta de
+            entrada de baixo atrito, antes do fluxo completo de proposta. O
+            LumenSolar já tinha toda a matemática (dimensionarSistema/
+            potenciaMinimaKWp), só não tinha essa porta de entrada — reusa a
+            mesma fórmula já testada, sem inventar dado novo nenhum. */}
+        <button onClick={onSimulacaoRapida} style={{
+          width: '100%', padding: '8px 12px', background: D.goldMuted,
+          border: `1px solid ${D.gold}55`, borderRadius: 8, color: '#8a6d1a',
+          fontSize: 12, fontWeight: 700, cursor: 'pointer', letterSpacing: '.03em',
+          display: 'flex', alignItems: 'center', gap: 8,
+        }}>
+          <span>⚡</span> Simulação Rápida
+        </button>
         <button onClick={onEmpresa} style={{
           width: '100%', padding: '8px 12px', background: '#eeece2',
           border: `1px solid #ddd9cb`, borderRadius: 8, color: '#6f6d63',
           fontSize: 12, fontWeight: 600, cursor: 'pointer', letterSpacing: '.03em',
           display: 'flex', alignItems: 'center', gap: 8,
+          marginBottom: 16,
         }}>
           <span>⚙</span> Configurações
         </button>
@@ -414,13 +432,13 @@ const Sidebar = ({ aba, setAba, logo, nomeEmpresa, onEmpresa, stepStatus }: {
 };
 
 // ─── SidebarContainer ────────────────────────────────────────────────────────
-function SidebarContainer({ aba, setAba, onEmpresa, stepStatus, onHome }: {
-  aba: Aba; setAba: (a: Aba) => void; onEmpresa: () => void;
+function SidebarContainer({ aba, setAba, onEmpresa, onSimulacaoRapida, stepStatus, onHome }: {
+  aba: Aba; setAba: (a: Aba) => void; onEmpresa: () => void; onSimulacaoRapida: () => void;
   stepStatus: Record<string, StatusPasso>; onHome: () => void;
 }) {
   const logo = useProjetoStore(s => s.empresa.logoBase64);
   const nome = useProjetoStore(s => s.empresa.nomeFantasia || s.empresa.razaoSocial);
-  return <Sidebar aba={aba} setAba={setAba} logo={logo} nomeEmpresa={nome} onEmpresa={onEmpresa} stepStatus={stepStatus} />;
+  return <Sidebar aba={aba} setAba={setAba} logo={logo} nomeEmpresa={nome} onEmpresa={onEmpresa} onSimulacaoRapida={onSimulacaoRapida} stepStatus={stepStatus} />;
 }
 
 // ─── Popup flutuante de copiar seleção ───────────────────────────────────────
@@ -568,6 +586,7 @@ function SelectionCopyToolbar() {
 export default function App() {
   const [aba, setAba] = useState<Aba>('home');
   const [showEmpresa, setShowEmpresa] = useState(false);
+  const [showSimulacaoRapida, setShowSimulacaoRapida] = useState(false);
   const [proposalId, setProposalId] = useState<string | null>(null);
   const [saving, setSaving] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [nomeArquivoAtual, setNomeArquivoAtual] = useState<string>('');
@@ -807,7 +826,7 @@ export default function App() {
     <>
       <style>{GLOBAL_CSS}</style>
       <div style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
-        <SidebarContainer aba={aba} setAba={setAba} onEmpresa={() => setShowEmpresa(true)} stepStatus={stepStatus} onHome={() => setAba('home')} />
+        <SidebarContainer aba={aba} setAba={setAba} onEmpresa={() => setShowEmpresa(true)} onSimulacaoRapida={() => setShowSimulacaoRapida(true)} stepStatus={stepStatus} onHome={() => setAba('home')} />
         <main style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
           {/* Barra de ações superior quando há proposta ativa */}
           {temProposta && !showEmpresa && (
@@ -834,13 +853,33 @@ export default function App() {
           )}
           <div style={{ padding: '20px 24px', flex: 1 }}>
             {showEmpresa && <TabEmpresa onClose={() => { setShowEmpresa(false); salvarEmpresa(useProjetoStore.getState().empresa); }} />}
-            {!showEmpresa && aba === 'home' && <TabHome onNovaProposta={novaProposta} onAbrirProposta={abrirProposta} onImportar={abrirImportado} />}
-            {!showEmpresa && aba === 'cliente'   && <TabCliente   onNext={() => setAba('consumo')} />}
-            {!showEmpresa && aba === 'consumo'   && <TabConsumo   onPrev={() => setAba('cliente')} onNext={() => setAba('local')} />}
-            {!showEmpresa && aba === 'local'      && <TabLocal     onPrev={() => setAba('consumo')} onNext={() => setAba('kit')} />}
-            {!showEmpresa && aba === 'kit'        && <TabKit       onPrev={() => setAba('local')} onNext={() => { useProjetoStore.getState().recalcularDefaultsPreco(); setAba('preco'); }} />}
-            {!showEmpresa && aba === 'preco'      && <TabPreco     onPrev={() => setAba('kit')} onCalc={tentarCalcular} />}
-            {!showEmpresa && aba === 'resultado'  && <TabResultado onPrev={() => setAba('preco')} onEmpresa={() => setShowEmpresa(true)} />}
+            {!showEmpresa && showSimulacaoRapida && (
+              <SimulacaoRapida
+                onClose={() => setShowSimulacaoRapida(false)}
+                onUsarNaProposta={(uf, consumoKWh) => {
+                  setShowSimulacaoRapida(false);
+                  novaProposta();
+                  useProjetoStore.getState().atualizarCliente({ uf } as any);
+                  // Semeia só o 1º mês da grade padrão de 12 meses com o
+                  // consumo informado na simulação — os outros 11 continuam
+                  // zerados, para o usuário completar com os valores reais das
+                  // contas no passo Consumo. Não inventa 12 meses iguais como
+                  // se fossem dado real (validarConsumo já exige >=3 meses
+                  // preenchidos antes de liberar o cálculo completo).
+                  useProjetoStore.getState().atualizarConsumo({
+                    contas: MESES.map((mes, i) => ({ mes, kWh: i === 0 ? consumoKWh : 0, valorRS: 0 })),
+                  } as any);
+                  setAba('cliente');
+                }}
+              />
+            )}
+            {!showEmpresa && !showSimulacaoRapida && aba === 'home' && <TabHome onNovaProposta={novaProposta} onAbrirProposta={abrirProposta} onImportar={abrirImportado} />}
+            {!showEmpresa && !showSimulacaoRapida && aba === 'cliente'   && <TabCliente   onNext={() => setAba('consumo')} />}
+            {!showEmpresa && !showSimulacaoRapida && aba === 'consumo'   && <TabConsumo   onPrev={() => setAba('cliente')} onNext={() => setAba('local')} />}
+            {!showEmpresa && !showSimulacaoRapida && aba === 'local'      && <TabLocal     onPrev={() => setAba('consumo')} onNext={() => setAba('kit')} />}
+            {!showEmpresa && !showSimulacaoRapida && aba === 'kit'        && <TabKit       onPrev={() => setAba('local')} onNext={() => { useProjetoStore.getState().recalcularDefaultsPreco(); setAba('preco'); }} />}
+            {!showEmpresa && !showSimulacaoRapida && aba === 'preco'      && <TabPreco     onPrev={() => setAba('kit')} onCalc={tentarCalcular} />}
+            {!showEmpresa && !showSimulacaoRapida && aba === 'resultado'  && <TabResultado onPrev={() => setAba('preco')} onEmpresa={() => setShowEmpresa(true)} />}
           </div>
         </main>
       </div>
@@ -998,6 +1037,103 @@ function TabHome({ onNovaProposta, onAbrirProposta, onImportar }: { onNovaPropos
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── Simulação Rápida ────────────────────────────────────────────────────────
+// ADICIONADO (set/2026, auditoria de sites de distribuidoras solares — Aldo
+// Solar, Solfácil, BelEnergy, a pedido do usuário: "analise o site de cada
+// uma para ver o que pode ser agregado ao nosso programa"). As três oferecem
+// uma porta de entrada de baixo atrito antes do fluxo completo: poucos
+// campos → kWp/geração em segundos (a calculadora pública da Aldo pede só
+// CEP + distribuidora + consumo/valor da conta). O LumenSolar já tinha toda
+// a matemática — dimensionarSistema/potenciaMinimaKWp, HSP por UF — só não
+// tinha essa porta de entrada rápida: o fluxo real começa em "Cliente" e só
+// chega a um número de kWp depois de 3 passos.
+//
+// Escopo deliberadamente contido: mostra só potência mínima e número
+// aproximado de módulos usando um módulo de REFERÊNCIA (550 Wp, o mesmo
+// valor usado como caso padrão em todo o resto do domínio — ver
+// dimensionar.test.ts). Não estima investimento em R$: isso exigiria um
+// R$/kWp médio de mercado que este código não tem como verificar de forma
+// independente agora — inventar um valor pareceria dado real sem ser
+// (mesma regra que barra TODO/placeholder mascarado de valor real). Reusa
+// só a fórmula já testada de potenciaMinimaKWp, nenhum cálculo novo.
+function SimulacaoRapida({ onClose, onUsarNaProposta }: {
+  onClose: () => void;
+  onUsarNaProposta: (uf: string, consumoMedioMensalKWh: number) => void;
+}) {
+  const [uf, setUf] = React.useState('MG');
+  const [consumoStr, setConsumoStr] = React.useState('');
+  const consumoMedioMensalKWh = Number(consumoStr.replace(',', '.')) || 0;
+  const hsp = (HSP_MEDIO_POR_UF as Record<string, number>)[uf] ?? 5.0;
+  const PERDAS_PADRAO = 0.20;
+  const POTENCIA_MODULO_REFERENCIA_WP = 550;
+
+  let kWpMinimo = 0;
+  let erro = '';
+  try {
+    kWpMinimo = potenciaMinimaKWp(consumoMedioMensalKWh, hsp, PERDAS_PADRAO);
+  } catch (e: any) {
+    erro = e?.message || 'Valor inválido.';
+  }
+  const numeroModulosAprox = kWpMinimo > 0 ? Math.ceil(kWpMinimo / (POTENCIA_MODULO_REFERENCIA_WP / 1000)) : 0;
+  const temResultado = consumoMedioMensalKWh > 0 && !erro;
+
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+        <div>
+          <h1 style={{ fontSize: 22, fontWeight: 800, color: '#1a1a28' }}>⚡ Simulação Rápida</h1>
+          <p style={{ fontSize: 13, color: '#9590a8', marginTop: 4 }}>
+            Uma estimativa em segundos, antes de abrir a proposta completa — para responder um cliente na hora.
+          </p>
+        </div>
+        <Btn onClick={onClose} variant="ghost">← Voltar</Btn>
+      </div>
+
+      <div className="card" style={{ marginBottom: 14, maxWidth: 640 }}>
+        <div className="card-body">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 14 }}>
+            <Campo label="UF" tip="Define a irradiação solar média (HSP) usada na estimativa.">
+              <select className="inp" value={uf} onChange={e => setUf(e.target.value)}>
+                {Object.keys(HSP_MEDIO_POR_UF).map(u => <option key={u} value={u}>{u}</option>)}
+              </select>
+            </Campo>
+            <Campo label="Consumo médio mensal (kWh)" hint="Veja o total de kWh na última conta de energia do cliente.">
+              <input
+                className="inp inp-num" type="text" inputMode="decimal" autoFocus
+                value={consumoStr}
+                onChange={e => setConsumoStr(e.target.value)}
+                placeholder="Ex: 450"
+              />
+            </Campo>
+          </div>
+
+          {erro && <p style={{ fontSize: 12, color: '#dc2626', marginTop: 12 }}>{erro}</p>}
+
+          {temResultado && (
+            <>
+              <div className="sep" />
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 14 }}>
+                <KPI label="Potência mínima estimada" val={`${kWpMinimo.toFixed(2)} kWp`} sub={`Para compensar 100% de ${fmtNum(consumoMedioMensalKWh, 0)} kWh/mês em ${uf}`} />
+                <KPI label="Módulos (aprox.)" val={`${numeroModulosAprox} un.`} sub={`Considerando módulo de referência de ${POTENCIA_MODULO_REFERENCIA_WP} Wp`} />
+              </div>
+              <p style={{ fontSize: 11, color: D.textMuted, marginTop: 14, lineHeight: 1.5 }}>
+                Estimativa rápida com HSP médio da UF e 20% de perdas padrão — não considera sombreamento,
+                orientação do telhado nem o módulo/inversor reais do kit. Para a proposta completa e o
+                dimensionamento técnico, use "Continuar para orçamento completo" abaixo.
+              </p>
+              <div style={{ marginTop: 16 }}>
+                <Btn onClick={() => onUsarNaProposta(uf, consumoMedioMensalKWh)}>
+                  Continuar para orçamento completo →
+                </Btn>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -1753,7 +1889,10 @@ function StrategiaKwp({ mediaKWh, uf, s }: { mediaKWh: number; uf: string; s: an
   const hsp = (HSP_MEDIO_POR_UF as Record<string,number>)[uf] ?? 5.0;
   const perdasPadrao = 0.20;
   const perc = s.kit.percentualCompensacaoDesejado ?? 1.0;
-  const kWpMinimo = mediaKWh / (hsp * 30.4167 * (1 - perdasPadrao));
+  // EXTRAÍDO (set/2026): fórmula agora vive em potenciaMinimaKWp
+  // (dimensionar.ts), testada e compartilhada com a Simulação Rápida —
+  // antes vivia só aqui, duplicada e sem cobertura de teste própria.
+  const kWpMinimo = potenciaMinimaKWp(mediaKWh, hsp, perdasPadrao);
   const kWpAlvo   = kWpMinimo * perc;
 
   const estratAtiva = ESTRATEGIAS.find(e => Math.abs(e.perc - perc) < 0.01);
