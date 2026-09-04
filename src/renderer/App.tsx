@@ -15,6 +15,7 @@ import { calcularDPSCA, calcularProtecaoCC } from '@domain/dimensionamento/calcu
 import { calcularFDI, type ResultadoFDI } from '@domain/dimensionamento/calcularFDI';
 import { calcularBancoBaterias, type TipoBateria, type TipoSistema } from '@domain/dimensionamento/calcularBateria';
 import { potenciaMinimaKWp } from '@domain/dimensionamento/dimensionar';
+import { calcularFaixaPrecoReferencia, buscarPaineisComparaveis, painelPrecoPorWp } from '@domain/catalogoReferencia/buscarReferenciaPainel';
 // Excel gerarExcel importado dinamicamente para não impactar o bundle inicial
 
 // ─── Sistema de Design ───────────────────────────────────────────────────────
@@ -2856,6 +2857,46 @@ function BadgeStatus({ status, onChange }: { status: StatusProposta; onChange: (
   );
 }
 
+/**
+ * ADICIONADO (set/2026, integração com CSV real de fornecedor enviado pelo
+ * usuário — ver src/data/catalogoReferenciaComponentes.ts): painel
+ * informativo de preço de mercado para o módulo configurado, comparando
+ * `potenciaModuloWp` contra o catálogo de painéis reais coletado no portal
+ * de parceiro da Solfácil.
+ *
+ * Deliberadamente NÃO escreve em nenhum campo do kit (mesmo padrão já usado
+ * em `configRecomendada`, a recomendação de string do inversor extraída por
+ * IA: mostra a referência, não decide por conta própria) — `custoKitRS` é o
+ * custo real da NF do fornecedor escolhido, que pode legitimamente diferir
+ * do catálogo (frete, negociação, outro fornecedor, kit completo com
+ * inversor vs. só o painel). O catálogo hoje cobre só 1 fornecedor (8
+ * painéis Solfácil) — o texto deixa isso explícito para não passar
+ * segurança estatística que a amostra não tem.
+ */
+function ReferenciaPrecoPainel({ potenciaModuloWp }: { potenciaModuloWp: number }) {
+  const faixa = calcularFaixaPrecoReferencia(potenciaModuloWp);
+  if (!faixa) return null;
+  const comparaveis = buscarPaineisComparaveis(potenciaModuloWp);
+  return (
+    <div style={{ gridColumn: 'span 2', background: D.bg, borderRadius: 8, padding: '10px 14px', marginTop: 4 }}>
+      <div style={{ fontSize: 12, color: D.textMuted, marginBottom: 6 }}>
+        💲 Referência de mercado — painéis de potência semelhante (±30Wp), catálogo {faixa.fornecedores.join(', ')} coletado em 04/09/2026
+      </div>
+      <div style={{ fontSize: 13, marginBottom: 6 }}>
+        <strong>{fmtBRL(faixa.precoPorWpMinimo)}</strong> a <strong>{fmtBRL(faixa.precoPorWpMaximo)}</strong> por Wp
+        {' '}(média {fmtBRL(faixa.precoPorWpMedio)}/Wp) entre {faixa.quantidade} modelo{faixa.quantidade !== 1 ? 's' : ''}
+      </div>
+      <div style={{ fontSize: 11, color: D.textMuted, lineHeight: 1.6 }}>
+        {comparaveis.map((p) => `${p.marca} ${p.potenciaWp}Wp — ${fmtBRL(p.precoUnitarioRS)} (${fmtBRL(painelPrecoPorWp(p))}/Wp)`).join(' · ')}
+      </div>
+      <div style={{ fontSize: 10, color: D.textMuted, marginTop: 6, fontStyle: 'italic' }}>
+        Referência de mercado, não é o custo do seu kit — cadastre o custo real da NF abaixo em "Custo do kit no fornecedor".
+        Catálogo com 1 fornecedor até o momento; cobertura ainda limitada.
+      </div>
+    </div>
+  );
+}
+
 // ─── Tab Kit ──────────────────────────────────────────────────────────────────
 function TabKit({ onPrev, onNext }: { onPrev:()=>void; onNext:()=>void }) {
   const s = useProjetoStore();
@@ -2890,6 +2931,7 @@ function TabKit({ onPrev, onNext }: { onPrev:()=>void; onNext:()=>void }) {
                 <div><span style={{ color: D.textMuted }}>{s.kit.quantidade} × {s.kit.potenciaModuloWp}Wp</span></div>
               </div>
             )}
+            <ReferenciaPrecoPainel potenciaModuloWp={s.kit.potenciaModuloWp} />
           </div>
         </div>
       </div>
